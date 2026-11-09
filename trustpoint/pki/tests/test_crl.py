@@ -75,9 +75,9 @@ def test_crl_generation_view_creates_crl(authenticated_client: Client, issuing_c
     assert not issuing_ca.crl_pem or issuing_ca.crl_pem == ''
     assert issuing_ca.last_crl_issued_at is None
 
-    # Generate CRL via GET request
+    # Generate CRL via POST request
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
-    response = authenticated_client.get(url)
+    response = authenticated_client.post(url)
 
     # Should redirect to config page
     assert response.status_code == 302
@@ -101,7 +101,7 @@ def test_crl_generation_with_next_parameter(authenticated_client: Client, issuin
     # Generate CRL with next parameter
     help_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': issuing_ca.pk})
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
-    response = authenticated_client.get(f'{url}?next={help_url}')
+    response = authenticated_client.post(f'{url}?next={help_url}')
 
     # Should redirect to the help page
     assert response.status_code == 302
@@ -118,7 +118,7 @@ def test_crl_generation_updates_existing_crl(authenticated_client: Client, issui
 
     # Generate first CRL
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
-    authenticated_client.get(url)
+    authenticated_client.post(url)
 
     issuing_ca.refresh_from_db()
     first_crl_pem = issuing_ca.crl_pem
@@ -129,7 +129,7 @@ def test_crl_generation_updates_existing_crl(authenticated_client: Client, issui
     assert first_timestamp is not None
 
     # Generate second CRL
-    authenticated_client.get(url)
+    authenticated_client.post(url)
 
     issuing_ca.refresh_from_db()
     second_crl_pem = issuing_ca.crl_pem

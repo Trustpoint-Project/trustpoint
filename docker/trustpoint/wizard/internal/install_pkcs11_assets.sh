@@ -127,24 +127,37 @@ fi
 
 log INFO "Installing PKCS#11 assets into the protected HSM area."
 
+snapshot_dir="$(mktemp -d)"
+trap 'rm -rf -- "$snapshot_dir"' EXIT
+snapshot_helper="$(dirname "$0")/snapshot_pkcs11_file.py"
+if [ "$install_module" -eq 1 ]; then
+    python3 -I "$snapshot_helper" "$STAGING_ROOT" "$staged_module" "$snapshot_dir/module"
+fi
+if [ "$use_installed_pin" -eq 0 ]; then
+    python3 -I "$snapshot_helper" "$STAGING_ROOT" "$staged_pin" "$snapshot_dir/pin"
+fi
+if [ "$install_config" -eq 1 ]; then
+    python3 -I "$snapshot_helper" "$STAGING_ROOT" "$staged_config" "$snapshot_dir/config"
+fi
+
 install -o root -g www-data -m 0750 -d "$HSM_CONFIG_DIR" "$HSM_LIB_DIR"
 
 if [ "$install_module" -eq 1 ]; then
-    if ! install -o root -g www-data -m 0640 "$staged_module" "$FINAL_MODULE_PATH"; then
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/module" "$FINAL_MODULE_PATH"; then
         log ERROR "Failed to install PKCS#11 module into $FINAL_MODULE_PATH"
         exit 4
     fi
 fi
 
 if [ "$use_installed_pin" -eq 0 ]; then
-    if ! install -o root -g www-data -m 0640 "$staged_pin" "$PIN_FILE_PATH"; then
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/pin" "$PIN_FILE_PATH"; then
         log ERROR "Failed to install PKCS#11 user PIN file into $PIN_FILE_PATH"
         exit 5
     fi
 fi
 
 if [ "$install_config" -eq 1 ]; then
-    if ! install -o root -g www-data -m 0640 "$staged_config" "$FINAL_CONFIG_PATH"; then
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/config" "$FINAL_CONFIG_PATH"; then
         log ERROR "Failed to install PKCS#11 provider config into $FINAL_CONFIG_PATH"
         exit 8
     fi
@@ -162,13 +175,13 @@ if [ "$install_module" -eq 1 ]; then
 fi
 
 if [ "$use_installed_pin" -eq 0 ]; then
-    rm -f "$staged_pin"
+    python3 -I "$snapshot_helper" --remove "$STAGING_ROOT" "$staged_pin"
 fi
 if [ "$install_module" -eq 1 ]; then
-    rm -f "$staged_module"
+    python3 -I "$snapshot_helper" --remove "$STAGING_ROOT" "$staged_module"
 fi
 if [ "$install_config" -eq 1 ]; then
-    rm -f "$staged_config"
+    python3 -I "$snapshot_helper" --remove "$STAGING_ROOT" "$staged_config"
 fi
 
 log INFO "PKCS#11 assets installed successfully."

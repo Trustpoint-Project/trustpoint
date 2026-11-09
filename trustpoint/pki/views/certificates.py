@@ -8,8 +8,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
 
+from django.db import transaction
 from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.utils.http import content_disposition_header
@@ -21,7 +23,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
@@ -48,6 +50,7 @@ from trustpoint.page_context import (
 )
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import PrimaryKeyListFromPrimaryKeyString, SortableTableMixin
+from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from typing import ClassVar
@@ -488,6 +491,18 @@ class CertificateViewSet(
         if self.action == 'list':
             return CertificateSummarySerializer
         return CertificateSerializer
+
+    @transaction.atomic
+    def perform_destroy(self, instance: CertificateModel) -> None:
+        """Certificate deletion also removes any truststore memberships."""
+        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        instance = get_object_or_404(CertificateModel.objects.select_for_update(), pk=instance.pk)
+        if instance.trust_store_components.exists() and not self.request.user.has_perm(
+            AppPermissions.MANAGE_TRUSTSTORES
+        ):
+            raise PermissionDenied
+        super().perform_destroy(instance)
 
     def _download_certificates(
         self, request: Request, certificate: CertificateModel, *, include_chain: bool

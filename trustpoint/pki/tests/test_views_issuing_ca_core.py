@@ -109,7 +109,7 @@ def test_crl_generation_rejects_inactive_ca() -> None:
     ):
         view = IssuingCaCrlGenerationView()
         view.request = request
-        response = view.get(request)
+        response = view.post(request)
 
     assert response.status_code == HTTPStatus.FOUND
     error.assert_called_once()
@@ -128,7 +128,7 @@ def test_crl_generation_reports_failure_and_rejects_external_next() -> None:
     ):
         view = IssuingCaCrlGenerationView()
         view.request = request
-        response = view.get(request)
+        response = view.post(request)
 
     assert response.status_code == HTTPStatus.FOUND
     ca.issue_crl.assert_called_once_with(crl_validity_hours=24)
@@ -213,10 +213,13 @@ def test_issuing_ca_import_rejects_malformed_key_and_certificate() -> None:
     """Import parsing returns field-specific errors for malformed PEM input."""
     view = IssuingCaViewSet()
     build_credential = IssuingCaViewSet.__dict__['_build_credential_from_import_data']
-    key_error, *_ = build_credential(view, {
-        'private_key_pem': 'bad',
-        'ca_certificate_pem': 'bad',
-    })
+    key_error, *_ = build_credential(
+        view,
+        {
+            'private_key_pem': 'bad',
+            'ca_certificate_pem': 'bad',
+        },
+    )
     assert key_error.status_code == HTTPStatus.BAD_REQUEST
     assert 'private_key_pem' in key_error.data
 
@@ -226,9 +229,12 @@ def test_issuing_ca_import_rejects_malformed_key_and_certificate() -> None:
         serialization.PrivateFormat.PKCS8,
         serialization.NoEncryption(),
     ).decode()
-    cert_error, *_ = build_credential(view, {
-        'private_key_pem': key_pem,
-        'ca_certificate_pem': 'bad',
-    })
+    cert_error, *_ = build_credential(
+        view,
+        {
+            'private_key_pem': key_pem,
+            'ca_certificate_pem': 'bad',
+        },
+    )
     assert cert_error.status_code == HTTPStatus.BAD_REQUEST
     assert 'ca_certificate_pem' in cert_error.data

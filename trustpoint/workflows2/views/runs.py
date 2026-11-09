@@ -29,6 +29,7 @@ from workflows2.services.transitions import (
     WorkflowRunTransitionService,
     save_instance_status,
 )
+from workflows2.views.definitions import WF2DefPermReqMixin
 from workflows2.views.presentation import (
     build_step_meta_from_ir,
     describe_event_context,
@@ -64,14 +65,11 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
         """Render the paginated run list."""
         supported_statuses = [choice[0] for choice in Workflow2Run.STATUS_CHOICES]
         supported_status_set = set(supported_statuses)
-        base_qs = (
-            Workflow2Run.objects.filter(status__in=supported_statuses)
-            .annotate(
-                instance_count=Count('instances', distinct=True),
-                event_text=Cast('event_json', output_field=TextField()),
-                source_text=Cast('source_json', output_field=TextField()),
-                run_id_text=Cast('id', output_field=TextField()),
-            )
+        base_qs = Workflow2Run.objects.filter(status__in=supported_statuses).annotate(
+            instance_count=Count('instances', distinct=True),
+            event_text=Cast('event_json', output_field=TextField()),
+            source_text=Cast('source_json', output_field=TextField()),
+            run_id_text=Cast('id', output_field=TextField()),
         )
 
         filters = self._read_filters(request, supported_status_set)
@@ -84,9 +82,7 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
         query_without_sort.pop('page', None)
         query_without_sort.pop('finalized', None)
 
-        trigger_choices = list(
-            base_qs.order_by('trigger_on').values_list('trigger_on', flat=True).distinct()
-        )
+        trigger_choices = list(base_qs.order_by('trigger_on').values_list('trigger_on', flat=True).distinct())
 
         paginator = Paginator(qs, 25)
         page_obj = paginator.get_page(request.GET.get('page'))
@@ -135,9 +131,7 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
         return {
             'query': (request.GET.get('q') or '').strip(),
             'status': status if status in supported_statuses else '',
-            'trigger_values': [
-                value.strip() for value in request.GET.getlist('trigger_on') if value.strip()
-            ],
+            'trigger_values': [value.strip() for value in request.GET.getlist('trigger_on') if value.strip()],
             'idempotency': idempotency if idempotency in self.IDEMPOTENCY_FILTERS else '',
         }
 
@@ -239,9 +233,8 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
             Workflow2Instance.STATUS_ERROR,
         }
         cfg = WorkflowExecutionConfig.load()
-        can_run_inline = (
-            str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE
-            and any(inst.status not in inline_skipped_statuses for inst in instances)
+        can_run_inline = str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE and any(
+            inst.status not in inline_skipped_statuses for inst in instances
         )
         can_cancel = run.status in {
             Workflow2Run.STATUS_QUEUED,
@@ -251,8 +244,7 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
             Workflow2Run.STATUS_ERROR,
         }
         can_release_idempotency = bool(
-            run.idempotency_key
-            and run.status in WorkflowRunTransitionService.TERMINAL_STATUSES
+            run.idempotency_key and run.status in WorkflowRunTransitionService.TERMINAL_STATUSES
         )
 
         return render(
@@ -283,7 +275,7 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
         )
 
 
-class Workflow2RunReleaseIdempotencyView(LoginRequiredMixin, View):
+class Workflow2RunReleaseIdempotencyView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Allow the same request details to create a fresh workflow run."""
 
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
@@ -301,7 +293,7 @@ class Workflow2RunReleaseIdempotencyView(LoginRequiredMixin, View):
         return redirect('workflows2:runs-detail', run_id=run_id)
 
 
-class Workflow2RunRunInlineView(LoginRequiredMixin, View):
+class Workflow2RunRunInlineView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Execute all runnable instances in a run inline."""
 
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
@@ -333,14 +325,13 @@ class Workflow2RunRunInlineView(LoginRequiredMixin, View):
         except Exception as e:  # noqa: BLE001
             messages.error(
                 request,
-                _('Inline run failed: %(type)s: %(error)s')
-                % {'type': type(e).__name__, 'error': e},
+                _('Inline run failed: %(type)s: %(error)s') % {'type': type(e).__name__, 'error': e},
             )
 
         return redirect('workflows2:runs-detail', run_id=run.id)
 
 
-class Workflow2RunCancelView(LoginRequiredMixin, View):
+class Workflow2RunCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Cancel a workflow run and its queued/running jobs."""
 
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:

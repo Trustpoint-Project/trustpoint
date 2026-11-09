@@ -10,6 +10,9 @@ from pki.models import CredentialModel, RevokedCertificateModel
 
 from pki.models import IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models import CertificateModel
+from pki.models.credential import PrimaryCredentialCertificate
+from pki.util.x509 import CertificateGenerator
 
 
 @pytest.fixture
@@ -17,6 +20,39 @@ def profile() -> CertificateProfileModel:
     return CertificateProfileModel.objects.get_or_create(
         unique_name='tls_client', defaults={'display_name': 'TLS Client', 'profile_json': {}}
     )[0]
+
+
+@pytest.mark.django_db
+def test_revoked_historical_certificate_cannot_inherit_replacement_validity(
+    credential_instance, device_instance, profile
+):
+    credential = credential_instance['credential']
+    old = credential.certificate
+    old_certificate = old.get_certificate_serializer().as_crypto()
+    replacement, _ = CertificateGenerator.create_ee(
+        issuer_private_key=credential_instance['priv_key'],
+        issuer_name=credential_instance['cert'].subject,
+        subject_name='Replacement',
+        private_key=credential.get_private_key(),
+    )
+    new = CertificateModel.save_certificate(replacement)
+    PrimaryCredentialCertificate.objects.create(credential=credential, certificate=new)
+    credential.certificate = new
+    credential.save()
+    device = device_instance['device']
+    issued = IssuedCredentialModel.objects.create(
+        common_name='Historical authentication',
+        issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+        certificate_profile=profile,
+        credential=credential,
+        device=device,
+        domain=device.domain,
+    )
+    RevokedCertificateModel.objects.create(certificate=old)
+    assert issued.is_valid_domain_credential()[0]
+    assert IssuedCredentialModel.get_credential_for_certificate(replacement) == issued
+    with pytest.raises(IssuedCredentialModel.DoesNotExist, match='not active'):
+        IssuedCredentialModel.get_credential_for_certificate(old_certificate)
 
 
 @pytest.mark.django_db

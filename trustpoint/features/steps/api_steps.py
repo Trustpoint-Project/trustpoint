@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 from behave import given, runner, then, when
+from django.contrib.auth.models import Permission
 from django.test import Client
 
-from features.support.auth import create_service_account
 from features.support.assertions import response_json
+from features.support.auth import create_service_account
 
 
 @given('an active service account credential exists')
@@ -18,6 +19,16 @@ def step_service_account_exists(context: runner.Context) -> None:
     context.service_account = account
     context.service_credential = credential
     context.service_secret = secret
+
+
+@given('the service account may issue certificates')
+def step_service_account_may_issue_certificates(context: runner.Context) -> None:
+    """Grant issuance only to scenarios that exercise certificate management."""
+    context.service_account.role.permissions.add(
+        Permission.objects.get(
+            content_type__app_label='users', content_type__model='apppermission', codename='issue_certificates'
+        )
+    )
 
 
 @when('the service account requests an OAuth2 token with client credentials')
@@ -82,9 +93,11 @@ def step_rest_pki_revoke_unauthenticated(context: runner.Context) -> None:
 def step_auth_failure(context: runner.Context) -> None:
     assert context.response.status_code in (401, 403)
 
+
 @given('the "{protocol}" protocol endpoint is registered')
 def step_protocol_registered(context: runner.Context, protocol: str) -> None:
     from django.urls import resolve
+
     probe = {
         'CMP': '/.well-known/cmp/p/test-domain',
         'EST': '/.well-known/est/test-domain/cacerts/',
@@ -97,6 +110,7 @@ def step_protocol_registered(context: runner.Context, protocol: str) -> None:
 def step_protocol_resolves(context: runner.Context, protocol: str) -> None:
     del protocol
     assert context.resolved_protocol.func is not None
+
 
 @given('the REST certificate "{operation}" endpoint is registered')
 def step_rest_certificate_route_registered(context: runner.Context, operation: str) -> None:
@@ -113,6 +127,7 @@ def step_rest_certificate_route_registered(context: runner.Context, operation: s
 @then('the REST certificate route resolves to a Trustpoint view')
 def step_rest_certificate_route_resolves(context: runner.Context) -> None:
     assert context.resolved_rest_certificate_route.func is not None
+
 
 @when('the authenticated service account enrolls for missing device {device_id:d}')
 def step_authenticated_missing_device_enroll(context: runner.Context, device_id: int) -> None:

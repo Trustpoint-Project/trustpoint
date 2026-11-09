@@ -22,6 +22,28 @@ from onboarding.models import NoOnboardingConfigModel
 from users.models import TrustpointUser
 
 
+@pytest.mark.parametrize(
+    'name,escaped',
+    [
+        ('device "quoted"', r'device \"quoted\"'),
+        ('device$(id)', r'device\$(id)'),
+        ('device`id`', r'device\`id\`'),
+        ('device$HOME', r'device\$HOME'),
+        ('back\\slash', r'back\\slash'),
+    ],
+)
+def test_scep_renewal_subject_keeps_shell_metacharacters_literal(name, escaped):
+    section = NoOnboardingScepStrategy._build_profile_section(
+        device=Mock(pk=1, common_name=name),
+        profile_url='http://localhost/scep/',
+        name='tls_client',
+        index=0,
+        challenge_state='active',
+    )
+    command = next(str(row.value) for row in section.rows if str(row.key) == 'Generate renewal key and CSR')
+    assert f'-subj "/CN={escaped}" -sha256' in command
+
+
 @pytest.mark.parametrize('state', ['none', 'expired', 'consumed', 'active'])
 def test_profile_download_link_requires_active_challenge(state: str) -> None:
     """Unavailable enrollment configurations show guidance instead of a broken link."""

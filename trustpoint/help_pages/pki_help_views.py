@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.conf import settings
 from django.http import Http404
+from django.middleware.csrf import get_token
 from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.translation import gettext as _non_lazy
@@ -720,15 +721,19 @@ class CrlDownloadHelpView(CaDetailView):
         help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': ca.pk})
         generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': ca.pk})
         generate_button = format_html(
-            '<a href="{}" class="btn btn-primary w-100">{}</a>',
+            '<form method="post" action="{}">'
+            '<input type="hidden" name="csrfmiddlewaretoken" value="{}">'
+            '<button type="submit" class="btn btn-primary w-100">{}</button>'
+            '</form>',
             f'{generate_url}?next={help_page_url}',
+            get_token(self.request),
             _non_lazy('Generate CRL'),
         )
         crl_status_rows.append(
             HelpRow(
                 _non_lazy('Generate New CRL'),
                 generate_button,
-                ValueRenderType.PLAIN,
+                ValueRenderType.HTML,
             )
         )
 

@@ -6,17 +6,33 @@
 from __future__ import annotations
 
 import base64
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.utils.translation import gettext_lazy as _
 from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication
+from rest_framework_simplejwt.authentication import JWTAuthentication
 
 from .authentication import ServiceAccountBackend
 from .models import TrustpointUser
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
+    from rest_framework_simplejwt.tokens import Token
+
+
+class EntitledJWTAuthentication(JWTAuthentication):
+    """Recheck account policy and REST entitlement on every bearer request."""
+
+    # SimpleJWT's return-only AuthUser TypeVar cannot describe our concrete user model.
+    def get_user(self, validated_token: Token) -> TrustpointUser:  # type: ignore[override]
+        """Retain JWT revocation checks before applying current account policy."""
+        from .oauth2_views import api_user_authentication_rule  # noqa: PLC0415
+
+        user = cast('TrustpointUser', super().get_user(validated_token))
+        if not api_user_authentication_rule(user):
+            raise exceptions.AuthenticationFailed(_('User is not permitted to use the REST API.'))
+        return user
 
 
 class ServiceAccountAuthentication(BaseAuthentication):

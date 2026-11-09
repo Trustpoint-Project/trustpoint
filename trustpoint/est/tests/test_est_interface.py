@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for the EST interface endpoints."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -55,6 +56,8 @@ def test_get_credential_for_certificate(mock_filter) -> None:
     mock_credential = MagicMock()
     mock_issued_credential = MagicMock()
     mock_issued_credential.credential = mock_credential
+    presented = mock_credential.certificates.get.return_value
+    presented.certificate_status = presented.CertificateStatus.OK
     mock_issued_credential.device = MagicMock()
 
     mock_filter.return_value.select_related.return_value.first.return_value = mock_issued_credential
@@ -74,6 +77,7 @@ def test_tls_client_cert_verification_no_cert(est_simple_enrollment_view) -> Non
         IDevIDAuthenticator.authenticate_idevid(
             est_simple_enrollment_view.request, est_simple_enrollment_view.requested_domain
         )
+
 
 def test_tls_client_cert_domain_credential_enrollment() -> None:
     """Tests that an issued credential can be enrolled via EST simpleenroll using an IDevID."""

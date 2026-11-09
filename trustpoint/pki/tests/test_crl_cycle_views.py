@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
@@ -14,6 +16,7 @@ from django.test import Client
 from django.urls import reverse
 
 from management.models import SecurityConfig
+from help_pages.help_section import HelpSection
 from pki.models import CaModel
 from users.models import TrustpointUser
 
@@ -21,11 +24,7 @@ from users.models import TrustpointUser
 @pytest.fixture
 def admin_user() -> User:
     """Create an admin user for testing."""
-    user = TrustpointUser.objects.create_superuser(
-        username='admin',
-        email='admin@test.com',
-        password='testpass123'
-    )
+    user = TrustpointUser.objects.create_superuser(username='admin', email='admin@test.com', password='testpass123')
     permission = Permission.objects.get(codename='manage_cas')
     user.role.permissions.add(permission)
     return user
@@ -39,10 +38,34 @@ def client_with_auth(admin_user: User) -> Client:
     return client
 
 
+def test_crl_help_button_submits_csrf_protected_post(issuing_ca_instance, admin_user):
+    ca = issuing_ca_instance['issuing_ca']
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(admin_user)
+    help_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': ca.pk})
+    action = f'{reverse("pki:issuing_cas-crl-gen", kwargs={"pk": ca.pk})}?next={help_url}'
+    with (
+        patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.1'),
+        patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=HelpSection('TLS', [])),
+    ):
+        response = client.get(help_url)
+    assert response.status_code == 200
+    button = next(row for row in response.context['help_page'].sections[1].rows if row.key == 'Generate New CRL')
+    assert f'<form method="post" action="{action}">' in button.value
+    token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', button.value)
+    assert token is not None
+
+    response = client.post(action, {'csrfmiddlewaretoken': token.group(1)})
+
+    assert response.status_code == 302
+    assert response.url == help_url
+    ca.refresh_from_db()
+    assert ca.crl_pem
+
+
 @pytest.mark.django_db
 def test_generate_crl_view_uses_configured_validity(
-    issuing_ca_instance: dict[str, Any],
-    client_with_auth: Client
+    issuing_ca_instance: dict[str, Any], client_with_auth: Client
 ) -> None:
     """Test that GenerateCrlView uses the configured CRL validity."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
@@ -53,7 +76,7 @@ def test_generate_crl_view_uses_configured_validity(
 
     # Generate CRL via view
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
-    response = client_with_auth.get(url)
+    response = client_with_auth.post(url)
 
     # Should redirect back to config page
     assert response.status_code == 302
@@ -65,10 +88,7 @@ def test_generate_crl_view_uses_configured_validity(
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
 
-    crl_object = x509.load_pem_x509_crl(
-        str.encode(issuing_ca.crl_pem),
-        default_backend()
-    )
+    crl_object = x509.load_pem_x509_crl(str.encode(issuing_ca.crl_pem), default_backend())
 
     this_update = crl_object.last_update_utc
     next_update = crl_object.next_update_utc
@@ -82,10 +102,7 @@ def test_generate_crl_view_uses_configured_validity(
 
 
 @pytest.mark.django_db
-def test_generate_crl_view_default_validity(
-    issuing_ca_instance: dict[str, Any],
-    client_with_auth: Client
-) -> None:
+def test_generate_crl_view_default_validity(issuing_ca_instance: dict[str, Any], client_with_auth: Client) -> None:
     """Test that GenerateCrlView uses default validity when not set."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
 
@@ -94,7 +111,7 @@ def test_generate_crl_view_default_validity(
 
     # Generate CRL via view
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
-    response = client_with_auth.get(url)
+    response = client_with_auth.post(url)
 
     assert response.status_code == 302
 
@@ -103,10 +120,7 @@ def test_generate_crl_view_default_validity(
 
 
 @pytest.mark.django_db
-def test_ca_config_view_loads_crl_settings(
-    issuing_ca_instance: dict[str, Any],
-    client_with_auth: Client
-) -> None:
+def test_ca_config_view_loads_crl_settings(issuing_ca_instance: dict[str, Any], client_with_auth: Client) -> None:
     """Test that CA config view loads CRL cycle settings."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
 
@@ -118,10 +132,7 @@ def test_ca_config_view_loads_crl_settings(
 
 
 @pytest.mark.django_db
-def test_ca_config_view_save_crl_settings(
-    issuing_ca_instance: dict[str, Any],
-    client_with_auth: Client
-) -> None:
+def test_ca_config_view_save_crl_settings(issuing_ca_instance: dict[str, Any], client_with_auth: Client) -> None:
     """Test that CA config view saves CRL cycle settings."""
     security_config = SecurityConfig(security_mode=SecurityConfig.SecurityModeChoices.LAB)
     security_config.apply_security_settings(save=False)

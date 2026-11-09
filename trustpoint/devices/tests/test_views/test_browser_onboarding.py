@@ -97,7 +97,16 @@ def test_authorized_browser_grant_cancellation_invalidates_download(
     download_url = reverse('devices:browser_domain_credential_download', args=[credential_id])
     download_url = f'{download_url}?token={grant.download_token}'
 
-    response = download_client.get(reverse('devices:devices_browser_cancel', args=[credential_id]))
+    cancel_url = reverse('devices:devices_browser_cancel', args=[credential_id])
+    assert download_client.get(cancel_url).status_code == 405
+    assert RemoteDeviceCredentialDownloadModel.objects.filter(pk=grant.pk).exists()
+    protected_client = Client(enforce_csrf_checks=True)
+    user_id = download_client.session['_auth_user_id']
+    protected_client.force_login(TrustpointUser.objects.get(pk=user_id))
+    assert protected_client.post(cancel_url).status_code == 403
+    assert RemoteDeviceCredentialDownloadModel.objects.filter(pk=grant.pk).exists()
+
+    response = download_client.post(reverse('devices:devices_browser_cancel', args=[credential_id]))
 
     assert response.status_code == 302
     assert response.url == reverse('devices:devices_credential-download', args=[credential_id])

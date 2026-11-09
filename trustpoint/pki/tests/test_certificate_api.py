@@ -16,6 +16,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs7
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -259,10 +260,15 @@ def test_unsupported_certificate_writes_return_method_not_allowed(api, leaf, met
     assert CertificateModel.objects.get(pk=leaf.pk).common_name == 'shared-name'
 
 
-def test_certificate_deletion_remains_supported(api, leaf):
-    """Removing unsupported writes preserves the existing deletion action."""
-    assert api.delete(f'/api/certificates/{leaf.pk}/').status_code == 204
-    assert not CertificateModel.objects.filter(pk=leaf.pk).exists()
+@pytest.mark.parametrize('can_delete', [False, True])
+def test_certificate_deletion_remains_supported(api: APIClient, leaf: CertificateModel, can_delete: bool) -> None:
+    """Deletion requires CA management permission; readers retain the certificate."""
+    if can_delete:
+        user = TrustpointUser.objects.get(username='certificate-reader')
+        user.role.permissions.add(Permission.objects.get(codename='manage_cas', content_type__app_label='users'))
+
+    assert api.delete(f'/api/certificates/{leaf.pk}/').status_code == (204 if can_delete else 403)
+    assert CertificateModel.objects.filter(pk=leaf.pk).exists() is not can_delete
 
 
 def test_certificate_openapi_contract():

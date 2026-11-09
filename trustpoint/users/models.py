@@ -15,6 +15,7 @@ import re
 import secrets
 import sys
 import time
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 from zoneinfo import available_timezones
 
@@ -634,9 +635,14 @@ class ServiceAccountCredential(models.Model):
 
     def is_expired(self) -> bool:
         """Check whether this credential has expired."""
-        if self.expires_at is None:
-            return False
-        return timezone.now() > self.expires_at
+        from management.models import AccountSecurityConfig  # noqa: PLC0415
+
+        now = timezone.now()
+        maximum_age = AccountSecurityConfig.get().api_credential_expiry_days
+        return bool(
+            (self.expires_at is not None and now >= self.expires_at)
+            or (maximum_age and now >= self.created_at + timedelta(days=maximum_age))
+        )
 
     def is_valid(self) -> bool:
         """Check if the credential is valid (active and not expired)."""

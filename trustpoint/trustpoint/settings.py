@@ -722,7 +722,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'users.api_auth.ServiceAccountAuthentication',
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.api_auth.EntitledJWTAuthentication',
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
