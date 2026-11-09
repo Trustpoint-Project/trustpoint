@@ -58,20 +58,11 @@ Welcome to Trustpoint's documentation!
 
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
+   :titlesonly:
    :caption: Development
 
-   development/index
-   development/architecture/index
-   development/auto_restore
-   development/sbom
-   development/pipeline
-   development/security-response-headers
-   development/release-checklist
-   development/testing/test_plan
-   development/testing/ci_cd
-   development/testing/test_report
-   development/trustpoint_view_design_guidelines
+   development/overview
 
 .. toctree::
    :maxdepth: 2

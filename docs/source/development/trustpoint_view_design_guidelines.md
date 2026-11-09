@@ -22,7 +22,7 @@ Specialized interfaces such as the Setup Wizard or graphical workflow editors ma
 
 ---
 
-# 1. General Design Principles
+## 1. General Design Principles
 
 Trustpoint is an enterprise application for PKI, certificate lifecycle management, device onboarding, and industrial cybersecurity.
 
@@ -44,7 +44,7 @@ Avoid decorative elements that do not help the user understand or operate the sy
 
 ---
 
-# 2. Use Existing Trustpoint and Bootstrap Components
+## 2. Use Existing Trustpoint and Bootstrap Components
 
 New views should primarily use:
 
@@ -95,7 +95,7 @@ Trustpoint-specific components such as the following should be reused where appr
 
 ---
 
-# 3. Standard Page Structure
+## 3. Standard Page Structure
 
 Most Trustpoint pages should consist of one main card.
 
@@ -127,7 +127,7 @@ Avoid wrapping the entire page in several nested cards unless the contained elem
 
 ---
 
-# 4. Page Titles
+## 4. Page Titles
 
 Every page should have one `<h1>`.
 
@@ -173,7 +173,7 @@ Add New Signer - Generate With Crypto Backend
 
 ---
 
-# 5. Page Sections
+## 5. Page Sections
 
 Major areas within a page should use semantic `<section>` elements.
 
@@ -208,7 +208,7 @@ Use a consistent heading hierarchy:
 
 ---
 
-# 6. Forms
+## 6. Forms
 
 Forms should normally exist only around the inputs that actually belong to the form.
 
@@ -261,7 +261,7 @@ id="main-form"
 
 ---
 
-# 7. Centered Forms
+## 7. Centered Forms
 
 Narrow configuration forms may use:
 
@@ -273,7 +273,7 @@ Do not use this layout for large inventories, dashboards, or wide technical tabl
 
 ---
 
-# 8. Form Actions
+## 8. Form Actions
 
 The normal footer structure for forms is:
 
@@ -318,9 +318,9 @@ For workflows with both Back and Cancel:
 
 ---
 
-# 9. Button Hierarchy
+## 9. Button Hierarchy
 
-## Primary action
+### Primary action
 
 Use:
 
@@ -339,7 +339,7 @@ Examples:
 
 A page should normally have only one visually dominant primary action.
 
-## Secondary actions
+### Secondary actions
 
 Use:
 
@@ -364,7 +364,7 @@ Examples:
 - View Certificates
 - Export
 
-## Destructive actions
+### Destructive actions
 
 Use:
 
@@ -384,7 +384,7 @@ for destructive actions on inventory or detail pages.
 
 ---
 
-# 10. Action Labels
+## 10. Action Labels
 
 Use explicit action text.
 
@@ -406,7 +406,7 @@ Icons may still be used where they provide meaningful supplemental information.
 
 ---
 
-# 11. Inventory Tables
+## 11. Inventory Tables
 
 Standard Trustpoint inventory tables should use:
 
@@ -424,7 +424,7 @@ The page should use the browser's natural vertical scrolling.
 
 ---
 
-# 12. Pagination
+## 12. Pagination
 
 Responsive tables and pagination are independent.
 
@@ -446,7 +446,7 @@ It does not replace or disable server-side pagination.
 
 ---
 
-# 13. Table Actions
+## 13. Table Actions
 
 Use one **Actions** column.
 
@@ -467,7 +467,7 @@ Avoid `btn-primary` for every action in every row.
 
 ---
 
-# 14. Empty Tables
+## 14. Empty Tables
 
 Use a clear, neutral empty state.
 
@@ -486,7 +486,7 @@ Always update `colspan` if table columns change.
 
 ---
 
-# 15. Missing Values
+## 15. Missing Values
 
 Use an em dash:
 
@@ -506,7 +506,7 @@ Example:
 
 ---
 
-# 16. Status Information
+## 16. Status Information
 
 Color should primarily communicate meaningful state.
 
@@ -541,7 +541,7 @@ Trustpoint status components may also be used:
 
 ---
 
-# 17. Filters
+## 17. Filters
 
 Filters should normally be presented as a compact dropdown above the table.
 
@@ -571,7 +571,7 @@ Recommended layout:
 
 ---
 
-# 18. Filter Button
+## 18. Filter Button
 
 Recommended filter button:
 
@@ -597,7 +597,7 @@ Do not use `aria-expanded="true"` merely because filters are active.
 
 ---
 
-# 19. Filter Form Footer
+## 19. Filter Form Footer
 
 Recommended:
 
@@ -621,7 +621,7 @@ Recommended:
 
 ---
 
-# 20. Column Visibility
+## 20. Column Visibility
 
 Large technical tables may provide a Columns dropdown.
 
@@ -629,7 +629,7 @@ Do not rename existing `data-col` values without also updating the associated Ja
 
 ---
 
-# 21. Sorting
+## 21. Sorting
 
 Sortable table headers should remain visually subtle.
 
@@ -644,7 +644,7 @@ Sortable table headers should remain visually subtle.
 
 ---
 
-# 22. Selection Pages
+## 22. Selection Pages
 
 Views that select between workflows may use cards.
 
@@ -662,7 +662,7 @@ If the choices are already self-explanatory, avoid unnecessary repetitive text.
 
 ---
 
-# 23. Detail Pages
+## 23. Detail Pages
 
 Detail pages should usually use sections and `tp-kvp-list`.
 
@@ -692,7 +692,7 @@ Do not create a separate nested card for every section.
 
 ---
 
-# 24. Technical Values
+## 24. Technical Values
 
 Technical identifiers should generally use monospace.
 
@@ -710,7 +710,7 @@ Long values may additionally use `text-break`.
 
 ---
 
-# 25. Copy-to-Clipboard
+## 25. Copy-to-Clipboard
 
 Copy controls are appropriate for technical values such as:
 
@@ -724,7 +724,7 @@ Copy icons are meaningful technical controls and are therefore an acceptable use
 
 ---
 
-# 26. Modals
+## 26. Modals
 
 Use modals only when they improve the workflow.
 
@@ -738,7 +738,7 @@ Do not move ordinary page information into modals merely to reduce page length.
 
 ---
 
-# 27. Confirmation and Deletion Pages
+## 27. Confirmation and Deletion Pages
 
 Destructive operations should use a dedicated confirmation page.
 
@@ -760,7 +760,7 @@ If an association is removed but the underlying object remains, use wording such
 
 ---
 
-# 28. Alerts
+## 28. Alerts
 
 Alerts should communicate meaningful information.
 
@@ -777,7 +777,7 @@ Do not use alerts merely as decorative information containers.
 
 ---
 
-# 29. Dashboard Metrics
+## 29. Dashboard Metrics
 
 Dashboard-style pages may use small nested cards for metrics.
 
@@ -787,7 +787,7 @@ Avoid using different colors for each metric unless the color itself communicate
 
 ---
 
-# 30. Scrolling
+## 30. Scrolling
 
 Trustpoint should generally use normal browser page scrolling.
 
@@ -810,7 +810,7 @@ Dedicated technical viewers, such as log or PEM viewers, may have their own scro
 
 ---
 
-# 31. Sticky Footers
+## 31. Sticky Footers
 
 Normal application cards should not require custom sticky footers.
 
@@ -826,7 +826,9 @@ Use normal page flow.
 
 ---
 
-# 32. Light and Dark Mode
+(light-and-dark-mode)=
+
+## 32. Light and Dark Mode
 
 Views must work in both supported themes.
 
@@ -850,7 +852,7 @@ border-color: var(--bs-border-color);
 
 ---
 
-# 33. Internationalization
+## 33. Internationalization
 
 All new user-visible text must use Django internationalization.
 
@@ -870,7 +872,7 @@ or:
 
 ---
 
-# 34. Accessibility
+## 34. Accessibility
 
 Views should use semantic HTML and meaningful labels.
 
@@ -901,7 +903,7 @@ aria-hidden="true"
 
 ---
 
-# 35. Preserve Existing Functionality
+## 35. Preserve Existing Functionality
 
 Frontend redesigns must not change backend behavior unless the change is intentional and reviewed separately.
 
@@ -931,7 +933,7 @@ from file upload forms.
 
 ---
 
-# 36. GET vs POST
+## 36. GET vs POST
 
 Do not use a form when the page only contains navigation links.
 
@@ -939,7 +941,7 @@ Use POST only for actions that modify state.
 
 ---
 
-# 37. Specialized Views
+## 37. Specialized Views
 
 Some Trustpoint views require specialized components.
 
@@ -968,7 +970,7 @@ Feature-specific CSS should not be introduced merely to recreate functionality a
 
 ---
 
-# 38. Recommended Inventory Page Template
+## 38. Recommended Inventory Page Template
 
 ```django
 {% extends "trustpoint/base.html" %}
@@ -1027,7 +1029,7 @@ Feature-specific CSS should not be introduced merely to recreate functionality a
 
 ---
 
-# 39. Recommended Form Page Template
+## 39. Recommended Form Page Template
 
 ```django
 {% extends "trustpoint/base.html" %}
@@ -1089,11 +1091,11 @@ Feature-specific CSS should not be introduced merely to recreate functionality a
 
 ---
 
-# 40. Review Checklist
+## 40. Review Checklist
 
 Before merging a new or redesigned view, verify the following.
 
-## Structure
+### Structure
 
 - [ ] The page has one clear `<h1>`.
 - [ ] Major areas use semantic sections.
@@ -1101,14 +1103,14 @@ Before merging a new or redesigned view, verify the following.
 - [ ] Normal page scrolling is used.
 - [ ] No unnecessary fixed viewport height exists.
 
-## Actions
+### Actions
 
 - [ ] There is normally only one primary page action.
 - [ ] Ordinary row actions use neutral styling.
 - [ ] Destructive actions use danger semantics.
 - [ ] Buttons use explicit text labels.
 
-## Tables
+### Tables
 
 - [ ] Tables use `table-responsive`.
 - [ ] Tables use `table table-hover align-middle`.
@@ -1117,7 +1119,7 @@ Before merging a new or redesigned view, verify the following.
 - [ ] Missing values use `—`.
 - [ ] Pagination remains outside the responsive table wrapper.
 
-## Forms
+### Forms
 
 - [ ] Forms have a specific ID.
 - [ ] Footer submit buttons use the form ID.
@@ -1125,20 +1127,20 @@ Before merging a new or redesigned view, verify the following.
 - [ ] File upload forms retain `multipart/form-data`.
 - [ ] Back, Cancel, and primary actions are clearly separated.
 
-## Status
+### Status
 
 - [ ] Color is used only when it communicates state or severity.
 - [ ] Status badges use semantic colors.
 - [ ] Ordinary values do not use arbitrary colors.
 
-## Compatibility
+### Compatibility
 
 - [ ] Light mode works.
 - [ ] Dark mode works.
 - [ ] No hardcoded white/black backgrounds were introduced.
 - [ ] Mobile layouts remain usable.
 
-## Accessibility
+### Accessibility
 
 - [ ] Form fields have labels.
 - [ ] Table headers use appropriate semantics.
@@ -1146,11 +1148,11 @@ Before merging a new or redesigned view, verify the following.
 - [ ] Icon-only controls have an `aria-label`.
 - [ ] Decorative icons use `aria-hidden="true"`.
 
-## Internationalization
+### Internationalization
 
 - [ ] All new visible text uses `{% trans %}` or `{% blocktrans %}`.
 
-## Functional Preservation
+### Functional Preservation
 
 - [ ] Existing URLs are unchanged.
 - [ ] Existing form field names are unchanged.
@@ -1160,7 +1162,7 @@ Before merging a new or redesigned view, verify the following.
 
 ---
 
-# 41. Core Rule
+## 41. Core Rule
 
 When designing a Trustpoint view, prefer the simplest standard component that communicates the required information.
 

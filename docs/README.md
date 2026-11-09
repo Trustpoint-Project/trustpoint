@@ -1,30 +1,23 @@
-# Python Documentation README
+# Trustpoint documentation
 
-This directory contains the reStructuredText (reST) sources to the Trustpoint documentation.
+The Sphinx sources in `docs/source/` use reStructuredText and MyST Markdown.
 
-## Building the docs
+Run from the repository root with a supported Python version, Java, and Graphviz
+(`dot`) available:
 
-Use
-```
-uv sync --group docs
-```
-to install the dependencies required to build docs.
-
-### Using make
-
-```
-make html
+```sh
+uv sync --frozen --group docs
+uv run --frozen sphinx-build -b html -n -W --keep-going docs/source docs/build/html
 ```
 
-_or_ 
+Open `docs/build/html/index.html`. For a clean rebuild, add `-E -a`.
 
-```
-make clean html
-```
-_for building without cache_
+The Makefile uses the same project environment:
 
-Use
+```sh
+make -C docs html SPHINXOPTS="-n -W --keep-going"
+make -C docs clean html SPHINXOPTS="-n -W --keep-going"
 ```
-uv run -m sphinx.cmd.build -M html source build
-```
-for forcing use of the correct env if you get a `Cannot import trustpoint.settings` error.
+
+See [Building and editing documentation](source/development/documentation.rst)
+for prerequisites, page structure, navigation, and hosted builds.
