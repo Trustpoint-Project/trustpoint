@@ -149,6 +149,11 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
             raise IssuedCredentialModel.DoesNotExist(error_message)
 
+        presented = issued_credential.credential.certificates.get(sha256_fingerprint=cert_fingerprint)
+        if presented.certificate_status != presented.CertificateStatus.OK:
+            error_message = 'The presented certificate is not active.'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
         return issued_credential
 
     @staticmethod

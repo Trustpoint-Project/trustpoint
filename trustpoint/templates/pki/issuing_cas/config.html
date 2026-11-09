@@ -331,11 +331,12 @@
                                                 {% trans 'Import CRL' %}
                                             </a>
                                         {% else %}
-                                            <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                                class="btn btn-sm btn-primary me-2{% if not issuing_ca.is_active %} disabled{% endif %}"
-                                                {% if not issuing_ca.is_active %}aria-disabled="true" tabindex="-1"{% endif %}>
-                                                {% trans 'Generate CRL' %}
-                                            </a>
+                                            <form method="post" action="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-primary me-2" {% if not issuing_ca.is_active %}disabled{% endif %}>
+                                                    {% trans 'Generate CRL' %}
+                                                </button>
+                                            </form>
                                         {% endif %}
                                         {% if issuing_ca.last_crl_issued_at %}
                                         <a href="{% url 'pki:crl-detail' pk=active_crl.pk %}"

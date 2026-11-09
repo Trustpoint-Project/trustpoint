@@ -49,6 +49,7 @@ from help_pages.commands import (
     EstUsernamePasswordCommandBuilder,
     RestClientCertificateCommandBuilder,
     RestUsernamePasswordCommandBuilder,
+    escape_shell_double_quotes,
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
@@ -1064,7 +1065,7 @@ class NoOnboardingScepStrategy(HelpPageStrategy):
                     (
                         'openssl req -new -newkey rsa:2048 -noenc '
                         '-keyout newkey.pem -out newreq.pem '
-                        f'-subj "/CN={device.common_name}" -sha256'
+                        f'-subj "/CN={escape_shell_double_quotes(device.common_name)}" -sha256'
                     ),
                     ValueRenderType.CODE,
                 ),

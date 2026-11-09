@@ -21,6 +21,7 @@ from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2StepRun
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.transitions import WorkflowInstanceTransitionService, save_instance_status
+from workflows2.views.definitions import WF2DefPermReqMixin
 from workflows2.views.presentation import (
     compact_value,
     describe_event_context,
@@ -106,17 +107,8 @@ def _get_step_meta(inst: Workflow2Instance) -> dict[str, dict[str, Any]]:
         params = _json_object(step.get('params'))
 
         # Title/description could be top-level or embedded
-        title = (
-            step.get('title')
-            or params.get('title')
-            or params.get('name')
-            or ''
-        )
-        description = (
-            step.get('description')
-            or params.get('description')
-            or ''
-        )
+        title = step.get('title') or params.get('title') or params.get('name') or ''
+        description = step.get('description') or params.get('description') or ''
 
         summary = ''
         try:
@@ -159,12 +151,8 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
         event_context = describe_event_context(inst.event_json)
         vars_summary = summarize_named_values(inst.vars_json)
         latest_step_run = step_runs[-1] if step_runs else None
-        pending_approvals = [
-            approval for approval in approvals if approval.status == Workflow2Approval.STATUS_PENDING
-        ]
-        resolved_approvals = [
-            approval for approval in approvals if approval.status != Workflow2Approval.STATUS_PENDING
-        ]
+        pending_approvals = [approval for approval in approvals if approval.status == Workflow2Approval.STATUS_PENDING]
+        resolved_approvals = [approval for approval in approvals if approval.status != Workflow2Approval.STATUS_PENDING]
         latest_failed_step_run = next(
             (step_run for step_run in reversed(step_runs) if step_run.status == 'error' or step_run.error),
             None,
@@ -201,8 +189,7 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
             Workflow2Instance.STATUS_ERROR,
         }
         can_run_inline = (
-            str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE
-            and inst.status not in inline_skipped_statuses
+            str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE and inst.status not in inline_skipped_statuses
         )
 
         return render(
@@ -233,7 +220,7 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
         )
 
 
-class Workflow2InstanceRunInlineView(LoginRequiredMixin, View):
+class Workflow2InstanceRunInlineView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Force-run inline. If errored, this resumes from current_step."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
@@ -259,14 +246,13 @@ class Workflow2InstanceRunInlineView(LoginRequiredMixin, View):
         except Exception as e:  # noqa: BLE001
             messages.error(
                 request,
-                _('Inline run failed: %(type)s: %(error)s')
-                % {'type': type(e).__name__, 'error': e},
+                _('Inline run failed: %(type)s: %(error)s') % {'type': type(e).__name__, 'error': e},
             )
 
         return redirect('workflows2:instances-detail', instance_id=instance_id)
 
 
-class Workflow2InstanceCancelView(LoginRequiredMixin, View):
+class Workflow2InstanceCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Cancel a workflow instance and its queued/running jobs."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
@@ -297,7 +283,7 @@ class Workflow2InstanceCancelView(LoginRequiredMixin, View):
         return redirect('workflows2:instances-detail', instance_id=inst.id)
 
 
-class Workflow2InstanceStopView(LoginRequiredMixin, View):
+class Workflow2InstanceStopView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Stop an errored or paused workflow instance without resuming it."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
@@ -352,7 +338,7 @@ class Workflow2InstanceStopView(LoginRequiredMixin, View):
         return redirect('workflows2:instances-detail', instance_id=inst.id)
 
 
-class Workflow2InstanceResumeView(LoginRequiredMixin, View):
+class Workflow2InstanceResumeView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Resume an errored or paused instance from its current step."""
 
     def post(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
@@ -388,8 +374,7 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
         except Exception as e:  # noqa: BLE001
             messages.error(
                 request,
-                _('Resume failed: %(type)s: %(error)s')
-                % {'type': type(e).__name__, 'error': e},
+                _('Resume failed: %(type)s: %(error)s') % {'type': type(e).__name__, 'error': e},
             )
 
         return redirect('workflows2:instances-detail', instance_id=instance_id)

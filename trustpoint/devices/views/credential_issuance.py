@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from django import forms
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
@@ -49,6 +50,8 @@ from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     PageContextMixin,
 )
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -58,6 +61,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
+
 
 class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
     """Abstract view for selecting how to issue a new application credential for a no-onboarding device."""
@@ -167,22 +171,32 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_scep_help',
             }
         )
-        sections.insert(1, {
-            'heading': gettext_lazy('CMP with WebUI'),
-            'group': 'CMP',
-            'description': gettext_lazy('Configure CMP enrollment in the device WebUI using a shared secret.'),
-            'protocol': 'cmp-shared-secret',
-            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
-            'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_webui_help',
-        })
-        sections.insert(3, {
-            'heading': gettext_lazy('EST with WebUI'),
-            'group': 'EST',
-            'description': gettext_lazy('Configure EST enrollment in the device WebUI using a username and password.'),
-            'protocol': 'est-username-password',
-            'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD),
-            'url': f'{self.page_category}:{self.page_name}_no_onboarding_est_webui_help',
-        })
+        sections.insert(
+            1,
+            {
+                'heading': gettext_lazy('CMP with WebUI'),
+                'group': 'CMP',
+                'description': gettext_lazy('Configure CMP enrollment in the device WebUI using a shared secret.'),
+                'protocol': 'cmp-shared-secret',
+                'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET),
+                'url': f'{self.page_category}:{self.page_name}_no_onboarding_cmp_webui_help',
+            },
+        )
+        sections.insert(
+            3,
+            {
+                'heading': gettext_lazy('EST with WebUI'),
+                'group': 'EST',
+                'description': gettext_lazy(
+                    'Configure EST enrollment in the device WebUI using a username and password.'
+                ),
+                'protocol': 'est-username-password',
+                'enabled': self.object.no_onboarding_config.has_pki_protocol(
+                    NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD
+                ),
+                'url': f'{self.page_category}:{self.page_name}_no_onboarding_est_webui_help',
+            },
+        )
         context['sections'] = sections
 
         return context
@@ -259,15 +273,17 @@ class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMi
             raise ValueError(err_msg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles(credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION))
+            domain.get_allowed_cert_profiles(credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION)
+        )
         profile_list = DomainAllowedCertificateProfileModel.get_list_of_display_names(allowed_app_profiles)
 
         context['cert_profile_list'] = {}
-        for (profile_id, display_name, _unique_name) in profile_list:
+        for profile_id, display_name, _unique_name in profile_list:
             context['cert_profile_list'][profile_id] = display_name
 
-        context['profile_issuance_url'] = \
+        context['profile_issuance_url'] = (
             f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_choose_issuance_method'
+        )
 
         return context
 
@@ -414,8 +430,7 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
             err_msg = gettext_lazy('Device is not configured for onboarding')
             messages.warning(request, err_msg)
             return redirect(
-                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
-                pk=self.object.pk
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', pk=self.object.pk
             )
 
         if not self.object.onboarding_config.get_pki_protocols():
@@ -424,38 +439,36 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
             )
             messages.warning(request, err_msg)
             return redirect(
-                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
-                pk=self.object.pk
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', pk=self.object.pk
             )
 
         if not self.object.domain:
             err_msg = gettext_lazy('No domain is configured for this device.')
             messages.warning(request, err_msg)
             return redirect(
-                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
-                pk=self.object.pk
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', pk=self.object.pk
             )
 
         # If CMP or EST are enabled, show the protocol selection page
-        if (
-            self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
-            or self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
-        ):
+        if self.object.onboarding_config.has_pki_protocol(
+            OnboardingPkiProtocol.CMP
+        ) or self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST):
             return super().get(request, *_args, **_kwargs)
 
         # Otherwise, redirect directly to the GDS Push application certificate help page
         return redirect(
             f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
-            pk=self.object.pk
+            pk=self.object.pk,
         )
 
 
 class AbstractIssueCredentialView[FormClass: forms.Form](
-    PageContextMixin, FormMixin[FormClass], DetailView[DeviceModel]
+    UserPermissionRequiredMixin, PageContextMixin, FormMixin[FormClass], DetailView[DeviceModel]
 ):
     """Base view for all credential issuance views."""
 
     http_method_names = ('get', 'post')
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
 
     model = DeviceModel
     context_object_name = 'device'
@@ -485,9 +498,7 @@ class AbstractIssueCredentialView[FormClass: forms.Form](
 
     def get_success_url(self) -> str:
         """Return to the device after successful issuance."""
-        return reverse(
-            f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
-        )
+        return reverse(f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk})
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """This method adds the concerning device model to the form kwargs and returns them.
@@ -540,9 +551,9 @@ class AbstractIssueCredentialView[FormClass: forms.Form](
                 )
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
-                return HttpResponseRedirect(reverse(
-                    f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk}
-                ))
+                return HttpResponseRedirect(
+                    reverse(f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.object.pk})
+                )
             return HttpResponseRedirect(self.get_success_url())
 
         return self.render_to_response(self.get_context_data(form=form))
@@ -572,8 +583,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
 
                 if server_info.get('server_certificate_available'):
                     messages.info(
-                        request,
-                        'Server certificate found. You can update the truststore with this certificate.'
+                        request, 'Server certificate found. You can update the truststore with this certificate.'
                     )
             else:
                 messages.error(request, f'Failed to discover server: {message}')
@@ -583,18 +593,18 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
 
         return HttpResponseRedirect(
             reverse_lazy(
-                f'devices:{self.page_name}_onboarding_truststore_associated_help',
-                kwargs={'pk': self.object.pk}
+                f'devices:{self.page_name}_onboarding_truststore_associated_help', kwargs={'pk': self.object.pk}
             )
         )
 
 
 class OpcUaGdsPushTruststoreAssociationView(
-    LoggerMixin, PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]
+    UserPermissionRequiredMixin, LoggerMixin, PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]
 ):
     """View for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
 
     form_class = OpcUaGdsPushTruststoreAssociationForm
+    permission_required = AppPermissions.MANAGE_DEVICES
     template_name = 'devices/truststore_association.html'
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
@@ -640,6 +650,8 @@ class OpcUaGdsPushTruststoreAssociationView(
 
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Handle truststore import from modal."""
+        if not request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
         import_form = TruststoreAddForm(request.POST, request.FILES)
 
         if import_form.is_valid():
@@ -656,8 +668,8 @@ class OpcUaGdsPushTruststoreAssociationView(
             messages.success(request, msg_str)
 
             return HttpResponseRedirect(
-                reverse('devices:devices_truststore_association', kwargs={'pk': self.get_device().pk}) +
-                f'?truststore_id={truststore.id}'
+                reverse('devices:devices_truststore_association', kwargs={'pk': self.get_device().pk})
+                + f'?truststore_id={truststore.id}'
             )
 
         context = self.get_context_data()
@@ -668,20 +680,17 @@ class OpcUaGdsPushTruststoreAssociationView(
         """Handle successful form submission."""
         form.save()
         messages.success(
-            self.request,
-            f'Successfully associated truststore with device {self.get_device().common_name}'
+            self.request, f'Successfully associated truststore with device {self.get_device().common_name}'
         )
         return HttpResponseRedirect(
             reverse_lazy(
                 f'devices:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_truststore_associated_help',
-                kwargs={'pk': self.get_device().pk}
+                kwargs={'pk': self.get_device().pk},
             )
         )
 
 
-class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
-    AbstractIssueCredentialView[CertificateIssuanceForm]
-):
+class AbstractIssueProfileCredentialView(FormErrorMessageMixin, AbstractIssueCredentialView[CertificateIssuanceForm]):
     """View to issue a new certificate profile credential."""
 
     friendly_name = 'Certificate Profile Credential'
@@ -714,9 +723,7 @@ class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
         context = super().get_context_data(**kwargs)
         context['profile'] = self.profile
         context['profile_dict'] = self.get_form_kwargs()['profile']
-        context['back_url'] = reverse(
-            context['clm_url'], kwargs={'pk': self.object.pk}
-        )
+        context['back_url'] = reverse(context['clm_url'], kwargs={'pk': self.object.pk})
         return context
 
     def form_valid(self, form: forms.Form) -> HttpResponse:
@@ -728,8 +735,9 @@ class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
         try:
             self.cert_builder = form.get_certificate_builder()
         except ValueError as e:
-            messages.error(self.request,
-                           gettext_lazy('Error generating certificate builder: {error}').format(error=str(e)))
+            messages.error(
+                self.request, gettext_lazy('Error generating certificate builder: {error}').format(error=str(e))
+            )
             return self.form_invalid(form)
 
         messages.success(
@@ -738,8 +746,7 @@ class AbstractIssueProfileCredentialView(FormErrorMessageMixin,
         )
         return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
-    def issue_credential(self, device: DeviceModel, form: forms.Form
-                         ) -> IssuedCredentialModel:
+    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
         """Issues a credential based on the selected certificate profile.
 
         Args:
@@ -782,14 +789,19 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueProfileCredentialView):
         """Warn when the domain is using a different credential profile."""
         context = super().get_context_data(**kwargs)
         if self.profile.unique_name != 'opc_ua_domain_credential':
-            messages.warning(self.request, format_html(
-                str(gettext_lazy(
-                    'This domain is not using the OPC UA Domain Credential profile. '
-                    'Select it in the <a href="{url}">domain settings</a> before issuing '
-                    'an OPC UA domain credential.'
-                )),
-                url=reverse('pki:domains-config', kwargs={'pk': self.object.domain_id}),
-            ))
+            messages.warning(
+                self.request,
+                format_html(
+                    str(
+                        gettext_lazy(
+                            'This domain is not using the OPC UA Domain Credential profile. '
+                            'Select it in the <a href="{url}">domain settings</a> before issuing '
+                            'an OPC UA domain credential.'
+                        )
+                    ),
+                    url=reverse('pki:domains-config', kwargs={'pk': self.object.domain_id}),
+                ),
+            )
         return context
 
     def get_certificate_profile(self) -> CertificateProfileModel:

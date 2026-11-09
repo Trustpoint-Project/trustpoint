@@ -191,6 +191,18 @@ def test_cert() -> x509.Certificate:
 class TestAgentCertificateAuthentication:
     """Test AgentCertificateAuthentication."""
 
+    def test_untrusted_peer_cannot_assert_an_agent_certificate(self, settings):
+        settings.TRUSTPOINT_TRUSTED_PROXY_IPS = ['127.0.0.1']
+        request = RequestFactory().get(
+            '/api/agents/jobs/',
+            HTTP_SSL_CLIENT_CERT='untrusted-assertion',
+            REMOTE_ADDR='198.51.100.10',
+        )
+        with patch('agents.api_views.x509.load_pem_x509_certificate') as parser:
+            with pytest.raises(AuthenticationFailed):
+                _parse_client_cert(request)
+            parser.assert_not_called()
+
     def test_parse_client_cert_success(self, test_cert: x509.Certificate):
         """Test parsing valid client certificate from headers."""
         pem = test_cert.public_bytes(serialization.Encoding.PEM).decode('utf-8')

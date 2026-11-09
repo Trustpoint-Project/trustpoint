@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Tests for authorization components."""
+
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -26,6 +27,8 @@ from request.authorization.base import (
 from request.authorization.est import EstAuthorization, EstOperationAuthorization
 from request.authorization.manual import ManualAuthorization
 from request.authorization.rest import RestAuthorization, RestOperationAuthorization
+from request.authorization.http import DeviceHttpProtocolAuthorization
+from onboarding.models import NoOnboardingPkiProtocol, OnboardingPkiProtocol
 from request.request_context import (
     BaseRequestContext,
     BaseCertificateRequestContext,
@@ -37,7 +40,9 @@ from request.request_context import (
 )
 
 
-def _csr(private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey, *, ca: bool = False) -> x509.CertificateSigningRequest:
+def _csr(
+    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey, *, ca: bool = False
+) -> x509.CertificateSigningRequest:
     builder = x509.CertificateSigningRequestBuilder().subject_name(
         x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'authorization-test')])
     )
@@ -223,7 +228,9 @@ class TestCertificateProfileAuthorization:
         assert 'Allowed profiles:' in str(exc_info.value)
         assert 'domain_credential' in str(exc_info.value)
 
-    def test_cert_profile_str_authorization_failure_missing_profile(self, domain_instance, cert_profile_instance) -> None:
+    def test_cert_profile_str_authorization_failure_missing_profile(
+        self, domain_instance, cert_profile_instance
+    ) -> None:
         """Test certificate profile authorization failure with missing profile string."""
         auth = CertificateProfileAuthorization()
         context = Mock(spec=BaseCertificateRequestContext)
@@ -250,7 +257,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization with single allowed profile."""
         auth = CertificateProfileAuthorization()
         context = MagicMock(spec=BaseCertificateRequestContext)
-        context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
+        context.cert_profile_str = 'test_profile_alias'  # Using alias for profile 'domain_credential'
         context.domain = domain_instance['domain']
         context.device = Mock()
         context.device.onboarding_config = Mock()
@@ -281,9 +288,7 @@ class TestCertificateProfileAuthorization:
         context.domain = Mock()
         context.domain.get_domain_credential_profile_name.return_value = 'domain_credential'
         context.device = Mock(onboarding_config=Mock())
-        context.domain.get_allowed_cert_profile.return_value = Mock(
-            credential_type='certificate'
-        )
+        context.domain.get_allowed_cert_profile.return_value = Mock(credential_type='certificate')
         with patch('request.authorization.base.ProfileValidator.validate'):
             auth.authorize(context)
         assert context.cert_profile_str == 'domain_credential'
@@ -408,8 +413,10 @@ class TestOnboardingAndOwnerAuthorization:
         with pytest.raises(ValueError, match='Client certificate is missing'):
             DevOwnerIDAuthorization().authorize(context)
         context.client_certificate = Mock()
-        with patch('request.authorization.base.AokiServiceMixin.get_owner_credential', return_value=None), \
-             patch('request.authorization.base.AokiServiceMixin.get_domain_based_owner_credential', return_value=None):
+        with (
+            patch('request.authorization.base.AokiServiceMixin.get_owner_credential', return_value=None),
+            patch('request.authorization.base.AokiServiceMixin.get_domain_based_owner_credential', return_value=None),
+        ):
             with pytest.raises(ValueError, match='No DevOwnerID credential'):
                 DevOwnerIDAuthorization().authorize(context)
         assert context.http_response_status == 403
@@ -450,7 +457,9 @@ class TestSecurityConfigAuthorization:
 
 class TestManualAndRestAuthorization:
     def test_manual_authorization_contains_manual_protocol(self) -> None:
-        protocols = next(component for component in ManualAuthorization().components if isinstance(component, ProtocolAuthorization))
+        protocols = next(
+            component for component in ManualAuthorization().components if isinstance(component, ProtocolAuthorization)
+        )
         assert protocols.allowed_protocols == ['manual']
 
     def test_rest_operation_authorization_success_and_failures(self) -> None:
@@ -465,7 +474,9 @@ class TestManualAndRestAuthorization:
 
     def test_rest_authorization_forwards_custom_operations(self) -> None:
         auth = RestAuthorization(['issue'])
-        operation = next(component for component in auth.components if isinstance(component, RestOperationAuthorization))
+        operation = next(
+            component for component in auth.components if isinstance(component, RestOperationAuthorization)
+        )
         assert operation.allowed_operations == ['issue']
 
     def test_rest_authorization_default_components_and_operations(self) -> None:
@@ -475,10 +486,13 @@ class TestManualAndRestAuthorization:
             'CertificateProfileAuthorization',
             'OnboardingDomainCredentialAuthorization',
             'ProtocolAuthorization',
+            'DeviceHttpProtocolAuthorization',
             'RestOperationAuthorization',
             'SecurityConfigAuthorization',
         ]
-        operation = next(component for component in auth.components if isinstance(component, RestOperationAuthorization))
+        operation = next(
+            component for component in auth.components if isinstance(component, RestOperationAuthorization)
+        )
         assert operation.allowed_operations == ['enroll', 'reenroll']
 
 
@@ -609,6 +623,58 @@ class TestCompositeAuthorization:
         assert 'Attempted to remove non-existent authorization component' in str(exc_info.value)
 
 
+@pytest.mark.parametrize('protocol', ['est', 'rest'])
+@pytest.mark.parametrize('onboarding', [False, True])
+def test_device_http_protocol_can_be_disabled_without_revoking_its_certificate(protocol, onboarding):
+    context = BaseRequestContext(protocol=protocol)
+    config = Mock()
+    context.device = Mock(
+        onboarding_config=config if onboarding else None,
+        no_onboarding_config=None if onboarding else config,
+    )
+    authorizer = DeviceHttpProtocolAuthorization()
+    config.has_pki_protocol.return_value = True
+    authorizer.authorize(context)
+    expected = (
+        {'est': OnboardingPkiProtocol.EST, 'rest': OnboardingPkiProtocol.REST}
+        if onboarding
+        else {
+            'est': NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+            'rest': NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD,
+        }
+    )
+    config.has_pki_protocol.assert_called_with(expected[protocol])
+    config.has_pki_protocol.return_value = False
+    with pytest.raises(ValueError, match='disabled'):
+        authorizer.authorize(context)
+
+
+@pytest.mark.parametrize('protocol', [None, 'unsupported'])
+@pytest.mark.parametrize('onboarding', [False, True])
+def test_device_http_protocol_rejects_missing_or_unknown_protocol(protocol: str | None, onboarding: bool) -> None:
+    """Reject invalid protocols before consulting configuration flags."""
+    context = BaseRequestContext(protocol=protocol)
+    config = Mock()
+    context.device = Mock(
+        onboarding_config=config if onboarding else None,
+        no_onboarding_config=None if onboarding else config,
+    )
+
+    with pytest.raises(ValueError, match='disabled'):
+        DeviceHttpProtocolAuthorization().authorize(context)
+
+    config.has_pki_protocol.assert_not_called()
+
+
+def test_device_http_protocol_rejects_missing_configuration() -> None:
+    """Reject devices with no enrollment configuration."""
+    context = BaseRequestContext(protocol='est')
+    context.device = Mock(onboarding_config=None, no_onboarding_config=None)
+
+    with pytest.raises(ValueError, match='disabled'):
+        DeviceHttpProtocolAuthorization().authorize(context)
+
+
 class TestEstAuthorization:
     """Test cases for EstAuthorization."""
 
@@ -616,8 +682,8 @@ class TestEstAuthorization:
         """Test EST authorization initialization with default components."""
         auth = EstAuthorization()
 
-        # Should have 6 components by default
-        assert len(auth.components) == 6
+        # Should have 7 components by default
+        assert len(auth.components) == 7
 
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
@@ -626,6 +692,7 @@ class TestEstAuthorization:
             'CertificateProfileAuthorization',
             'OnboardingDomainCredentialAuthorization',
             'ProtocolAuthorization',
+            'DeviceHttpProtocolAuthorization',
             'EstOperationAuthorization',
             'SecurityConfigAuthorization',
         ]

@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, hmac
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import Encoding
@@ -287,8 +288,10 @@ def test_cmp_shared_secret_verifies_pbm_with_multiple_iterations_and_sha512_hmac
         mac=MagicMock(algorithm=Mock(prettyPrint=Mock(return_value='1.3.6.1.5.5.8.1.7'))),
     )
     decoded.__getitem__.side_effect = lambda key: {
-        'salt': decoded.salt, 'owf': decoded.owf,
-        'iterationCount': decoded.iterationCount, 'mac': decoded.mac,
+        'salt': decoded.salt,
+        'owf': decoded.owf,
+        'iterationCount': decoded.iterationCount,
+        'mac': decoded.mac,
     }[key]
     decoded.owf.__getitem__.side_effect = lambda key: decoded.owf.algorithm
     decoded.mac.__getitem__.side_effect = lambda key: decoded.mac.algorithm
@@ -353,6 +356,33 @@ def test_cmp_signature_initialization_wraps_authenticator_error() -> None:
         auth._authenticate_and_verify_device(Mock(), Mock(), [])
 
 
+def test_cmp_initialization_verifies_signature_before_creating_device_state():
+    auth = CmpSignatureBasedInitializationAuthentication()
+    with (
+        patch.object(auth, '_verify_protection_signature', side_effect=InvalidSignature),
+        patch.object(auth, '_authenticate_device') as create_device,
+    ):
+        with pytest.raises(InvalidSignature):
+            auth._process_device_authentication(Mock(), Mock(), [])
+        create_device.assert_not_called()
+
+
+def test_cmp_poll_verifies_signature_before_attempting_idevid_fallback():
+    auth = CmpSignatureBasedPollAuthentication()
+    context = CmpPollRequestContext(protocol='cmp', cmp_body_type='pollReq', parsed_message=Mock())
+    with (
+        patch.object(auth, '_should_authenticate', return_value=True),
+        patch.object(auth, '_extract_extra_certs', return_value=(Mock(), [])),
+        patch.object(auth, '_verify_protection_signature', side_effect=InvalidSignature),
+        patch.object(auth, '_authenticate_with_domain_credential') as domain_auth,
+        patch.object(auth, '_authenticate_with_idevid') as idevid_auth,
+    ):
+        with pytest.raises(ValueError, match='pollReq authentication failed'):
+            auth.authenticate(context)
+        domain_auth.assert_not_called()
+        idevid_auth.assert_not_called()
+
+
 def test_cmp_signature_certification_rejects_unknown_device() -> None:
     auth = CmpSignatureBasedCertificationAuthentication()
     with patch.object(DeviceModel.objects, 'get', side_effect=DeviceModel.DoesNotExist):
@@ -368,6 +398,7 @@ def test_cmp_signature_poll_domain_credential_is_accepted() -> None:
         patch.object(auth, '_authenticate_with_domain_credential', return_value=device),
         patch.object(auth, '_extract_extra_certs', return_value=(Mock(), [])),
         patch.object(auth, '_should_authenticate', return_value=True),
+        patch.object(auth, '_verify_protection_signature'),
         patch.object(auth, '_verify_protection_and_finalize'),
     ):
         auth.authenticate(context)
@@ -451,17 +482,17 @@ def test_cmp_shared_secret_rejects_unsupported_hmac_algorithm() -> None:
         mac=MagicMock(algorithm=Mock(prettyPrint=Mock(return_value='unsupported'))),
     )
     decoded.__getitem__.side_effect = lambda key: {
-        'salt': decoded.salt, 'owf': decoded.owf,
-        'iterationCount': decoded.iterationCount, 'mac': decoded.mac,
+        'salt': decoded.salt,
+        'owf': decoded.owf,
+        'iterationCount': decoded.iterationCount,
+        'mac': decoded.mac,
     }[key]
     decoded.owf.__getitem__.side_effect = lambda key: decoded.owf.algorithm
     decoded.mac.__getitem__.side_effect = lambda key: decoded.mac.algorithm
 
     with patch('request.authentication.cmp.decoder.decode', return_value=(decoded, b'')):
         with pytest.raises(ValueError, match='hmac algorithm not supported'):
-            CmpSharedSecretAuthentication._verify_protection_shared_secret(
-                _cmp_pbm_message(decoded, b'bad'), 'secret'
-            )
+            CmpSharedSecretAuthentication._verify_protection_shared_secret(_cmp_pbm_message(decoded, b'bad'), 'secret')
 
 
 def test_cmp_signature_base_rejects_missing_or_empty_extra_certs() -> None:
@@ -506,7 +537,9 @@ def test_cmp_signature_initialization_passes_aoki_parameters() -> None:
     auth = CmpSignatureBasedInitializationAuthentication()
     device = Mock(domain=Mock())
     context = CmpCertificateRequestContext(
-        protocol='cmp', operation='initialization', domain_str='.aoki',
+        protocol='cmp',
+        operation='initialization',
+        domain_str='.aoki',
         raw_message=Mock(path='/p/.aoki/initialization'),
     )
     with patch(
@@ -533,7 +566,9 @@ def test_cmp_signature_certification_falls_back_to_fingerprint_lookup() -> None:
     certificate, _ = _certificate_and_csr()
     context = CmpCertificateRequestContext(client_certificate=certificate)
     device = Mock()
-    with patch.object(ClientCertificateAuthentication, 'authenticate', side_effect=lambda ctx: setattr(ctx, 'device', device)):
+    with patch.object(
+        ClientCertificateAuthentication, 'authenticate', side_effect=lambda ctx: setattr(ctx, 'device', device)
+    ):
         assert auth._authenticate_device(context) is device
 
 
@@ -553,7 +588,9 @@ def test_cmp_signature_certification_wraps_protection_failure() -> None:
 def test_cmp_signature_certification_requires_profile_and_signer() -> None:
     auth = CmpSignatureBasedCertificationAuthentication()
     context = CmpCertificateRequestContext(
-        protocol='cmp', operation='certification', parsed_message=MagicMock(spec=rfc4210.PKIMessage),
+        protocol='cmp',
+        operation='certification',
+        parsed_message=MagicMock(spec=rfc4210.PKIMessage),
         cert_profile_str=None,
     )
     with patch('request.authentication.cmp.AlgorithmIdentifier.from_dotted_string', return_value=Mock()):
@@ -655,9 +692,10 @@ def test_cmp_certconf_rejects_disallowed_hash_and_missing_implicit_signature_has
     context = CmpCertConfRequestContext(cert_hash=digest.finalize())
     with (
         patch.object(IssuedCredentialModel.objects, 'filter', return_value=queryset),
-        patch('request.authentication.cmp.SignatureSuite.from_certificate', return_value=Mock(
-            algorithm_identifier=Mock(hash_algorithm=None)
-        )),
+        patch(
+            'request.authentication.cmp.SignatureSuite.from_certificate',
+            return_value=Mock(algorithm_identifier=Mock(hash_algorithm=None)),
+        ),
     ):
         with pytest.raises(ValueError, match='hashAlg is required'):
             auth._resolve_issued_credential_by_cert_hash(context=context, hash_algorithm=hashes.SHA256())

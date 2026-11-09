@@ -31,7 +31,7 @@ from signer.forms import (
 from signer.models import SignedMessageModel, SignerModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin, SortableTableMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 
@@ -41,6 +41,7 @@ class SignerContextMixin(ContextDataMixin):
     context_page_category = 'tools'
     context_page_name = 'signer'
 
+
 class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListView[SignerModel]):
     """Signer Table View."""
 
@@ -49,6 +50,7 @@ class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListV
     context_object_name = 'signers'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+
 
 class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSelectForm]):
     """View to select the method to add a Signer."""
@@ -185,6 +187,7 @@ class SignerConfigView(LoggerMixin, SignerContextMixin, DetailView[SignerModel])
         """
         return super().get_context_data(**kwargs)
 
+
 class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
     """View to display all signed messages by a specific Signer."""
 
@@ -268,10 +271,11 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
         return response
 
 
-class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
+class SignHashView(UserPermissionRequiredMixin, LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
     """View for signing a hash value with a selected signer."""
 
     template_name = 'signer/sign_hash.html'
+    permission_required = AppPermissions.MANAGE_SIGNER
     form_class = SignHashForm
     success_url = reverse_lazy('signer:signer_list')
 
@@ -301,11 +305,7 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
 
             signature_hex = signature.hex()
 
-            SignedMessageModel.objects.create(
-                signer=signer,
-                hash_value=hash_value,
-                signature=signature_hex
-            )
+            SignedMessageModel.objects.create(signer=signer, hash_value=hash_value, signature=signature_hex)
 
             user = getattr(self.request, 'user', None)
             actor = user if user is not None and user.is_authenticated else None
@@ -318,7 +318,7 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
 
             messages.success(
                 self.request,
-                _('Hash successfully signed with signer "{signer_name}".').format(signer_name=signer.unique_name)
+                _('Hash successfully signed with signer "{signer_name}".').format(signer_name=signer.unique_name),
             )
 
             self.request.session['last_signature'] = {
@@ -332,10 +332,7 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
 
         except Exception as e:
             self.logger.exception('Failed to sign hash')
-            messages.error(
-                self.request,
-                _('Failed to sign hash: {error}').format(error=str(e))
-            )
+            messages.error(self.request, _('Failed to sign hash: {error}').format(error=str(e)))
             return self.form_invalid(form)
 
 

@@ -156,6 +156,83 @@ def test_verify_ca_cert_rejects_untrusted_chain(settings) -> None:
         CertificateVerifier.verify_ca_cert(intermediate, trusted_roots=[])
 
 
+def test_ca_chain_search_visits_cyclic_extras_once(monkeypatch):
+    SecurityConfig.objects.create(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+    trusted_key = ec.generate_private_key(ec.SECP256R1())
+    issuer_key = ec.generate_private_key(ec.SECP256R1())
+    attacker_key = ec.generate_private_key(ec.SECP256R1())
+    trusted, _ = CertificateGenerator.create_root_ca('Trusted root', private_key=trusted_key)
+    issuer, _ = CertificateGenerator.create_root_ca('Legitimate issuer', private_key=issuer_key)
+    issued, _ = CertificateGenerator.create_issuing_ca(issuer_key, 'Legitimate issuer', 'Requested CA')
+    cycle = [CertificateGenerator.create_root_ca('Cycle', private_key=attacker_key)[0] for _ in range(6)]
+    replacement = (
+        x509.CertificateBuilder()
+        .subject_name(issuer.subject)
+        .issuer_name(cycle[0].subject)
+        .public_key(issuer.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(issuer.not_valid_before_utc)
+        .not_valid_after(issuer.not_valid_after_utc)
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .add_extension(issuer.extensions.get_extension_for_class(x509.KeyUsage).value, critical=True)
+        .sign(attacker_key, hashes.SHA256())
+    )
+    extras = [replacement, *cycle]
+    assert sum(len(cert.public_bytes(serialization.Encoding.DER)) for cert in extras) < 131072
+    original_verify = CertificateVerifier._verify_cert_signature
+    attempts = []
+
+    def counted_verify(cert, signing_cert):
+        attempts.append((cert, signing_cert))
+        return original_verify(cert, signing_cert)
+
+    monkeypatch.setattr(CertificateVerifier, '_verify_cert_signature', staticmethod(counted_verify))
+    with pytest.raises(ValueError, match='valid certificate chain'):
+        CertificateVerifier.verify_ca_cert(issued, [trusted], extras)
+    assert len(attempts) == 1 + len(cycle)
+    assert len(set(attempts)) == len(attempts)
+
+    valid_issuer, _ = CertificateGenerator.create_issuing_ca(
+        trusted_key,
+        'Trusted root',
+        'Legitimate issuer',
+        private_key=issuer_key,
+    )
+    attempts.clear()
+    assert CertificateVerifier.verify_ca_cert(issued, [trusted], [*extras, valid_issuer]) == [
+        issued,
+        valid_issuer,
+        trusted,
+    ]
+    assert len(set(attempts)) == len(attempts)
+
+    valid, _ = CertificateGenerator.create_issuing_ca(trusted_key, 'Trusted root', 'Allowed CA')
+    attempts.clear()
+    assert CertificateVerifier.verify_ca_cert(valid, [trusted]) == [valid, trusted]
+    assert len(attempts) == 1
+
+
+def test_ca_chain_search_handles_long_trusted_paths_without_recursion():
+    SecurityConfig.objects.create(security_mode=SecurityConfig.SecurityModeChoices.LAB)
+    depth = 1100
+    root, key = CertificateGenerator.create_root_ca(
+        'CA 0',
+        private_key=ec.generate_private_key(ec.SECP256R1()),
+        path_length=depth,
+    )
+    chain = [root]
+    for index in range(1, depth + 1):
+        certificate, key = CertificateGenerator.create_issuing_ca(
+            key,
+            f'CA {index - 1}',
+            f'CA {index}',
+            private_key=ec.generate_private_key(ec.SECP256R1()),
+            path_length=depth - index,
+        )
+        chain.append(certificate)
+    assert CertificateVerifier.verify_ca_cert(chain[-1], [root], chain[1:-1]) == chain[::-1]
+
+
 def test_verify_signature_rejects_wrong_issuer() -> None:
     """Signature verification rejects a certificate signed by another issuer."""
     first, first_key = CertificateGenerator.create_root_ca('First')
@@ -179,9 +256,7 @@ def test_generate_empty_crl_has_expected_metadata() -> None:
     """Empty CRLs contain issuer, number, and requested validity metadata."""
     root, root_key = CertificateGenerator.create_root_ca('Root')
 
-    crl = x509.load_pem_x509_crl(
-        generate_empty_crl(root, root_key, crl_validity_hours=12, crl_number=7).encode()
-    )
+    crl = x509.load_pem_x509_crl(generate_empty_crl(root, root_key, crl_validity_hours=12, crl_number=7).encode())
 
     assert crl.issuer == root.subject
     assert len(crl) == 0

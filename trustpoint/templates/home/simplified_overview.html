@@ -169,9 +169,10 @@
                                     <h6 class="text-muted mb-2 mt-2">{% trans "CRL Management" %}</h6>
                                     <div class="row g-2 mb-2">
                                         <div class="col-6">
-                                            <a href="{% url 'pki:issuing_cas-crl-gen' domain.issuing_ca.pk %}" class="btn btn-outline-secondary btn-sm w-100">
-                                                {% trans "Generate CRL" %}
-                                            </a>
+                                            <form method="post" action="{% url 'pki:issuing_cas-crl-gen' domain.issuing_ca.pk %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-outline-secondary btn-sm w-100">{% trans "Generate CRL" %}</button>
+                                            </form>
                                         </div>
                                         <div class="col-6">
                                             {% with active_crl=domain.issuing_ca.get_active_crl %}
