@@ -69,9 +69,9 @@ def test_success_reuses_pending_key_and_preserves_role_specific_updates(enrollme
     )
     csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
     with (
-        patch('pki.services.owner_credential.ProfileAwareCsrBuilder') as builder,
-        patch('pki.services.owner_credential.EstDeviceCsrSignProcessor') as signer,
-        patch('pki.services.owner_credential.EstClient') as client,
+        patch('pki.services.est_enrollment.ProfileAwareCsrBuilder') as builder,
+        patch('pki.services.est_enrollment.EstDeviceCsrSignProcessor') as signer,
+        patch('pki.services.est_enrollment.EstClient') as client,
     ):
         builder.return_value.get_csr.return_value = csr
         signer.return_value.get_signed_csr.return_value = csr
@@ -104,9 +104,9 @@ def test_est_failure_keeps_the_pending_record_unissued(enrollment):
     domain, owner, pending, context = enrollment
     original_key = pending.credential.get_private_key_serializer().as_pkcs8_pem()
     with (
-        patch('pki.services.owner_credential.ProfileAwareCsrBuilder'),
-        patch('pki.services.owner_credential.EstDeviceCsrSignProcessor'),
-        patch('pki.services.owner_credential.EstClient') as client,
+        patch('pki.services.est_enrollment.ProfileAwareCsrBuilder'),
+        patch('pki.services.est_enrollment.EstDeviceCsrSignProcessor'),
+        patch('pki.services.est_enrollment.EstClient') as client,
     ):
         client.return_value.simple_enroll.side_effect = EstClientError('remote failure')
         with pytest.raises(EstClientError, match='remote failure'):
@@ -140,9 +140,9 @@ def test_est_result_binding_fails_before_certificate_persistence(enrollment, mis
     )
     csr = x509.CertificateSigningRequestBuilder().subject_name(subject).sign(key, hashes.SHA256())
     with (
-        patch('pki.services.owner_credential.ProfileAwareCsrBuilder') as builder,
-        patch('pki.services.owner_credential.EstDeviceCsrSignProcessor') as signer,
-        patch('pki.services.owner_credential.EstClient') as client,
+        patch('pki.services.est_enrollment.ProfileAwareCsrBuilder') as builder,
+        patch('pki.services.est_enrollment.EstDeviceCsrSignProcessor') as signer,
+        patch('pki.services.est_enrollment.EstClient') as client,
         patch('pki.services.owner_credential.CertificateModel.save_certificate') as save,
     ):
         builder.return_value.get_csr.return_value = csr
@@ -160,7 +160,7 @@ def test_est_result_binding_fails_before_certificate_persistence(enrollment, mis
 def test_owner_enrollment_requires_profile_before_sending_request(enrollment):
     domain, owner, pending, context = enrollment
     context.certificate_profile_model = None
-    with patch('pki.services.owner_credential.EstClient') as client:
+    with patch('pki.services.est_enrollment.EstClient') as client:
         with pytest.raises(ValueError, match='certificate profile is required'):
             enroll_owner_credential_est(
                 context, owner, pending, logger=logging.getLogger(__name__), domain_credential=domain

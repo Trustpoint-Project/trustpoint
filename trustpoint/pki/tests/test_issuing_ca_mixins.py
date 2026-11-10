@@ -53,8 +53,8 @@ def test_est_and_cmp_request_data_convert_form_values() -> None:
     }
     est_view = IssuingCaRequestCertEstView()
     cmp_view = IssuingCaRequestCertCmpView()
-    est = est_view._build_request_data_from_form(content)
-    cmp = cmp_view._build_request_data_from_form(content)
+    est = est_view.build_request_data_for_enrollment(content)
+    cmp = cmp_view.build_request_data_for_enrollment(content)
 
     assert est == cmp
     assert IssuingCaExternalCsrView()._build_request_data_from_form(content) == est
@@ -87,31 +87,19 @@ def test_define_content_profile_selection_prefers_requested_then_issuing_default
 
 @pytest.mark.django_db
 def test_request_cert_views_redirect_when_content_is_missing() -> None:
-    """EST and CMP requests require certificate content in the session first."""
+    """Certificate requests require certificate content in the session first."""
     ca = SimpleNamespace(pk=7, unique_name='remote-ca')
-    for view_class, route in [
-        (IssuingCaRequestCertEstView, 'pki:issuing_cas-define-cert-content-est'),
-        (IssuingCaRequestCertCmpView, 'pki:issuing_cas-define-cert-content-cmp'),
-    ]:
-        request = RequestFactory().post('/')
-        request.user = Mock(has_perm=Mock(return_value=True))
-        request.session = {}
-        view = view_class()
-        view.get_object = Mock(return_value=ca)
-        with patch('pki.views.issuing_cas.messages.error') as error, patch(
-            'pki.views.issuing_cas.redirect', return_value=SimpleNamespace(status_code=HTTPStatus.FOUND)
-        ) as redirect:
-            response = view.post(request)
+    view = IssuingCaRequestCertCmpView()
+    view.state = {}
+    view.edit_url_name = 'pki:issuing_cas-define-cert-content-cmp'
+    request = RequestFactory().post('/')
+    request.user = Mock(has_perm=Mock(return_value=True))
+    request.session = {}
+    view.get_object = Mock(return_value=ca)
+    with patch(
+        'pki.views.est_request.redirect', return_value=SimpleNamespace(status_code=HTTPStatus.FOUND)
+    ) as redirect:
+        response = view.post(request)
 
-        assert response.status_code == HTTPStatus.FOUND
-        error.assert_called_once()
-        redirect.assert_called_once_with(route, pk=7)
-
-
-def test_define_content_views_have_protocol_specific_messages() -> None:
-    """EST and CMP content views expose protocol-specific success messages."""
-    est_message = IssuingCaDefineCertContentEstView().get_success_message()
-    cmp_message = IssuingCaDefineCertContentCmpView().get_success_message()
-
-    assert 'EST' in est_message
-    assert 'CMP' in cmp_message
+    assert response.status_code == HTTPStatus.FOUND
+    redirect.assert_called_once_with('pki:issuing_cas-define-cert-content-cmp', pk=7)

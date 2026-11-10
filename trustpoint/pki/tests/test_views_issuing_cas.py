@@ -5,7 +5,7 @@
 
 from unittest.mock import Mock, call, patch
 
-from pki.views.issuing_cas import IssuingCaRequestCertCmpView
+from pki.services.ca_enrollment import CmpCaEnrollmentService
 
 
 def _mock_certificate(subject: bytes = b'subject', issuer: bytes = b'issuer') -> Mock:
@@ -24,8 +24,8 @@ def test_find_existing_ca_for_certificate_prefers_keyless_match() -> None:
     keyless_queryset = Mock()
     keyless_queryset.first.return_value = keyless_ca
 
-    with patch('pki.views.issuing_cas.CaModel.objects.filter', return_value=keyless_queryset) as filter_mock:
-        result = IssuingCaRequestCertCmpView()._find_existing_ca_for_certificate(cert)
+    with patch('pki.services.ca_enrollment.CaModel.objects.filter', return_value=keyless_queryset) as filter_mock:
+        result = CmpCaEnrollmentService()._find_existing_ca_for_certificate(cert)
 
     assert result is keyless_ca
     filter_mock.assert_called_once_with(
@@ -43,10 +43,10 @@ def test_find_existing_ca_for_certificate_falls_back_to_credential_match() -> No
     credential_queryset.first.return_value = credential_ca
 
     with patch(
-        'pki.views.issuing_cas.CaModel.objects.filter',
+        'pki.services.ca_enrollment.CaModel.objects.filter',
         side_effect=[keyless_queryset, credential_queryset],
     ) as filter_mock:
-        result = IssuingCaRequestCertCmpView()._find_existing_ca_for_certificate(cert)
+        result = CmpCaEnrollmentService()._find_existing_ca_for_certificate(cert)
 
     assert result is credential_ca
     assert filter_mock.call_args_list == [

@@ -5,41 +5,30 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NamedTuple, cast
+from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.db import transaction
 
+from onboarding.authorization import PermittedProtocolsAuthorization
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from pki.authorization import PkiSecurityAuthorization
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.issued_credential import RemoteIssuedCredentialModel
+from pki.services.cmp_enrollment import enroll_cmp
+from pki.services.est_enrollment import enroll_est
 from pki.services.external_csr import certificate_matches_credential
 from pki.util.certificate_request import build_ca_request_data
 from pki.util.x509 import CertificateVerifier
-from request.clients import EstClient
-from request.clients.cmp_client import CmpClient
-from request.message_builder.cmp import CmpMessageBuilder
-from request.operation_processor.csr_build import ProfileAwareCsrBuilder
-from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from pki.models.cert_profile import CertificateProfileModel
-
-
-class CmpContextParams(NamedTuple):
-    """Parameters for creating a CMP certificate request context."""
-
-    subject: x509.Name
-    public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey | Any  # Any for ML-DSA keys
-    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any  # Any for ML-DSA keys
-    recipient_name: str
-    extensions: list[x509.Extension[x509.ExtensionType]] | None
-    sender_kid: int | None
+    from pki.models.truststore import TruststoreModel
 
 
 def validate_ca_enrollment_certificate(ca: CaModel, certificate: x509.Certificate) -> CredentialModel:
@@ -49,6 +38,105 @@ def validate_ca_enrollment_certificate(ca: CaModel, certificate: x509.Certificat
         msg = 'The upstream certificate does not match the managed key.'
         raise ValueError(msg)
     return ca.credential
+
+
+def finalize_est_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configuration fields.
+    *,
+    credential: CredentialModel,
+    issued_cert: x509.Certificate,
+    truststore: TruststoreModel,
+    cert_profile: CertificateProfileModel,
+    unique_name: str,
+    remote_host: str,
+    remote_port: int,
+    remote_path: str,
+    est_username: str,
+    est_password: str,
+) -> CaModel:
+    """Create the Issuing CA from an EST-issued certificate and its pending key."""
+    CaModel._validate_ca_certificate(issued_cert)  # noqa: SLF001
+    if not certificate_matches_credential(issued_cert, credential):
+        msg = 'The upstream certificate does not match the managed key.'
+        raise ValueError(msg)
+
+    cert_model = CertificateModel.save_certificate(issued_cert)
+    credential.certificate = cert_model
+    credential.save(update_fields=['certificate'])
+    PrimaryCredentialCertificate.objects.update_or_create(
+        credential=credential, certificate=cert_model, defaults={'is_primary': True},
+    )
+
+    no_onboarding_config = NoOnboardingConfigModel.objects.create(
+        pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+        est_password=est_password,
+        trust_store=truststore,
+    )
+    ca = CaModel(
+        unique_name=unique_name,
+        credential=credential,
+        ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST,
+        remote_host=remote_host,
+        remote_port=remote_port,
+        remote_path=remote_path,
+        est_username=est_username,
+        no_onboarding_config=no_onboarding_config,
+    )
+    PermittedProtocolsAuthorization().check(ca)
+    PkiSecurityAuthorization().check(ca)
+    ca.save()
+
+    cn_attrs = issued_cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+    common_name_value = cn_attrs[0].value if cn_attrs else ''
+    common_name = common_name_value.decode() if isinstance(common_name_value, bytes) else str(common_name_value)
+    remote_issued_credential = RemoteIssuedCredentialModel(
+        common_name=common_name,
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.LOCAL_CA,
+        certificate_profile=cert_profile,
+        credential=credential,
+        ca=ca,
+    )
+    remote_issued_credential.full_clean()
+    remote_issued_credential.save()
+    return ca
+
+
+@transaction.atomic
+def finalize_cmp_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configuration fields.
+    *,
+    credential: CredentialModel,
+    issued_cert: x509.Certificate,
+    chain_certs: list[x509.Certificate],
+    truststore: TruststoreModel,
+    cert_profile: CertificateProfileModel,
+    unique_name: str,
+    remote_host: str,
+    remote_port: int,
+    remote_path: str,
+    cmp_shared_secret: str,
+    cmp_sender_kid: int | None = None,
+) -> CaModel:
+    """Create the Issuing CA from a CMP-issued certificate and its pending key."""
+    no_onboarding_config = NoOnboardingConfigModel.objects.create(
+        pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
+        cmp_shared_secret=cmp_shared_secret,
+        trust_store=truststore,
+    )
+    ca = CaModel(
+        unique_name=unique_name,
+        credential=credential,
+        ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+        remote_host=remote_host,
+        remote_port=remote_port,
+        remote_path=remote_path,
+        cmp_sender_kid=cmp_sender_kid,
+        no_onboarding_config=no_onboarding_config,
+    )
+    PermittedProtocolsAuthorization().check(ca)
+    PkiSecurityAuthorization().check(ca)
+    ca.save()
+
+    CmpCaEnrollmentService()._save_cmp_certificates(ca, issued_cert, chain_certs, cert_profile)  # noqa: SLF001
+    return ca
 
 
 def cmp_issuer_chain(
@@ -90,20 +178,7 @@ class EstCaEnrollmentService(LoggerMixin):
         context.request_data = request_data
         context.owner_credential = ca.credential
 
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-
-        context.cert_requested = csr
-
-        # Use EstDeviceCsrSignProcessor to re-sign the CSR with the proper signature algorithm
-        csr_signer = EstDeviceCsrSignProcessor()
-        csr_signer.process_operation(context)
-        signed_csr = csr_signer.get_signed_csr()
-
-        # Send the re-signed CSR to the remote EST server
-        est_client = EstClient(context)
-        issued_cert, _ = est_client.simple_enroll(signed_csr)
+        issued_cert, _ = enroll_est(context)
 
         credential = validate_ca_enrollment_certificate(ca, issued_cert)
         cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
@@ -174,47 +249,7 @@ class CmpCaEnrollmentService(LoggerMixin):
         context.request_data = request_data
         context.owner_credential = ca.credential
 
-        csr_builder = ProfileAwareCsrBuilder()
-        csr_builder.process_operation(context)
-        csr = csr_builder.get_csr()
-
-        if not csr.subject or len(csr.subject) == 0:
-            msg = 'CSR does not have a subject - cannot build CMP request'
-            raise ValueError(msg)
-
-        self.logger.info('CSR subject: %s', csr.subject.rfc4514_string())
-
-        csr_subject = csr.subject
-        csr_public_key = csr.public_key()
-        csr_extensions = list(csr.extensions) if csr.extensions else None
-
-        self.logger.info('CSR has %d extensions', len(csr.extensions) if csr.extensions else 0)
-
-        recipient_name = self._get_recipient_name_from_truststore(ca)
-
-        private_key = self._load_private_key(ca)
-
-        cmp_params = CmpContextParams(
-            subject=csr_subject,
-            public_key=cast('rsa.RSAPublicKey | ec.EllipticCurvePublicKey | Any', csr_public_key),
-            private_key=private_key,
-            recipient_name=recipient_name,
-            extensions=csr_extensions,
-            sender_kid=sender_kid,
-        )
-
-        cmp_context = self._create_cmp_context(ca, cmp_params)
-
-        cmp_builder = CmpMessageBuilder()
-        cmp_builder.build(cmp_context)
-
-        pki_message = cmp_context.parsed_message
-
-        cmp_client = CmpClient(cmp_context)
-        issued_cert, chain_certs = cmp_client.send_and_extract_certificate(
-            pki_message,
-            add_shared_secret_protection=True,
-        )
+        issued_cert, chain_certs = enroll_cmp(context, sender_kid=sender_kid)
 
         self._save_cmp_certificates(ca, issued_cert, chain_certs, cert_profile)
 
@@ -222,70 +257,6 @@ class CmpCaEnrollmentService(LoggerMixin):
         """Use the shared CA request conversion, including SAN list normalization."""
         self.logger.info('Building request data from: %s', cert_content_data)
         return build_ca_request_data(cert_content_data)
-
-    def _get_recipient_name_from_truststore(self, ca: CaModel) -> str:
-        """Extract recipient name from the CA's truststore."""
-        if not ca.no_onboarding_config or not ca.no_onboarding_config.trust_store:
-            msg = 'No truststore configured for CMP CA - recipient name cannot be determined'
-            raise ValueError(msg)
-
-        try:
-            truststore_certs = ca.no_onboarding_config.trust_store.truststoreordermodel_set.order_by('order')
-            if not truststore_certs.exists():
-                msg = 'Truststore contains no certificates - cannot determine recipient name'
-                raise ValueError(msg)
-
-            first_cert_model = truststore_certs.first().certificate  # type: ignore[union-attr]
-            ca_cert = first_cert_model.get_certificate_serializer().as_crypto()
-            recipient_name = ca_cert.subject.rfc4514_string()
-            self.logger.info('Using recipient name from truststore: %s', recipient_name)
-        except (AttributeError, IndexError) as e:
-            msg = f'Failed to extract recipient name from truststore: {e}'
-            raise ValueError(msg) from e
-        else:
-            return recipient_name
-
-    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any:
-        """Load the private key from the CA's credential."""
-        if not ca.credential:
-            msg = 'No private key available for CA credential'
-            raise ValueError(msg)
-
-        try:
-            return cast(
-                'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any',
-                ca.credential.get_private_key(),
-            )
-        except (RuntimeError, TypeError, ValueError) as exc:
-            msg = 'No usable private key is available for the CA credential.'
-            raise ValueError(msg) from exc
-
-    def _create_cmp_context(
-        self,
-        ca: CaModel,
-        params: CmpContextParams,
-    ) -> CmpCertificateRequestContext:
-        """Create the CMP certificate request context."""
-        return CmpCertificateRequestContext(
-            protocol='cmp',
-            operation='certification',
-            cmp_server_host=ca.remote_host,
-            cmp_server_port=ca.remote_port,
-            cmp_server_path=ca.remote_path,
-            cmp_shared_secret=(ca.no_onboarding_config.cmp_shared_secret if ca.no_onboarding_config else None),
-            cmp_server_truststore=(ca.no_onboarding_config.trust_store if ca.no_onboarding_config else None),
-            request_data={
-                'subject': params.subject,
-                'public_key': params.public_key,
-                'private_key': params.private_key,
-                'recipient_name': params.recipient_name,
-                'extensions': params.extensions,
-                'use_initialization_request': False,
-                'add_pop': True,
-                'prepare_shared_secret_protection': True,
-                'sender_kid': params.sender_kid,
-            },
-        )
 
     def _save_cmp_certificates(
         self,

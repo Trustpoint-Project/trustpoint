@@ -181,6 +181,16 @@ urlpatterns = [
         issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
         name='issuing_cas-truststore-association',
     ),
+    path(
+        'issuing-cas/est-truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaEstTruststoreAssociationView.as_view(),
+        name='issuing_cas-est-truststore-association',
+    ),
+    path(
+        'issuing-cas/cmp-truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaCmpTruststoreAssociationView.as_view(),
+        name='issuing_cas-cmp-truststore-association',
+    ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     # CA Rollover management

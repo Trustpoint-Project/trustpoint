@@ -29,6 +29,7 @@ from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
+from pki.forms.cmp_request import CmpRequestFormMixin
 from pki.forms.credentials import (
     encode_credential_password,
     parse_certificate_chain_upload,
@@ -36,6 +37,7 @@ from pki.forms.credentials import (
     parse_private_key_upload,
     read_pkcs12_upload,
 )
+from pki.forms.est_request import EstRequestFormMixin
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
@@ -726,6 +728,49 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
             instance.save()
         return instance
+
+
+class IssuingCaRequestEstForm(EstRequestFormMixin, forms.Form):
+    """Request an Issuing CA certificate from an external EST PKI (session-based wizard)."""
+
+    key_type_choices = KEY_TYPE_CHOICES
+    key_type_initial = 'RSA-2048'
+    remote_port_initial = 443
+    est_authentication_required = True
+
+    unique_name = forms.CharField(
+        label=_('Unique Name'),
+        max_length=100,
+        required=True,
+        validators=[UniqueNameValidator()],
+        help_text=_('A unique name for the new Issuing CA.'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the Issuing CA defaults to the shared EST request fields."""
+        super().__init__(*args, **kwargs)
+        self._apply_est_request_defaults()
+
+
+class IssuingCaRequestCmpForm(CmpRequestFormMixin, forms.Form):
+    """Request an Issuing CA certificate from an external CMP PKI (session-based wizard)."""
+
+    key_type_choices = KEY_TYPE_CHOICES
+    key_type_initial = 'RSA-2048'
+    remote_port_initial = 443
+
+    unique_name = forms.CharField(
+        label=_('Unique Name'),
+        max_length=100,
+        required=True,
+        validators=[UniqueNameValidator()],
+        help_text=_('A unique name for the new Issuing CA.'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the Issuing CA defaults to the shared CMP request fields."""
+        super().__init__(*args, **kwargs)
+        self._apply_cmp_request_defaults()
 
 
 class IssuingCaAddRequestExternalCsrForm(IssuingCaAddRequestMixin):

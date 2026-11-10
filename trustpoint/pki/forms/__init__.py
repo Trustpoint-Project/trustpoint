@@ -18,9 +18,12 @@ from .issuing_cas import (
     IssuingCaCrlCycleForm,
     IssuingCaExternalCsrCertificateForm,
     IssuingCaFileTypeSelectForm,
+    IssuingCaRequestCmpForm,
+    IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
 )
 from .owner_credential import (
+    OwnerCredentialAddRequestCmpForm,
     OwnerCredentialAddRequestEstNoOnboardingForm,
     OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialFileImportForm,
@@ -46,7 +49,10 @@ __all__ = [
     'IssuingCaCrlCycleForm',
     'IssuingCaExternalCsrCertificateForm',
     'IssuingCaFileTypeSelectForm',
+    'IssuingCaRequestCmpForm',
+    'IssuingCaRequestEstForm',
     'IssuingCaTruststoreAssociationForm',
+    'OwnerCredentialAddRequestCmpForm',
     'OwnerCredentialAddRequestEstNoOnboardingForm',
     'OwnerCredentialAddRequestEstOnboardingForm',
     'OwnerCredentialFileImportForm',

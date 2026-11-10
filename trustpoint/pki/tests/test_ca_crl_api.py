@@ -527,9 +527,9 @@ def test_upstream_ca_enrollment(api, ca, lab_config, protocol):
         .sign(ca.credential.get_private_key(), hashes.SHA256())
     )
     path = (
-        'pki.services.ca_enrollment.EstClient.simple_enroll'
+        'pki.services.est_enrollment.EstClient.simple_enroll'
         if protocol == 'est'
-        else 'pki.services.ca_enrollment.CmpClient.send_and_extract_certificate'
+        else 'pki.services.cmp_enrollment.CmpClient.send_and_extract_certificate'
     )
     upstream_result = (cert, [ca.get_certificate()])
     enrollment_data = {

@@ -43,6 +43,7 @@ from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.forms.cmp_request import CmpRequestFormMixin
 from pki.forms.credentials import (
     encode_credential_password,
     parse_certificate_chain_upload,
@@ -51,8 +52,9 @@ from pki.forms.credentials import (
     read_pkcs12_upload,
     read_private_key_upload,
 )
+from pki.forms.est_request import EstRequestFormMixin
 from pki.key_types import TLS_KEY_TYPE_CHOICES
-from pki.models import CredentialModel
+from pki.models import CaModel, CredentialModel
 from pki.models.truststore import TruststoreModel
 from pki.services import credential_upload as uploads
 from pki.services.credential_upload import parse_pkcs12
@@ -162,6 +164,41 @@ class TlsExternalCsrCertificateForm(forms.Form):
             return list(certificate.extensions.get_extension_for_class(x509.SubjectAlternativeName).value)
         except x509.ExtensionNotFound:
             return []
+
+
+class TlsAddRequestEstForm(EstRequestFormMixin, forms.Form):
+    """Generate a TLS key and request the TLS server certificate via an external EST PKI."""
+
+    key_type_choices = TLS_KEY_TYPE_CHOICES
+    key_type_initial = 'ECC-SECP256R1'
+    remote_port_initial = 8443
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Limit offerings to supported RSA and TLS elliptic curves."""
+        super().__init__(*args, **kwargs)
+        self._apply_est_request_defaults()
+
+
+class TlsAddRequestCmpForm(CmpRequestFormMixin, forms.Form):
+    """Generate a TLS key and request the TLS server certificate via an external CMP PKI."""
+
+    key_type_choices = TLS_KEY_TYPE_CHOICES
+    key_type_initial = 'ECC-SECP256R1'
+    remote_port_initial = 8443
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Limit offerings to supported RSA and TLS elliptic curves."""
+        super().__init__(*args, **kwargs)
+        self._apply_cmp_request_defaults()
+
+
+class TlsLocalCaSelectForm(forms.Form):
+    """Select a local Issuing CA hosted in Trustpoint to sign the TLS credential."""
+
+    issuing_ca = forms.ModelChoiceField(
+        queryset=CaModel.objects.filter(is_active=True, credential__isnull=False),
+        label=_('Issuing CA'),
+    )
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):

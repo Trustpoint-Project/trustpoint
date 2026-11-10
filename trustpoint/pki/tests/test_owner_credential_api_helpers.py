@@ -149,7 +149,10 @@ def test_est_context_keeps_ui_errors_translated_and_api_errors_plain(ui, missing
     )
     consumer = owner_credentials.OwnerCredentialRequestCertEstView() if ui else DevOwnerIdViewSet()
     with pytest.raises(ValueError) as error:
-        consumer._build_est_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
+        if ui:
+            consumer._build_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
+        else:
+            consumer._build_est_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
     expected = (
         'The domain credential has no certificate. Please issue a domain credential first.' if missing_certificate
         else 'No domain credential found for this owner credential. Please issue a domain credential first.'
