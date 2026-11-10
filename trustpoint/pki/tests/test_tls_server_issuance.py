@@ -4,7 +4,6 @@
 """TLS server credential enrollment via EST and local Issuing CA."""
 
 import datetime as dt
-from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -19,7 +18,7 @@ from pki.models import CaModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
 from pki.services.key_generation import generate_pending_credential
-from pki.services.tls_server_issuance import enroll_tls_server_est, issue_tls_server_local
+from pki.services.tls_server_issuance import finalize_tls_server_enrollment, issue_tls_server_local
 from pki.forms.truststores import TruststoreAddForm
 from pki.tests.managed_ca_helpers import create_managed_root_ca
 
@@ -79,7 +78,7 @@ def test_issue_tls_server_local_signs_with_local_ca() -> None:
     assert [c.subject for c in pending.get_certificate_chain()] == [ca_cert.subject]
 
 
-def test_enroll_tls_server_est_attaches_certificate() -> None:
+def test_finalize_tls_server_enrollment_attaches_certificate() -> None:
     """An EST-issued certificate that chains to the truststore is attached to the pending key."""
     issuer_key = ec.generate_private_key(ec.SECP256R1())
     issuer_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'External CA')])
@@ -100,7 +99,6 @@ def test_enroll_tls_server_est_attaches_certificate() -> None:
     )
     truststore = TruststoreAddForm.save_trust_store('est-tls', TruststoreModel.IntendedUsage.TLS, [issuer_cert])
 
-    profile = CertificateProfileModel.objects.get(unique_name='tls_server')
     pending = _pending_credential()
     leaf = (
         x509.CertificateBuilder()
@@ -119,19 +117,7 @@ def test_enroll_tls_server_est_attaches_certificate() -> None:
         .sign(issuer_key, hashes.SHA256())
     )
 
-    with patch('pki.services.est_enrollment.EstClient') as client:
-        client.return_value.simple_enroll.return_value = (leaf, [issuer_cert])
-        enroll_tls_server_est(
-            pending,
-            profile,
-            CONTENT,
-            est_host='ca.example',
-            est_port=8443,
-            est_path='/.well-known/est/simpleenroll',
-            est_username='user',
-            est_password='secret',
-            truststore=truststore,
-        )
+    finalize_tls_server_enrollment(pending, leaf, [issuer_cert], truststore)
 
     pending.refresh_from_db()
     cert = pending.get_certificate()
@@ -139,7 +125,7 @@ def test_enroll_tls_server_est_attaches_certificate() -> None:
     assert [c.subject for c in pending.get_certificate_chain()] == [issuer_name]
 
 
-def test_enroll_tls_server_est_rejects_untrusted_certificate() -> None:
+def test_finalize_tls_server_enrollment_rejects_untrusted_certificate() -> None:
     """A certificate that does not chain to the truststore is rejected before persistence."""
     issuer_key = ec.generate_private_key(ec.SECP256R1())
     issuer_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Trusted CA')])
@@ -158,7 +144,6 @@ def test_enroll_tls_server_est_rejects_untrusted_certificate() -> None:
     )
     truststore = TruststoreAddForm.save_trust_store('est-tls-2', TruststoreModel.IntendedUsage.TLS, [issuer_cert])
 
-    profile = CertificateProfileModel.objects.get(unique_name='tls_server')
     pending = _pending_credential()
     rogue_key = ec.generate_private_key(ec.SECP256R1())
     rogue_name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Rogue CA')])
@@ -185,20 +170,8 @@ def test_enroll_tls_server_est_rejects_untrusted_certificate() -> None:
         .sign(rogue_key, hashes.SHA256())
     )
 
-    with patch('pki.services.est_enrollment.EstClient') as client:
-        client.return_value.simple_enroll.return_value = (leaf, [rogue_cert])
-        with pytest.raises(ValueError, match='does not chain'):
-            enroll_tls_server_est(
-                pending,
-                profile,
-                CONTENT,
-                est_host='ca.example',
-                est_port=8443,
-                est_path='/.well-known/est/simpleenroll',
-                est_username='user',
-                est_password='secret',
-                truststore=truststore,
-            )
+    with pytest.raises(ValueError, match='does not chain'):
+        finalize_tls_server_enrollment(pending, leaf, [rogue_cert], truststore)
 
     pending.refresh_from_db()
     assert pending.certificate_id is None

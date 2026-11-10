@@ -13,22 +13,18 @@ import pytest
 from django.test import RequestFactory
 
 from pki.models import CertificateProfileModel
+from pki.util.certificate_request import build_cert_content_summary
 from pki.views.issuing_cas import (
-    IssuingCaDefineCertContentCmpView,
     IssuingCaDefineCertContentEstView,
-    IssuingCaDefineCertContentMixin,
     IssuingCaExternalCsrView,
     IssuingCaRequestCertCmpView,
     IssuingCaRequestCertEstView,
-    IssuingCaRequestCertMixin,
 )
 
 
 def test_certificate_content_summary_formats_subject_sans_and_validity() -> None:
     """Content summaries label all supplied subject, SAN, and validity fields."""
-    view = IssuingCaRequestCertEstView()
-    summary = IssuingCaRequestCertMixin.__dict__['_build_cert_content_summary'](
-        view,
+    summary = build_cert_content_summary(
         {
             'common_name': 'ca.example',
             'organization_name': 'Trustpoint',
@@ -42,7 +38,7 @@ def test_certificate_content_summary_formats_subject_sans_and_validity() -> None
     assert summary['subject'] == {'Common Name (CN)': 'ca.example', 'Organization (O)': 'Trustpoint'}
     assert summary['san'] == {'DNS Names': ['ca.example'], 'URIs': ['urn:ca']}
     assert summary['validity'] == '10 days, 5 minutes'
-    assert IssuingCaRequestCertMixin.__dict__['_build_cert_content_summary'](view, {})['validity'] == 'Not specified'
+    assert build_cert_content_summary({})['validity'] == 'Not specified'
 
 
 def test_est_and_cmp_request_data_convert_form_values() -> None:

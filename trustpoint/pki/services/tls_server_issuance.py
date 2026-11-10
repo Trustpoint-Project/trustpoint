@@ -1,13 +1,7 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""TLS server credential enrollment: external EST and local Issuing CA issuance.
-
-Reuses the profile-aware CSR machinery already used for external-CSR and
-DevOwnerID enrollment (``pki/services/external_csr.py``), the EST client
-(``request/clients/est_client.py``) and the CA signing helpers from
-``request/operation_processor/issue_cert.py``, without the device/domain coupling.
-"""
+"""TLS server certificate finalization and local Issuing CA issuance."""
 
 from __future__ import annotations
 
@@ -23,19 +17,16 @@ from trustpoint_core.oid import SignatureSuite
 from pki.models import CaModel, CredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
-from pki.services.est_enrollment import enroll_est
-from pki.services.external_csr import build_external_csr, certificate_matches_credential, external_csr_profile
+from pki.services.external_csr import build_external_csr, certificate_matches_credential
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from pki.util.certificate_path import validate_issued_certificate_path
-from pki.util.certificate_request import build_request_data
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
-from request.request_context import EstCertificateRequestContext
 
 if TYPE_CHECKING:
     from pki.models.cert_profile import CertificateProfileModel
     from pki.models.truststore import TruststoreModel
 
-__all__ = ['enroll_tls_server_est', 'finalize_tls_server_enrollment', 'issue_tls_server_local']
+__all__ = ['finalize_tls_server_enrollment', 'issue_tls_server_local']
 
 
 @transaction.atomic
@@ -68,40 +59,6 @@ def _attach_certificate(
             primary_certificate=leaf_model,
             order=order,
         )
-
-
-def enroll_tls_server_est(  # noqa: PLR0913 - EST connection fields mirror the remote PKI configuration.
-    credential: CredentialModel,
-    cert_profile: CertificateProfileModel,
-    content: dict[str, Any],
-    *,
-    est_host: str,
-    est_port: int,
-    est_path: str,
-    est_username: str,
-    est_password: str | None,
-    truststore: TruststoreModel,
-) -> CredentialModel:
-    """Enroll a TLS server credential from an external PKI via EST (RFC 7030)."""
-    context = EstCertificateRequestContext(
-        operation='simpleenroll',
-        protocol='est',
-        domain=None,
-        cert_profile_str=cert_profile.unique_name,
-        certificate_profile_model=external_csr_profile(cert_profile),
-        allow_ca_certificate_request=False,
-        est_server_host=est_host,
-        est_server_port=est_port,
-        est_server_path=est_path,
-        est_username=est_username,
-        est_password=est_password,
-        est_server_truststore=truststore,
-    )
-    context.request_data = build_request_data(content, keep_empty_sans=True)
-    context.owner_credential = credential
-
-    issued_cert, extra_certs = enroll_est(context)
-    return finalize_tls_server_enrollment(credential, issued_cert, list(extra_certs), truststore)
 
 
 def finalize_tls_server_enrollment(
