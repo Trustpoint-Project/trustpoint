@@ -93,9 +93,7 @@ def test_enroll_tls_server_est_attaches_certificate() -> None:
         .not_valid_before(now - dt.timedelta(days=1))
         .not_valid_after(now + dt.timedelta(days=365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(
-            x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True
-        )
+        .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(issuer_key.public_key()), critical=False)
         .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False)
         .sign(issuer_key, hashes.SHA256())
@@ -114,7 +112,9 @@ def test_enroll_tls_server_est_attaches_certificate() -> None:
         .not_valid_after(now + dt.timedelta(days=10))
         .add_extension(x509.SubjectAlternativeName([x509.DNSName('server.example')]), critical=True)
         .add_extension(x509.ExtendedKeyUsage([x509.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
-        .add_extension(x509.SubjectKeyIdentifier.from_public_key(pending.get_private_key().public_key()), critical=False)
+        .add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(pending.get_private_key().public_key()), critical=False
+        )
         .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False)
         .sign(issuer_key, hashes.SHA256())
     )
@@ -153,9 +153,7 @@ def test_enroll_tls_server_est_rejects_untrusted_certificate() -> None:
         .not_valid_before(now - dt.timedelta(days=1))
         .not_valid_after(now + dt.timedelta(days=365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(
-            x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True
-        )
+        .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
         .sign(issuer_key, hashes.SHA256())
     )
     truststore = TruststoreAddForm.save_trust_store('est-tls-2', TruststoreModel.IntendedUsage.TLS, [issuer_cert])
@@ -173,9 +171,7 @@ def test_enroll_tls_server_est_rejects_untrusted_certificate() -> None:
         .not_valid_before(now - dt.timedelta(days=1))
         .not_valid_after(now + dt.timedelta(days=365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(
-            x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True
-        )
+        .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
         .sign(rogue_key, hashes.SHA256())
     )
     leaf = (

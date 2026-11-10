@@ -57,7 +57,8 @@ def _attach_certificate(
     pending.certificate = leaf_model
     pending.save(update_fields=['certificate'])
     PrimaryCredentialCertificate.objects.update_or_create(
-        credential=pending, defaults={'certificate': leaf_model, 'is_primary': True},
+        credential=pending,
+        defaults={'certificate': leaf_model, 'is_primary': True},
     )
     # Chain entries are stored root-first, matching the existing external-CSR finalize.
     for order, issuer in enumerate(reversed(issuer_chain_leaf_first)):
@@ -152,9 +153,7 @@ def issue_tls_server_local(
             critical=False,
         )
     with contextlib.suppress(ValueError):  # extension already present in CSR
-        builder = builder.add_extension(
-            x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False
-        )
+        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
 
     issuer_key = _unwrap_mldsa_managed_key(ca_credential.get_private_key())
     issuer_key = validate_certificate_signing_private_key(issuer_key)

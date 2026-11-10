@@ -58,7 +58,7 @@
                         <p class="text-muted mb-0">{% trans 'Define the distinguished name information included in the certificate subject.' %}</p>
                     </div>
                     <hr class="mb-4">
-                    {% include 'management/tls/external_csr_fields.html' with field_names='common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address,serial_number' %}
+                    {% include 'shared/partials/certificate_form_fields.html' with field_names='common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address,serial_number' %}
                 </section>
                 <section class="mb-5">
                     <div class="mb-3">
@@ -66,7 +66,7 @@
                         <p class="text-muted mb-0">{% trans 'Define additional identities such as DNS names, IP addresses, email addresses or URIs.' %}</p>
                     </div>
                     <hr class="mb-4">
-                    {% include 'management/tls/external_csr_fields.html' with field_names='dns_names,ip_addresses,rfc822_names,uris' %}
+                    {% include 'shared/partials/certificate_form_fields.html' with field_names='dns_names,ip_addresses,rfc822_names,uris' %}
                 </section>
                 <section>
                     <div class="mb-3">
@@ -74,7 +74,7 @@
                         <p class="text-muted mb-0">{% trans 'Define the validity period for the certificate.' %}</p>
                     </div>
                     <hr class="mb-4">
-                    {% include 'management/tls/external_csr_fields.html' with field_names='not_before,not_after,days,hours,minutes,seconds' %}
+                    {% include 'shared/partials/certificate_form_fields.html' with field_names='not_before,not_after,days,hours,minutes,seconds' %}
                 </section>
             {% else %}
                 <section aria-labelledby="configuration-section-title">
@@ -92,7 +92,7 @@
                         </div>
                         {{ form|crispy }}
                     {% else %}
-                        {% include 'management/tls/external_csr_fields.html' %}
+                        {% include 'shared/partials/certificate_form_fields.html' %}
                     {% endif %}
                 </section>
             {% endif %}

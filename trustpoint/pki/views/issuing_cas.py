@@ -597,12 +597,12 @@ class IssuingCaDefineCertContentEstView(
     """Define certificate content for the EST Issuing CA request."""
 
     permission_required = AppPermissions.MANAGE_CAS
-    template_name = 'management/tls/external_csr_form.html'
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
     session_scope = 'issuing-ca-est'
     default_profile_name = 'issuing_ca'
     profile_credential_type = None
     request_cert_url_name = 'pki:issuing_cas-request-cert-est'
+    cancel_url_name = 'pki:issuing_cas'
 
 
 class IssuingCaDefineCertContentCsrView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
@@ -852,12 +852,12 @@ class IssuingCaDefineCertContentCmpView(
     """Define certificate content for the CMP Issuing CA request."""
 
     permission_required = AppPermissions.MANAGE_CAS
-    template_name = 'management/tls/external_csr_form.html'
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
     session_scope = 'issuing-ca-cmp'
     default_profile_name = 'issuing_ca'
     profile_credential_type = None
     request_cert_url_name = 'pki:issuing_cas-request-cert-cmp'
+    cancel_url_name = 'pki:issuing_cas'
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
@@ -1079,7 +1079,6 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
     """Review the EST request, then create the Issuing CA from the issued certificate."""
 
     permission_required = AppPermissions.MANAGE_CAS
-    template_name = 'management/tls/request_cert_est.html'
     title = 'Request CA Certificate via EST'
     description = 'Review the request and enroll the Issuing CA certificate from the external EST PKI.'
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
@@ -1124,7 +1123,6 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
     """Review the CMP request, then create the Issuing CA from the issued certificate."""
 
     permission_required = AppPermissions.MANAGE_CAS
-    template_name = 'management/tls/request_cert_cmp.html'
     title = 'Request CA Certificate via CMP'
     description = 'Review the request and enroll the Issuing CA certificate from the external PKI via CMP.'
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
@@ -1164,8 +1162,6 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
         """Return to the created CA's configuration page."""
         return redirect('pki:issuing_cas-config', pk=result.pk)
-
-
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

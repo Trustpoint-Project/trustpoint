@@ -63,7 +63,9 @@ def finalize_est_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configura
     credential.certificate = cert_model
     credential.save(update_fields=['certificate'])
     PrimaryCredentialCertificate.objects.update_or_create(
-        credential=credential, certificate=cert_model, defaults={'is_primary': True},
+        credential=credential,
+        certificate=cert_model,
+        defaults={'is_primary': True},
     )
 
     no_onboarding_config = NoOnboardingConfigModel.objects.create(

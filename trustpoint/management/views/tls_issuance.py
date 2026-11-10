@@ -54,6 +54,7 @@ class TlsAddRequestEstView(TlsSettingsContextMixin, EstRequestView):
     session_scope = TLS_SCOPE
     key_extractable = True
     truststore_url_name = 'management:tls-truststore-association'
+    back_url_name = 'management:tls-add-method_select'
 
 
 class TlsTruststoreAssociationView(TlsSettingsContextMixin, CertificateTruststoreAssociationView):
@@ -62,6 +63,7 @@ class TlsTruststoreAssociationView(TlsSettingsContextMixin, CertificateTruststor
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
     content_url_name = 'management:tls-define-cert-content-est'
+    cancel_url_name = 'management:tls'
 
 
 class TlsDefineCertContentEstView(TlsSettingsContextMixin, CertificateDefineCertContentView):
@@ -72,12 +74,12 @@ class TlsDefineCertContentEstView(TlsSettingsContextMixin, CertificateDefineCert
     default_profile_name = 'tls_server'
     profile_credential_type = CertificateProfileModel.ProfileCredentialType.APPLICATION
     request_cert_url_name = 'management:tls-request-cert-est'
+    cancel_url_name = 'management:tls'
 
 
 class TlsRequestCertEstView(TlsSettingsContextMixin, EstRequestCertView):
     """Review the EST request, then enroll the TLS certificate."""
 
-    template_name = 'management/tls/request_cert_est.html'
     title = 'Request TLS Certificate via EST'
     description = 'Review the request and enroll the TLS server certificate from the external EST PKI.'
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
@@ -109,6 +111,7 @@ class TlsAddRequestCmpView(TlsSettingsContextMixin, CmpRequestView):
     session_scope = TLS_SCOPE
     key_extractable = True
     truststore_url_name = 'management:tls-cmp-truststore-association'
+    back_url_name = 'management:tls-add-method_select'
 
 
 class TlsCmpTruststoreAssociationView(TlsSettingsContextMixin, CertificateTruststoreAssociationView):
@@ -117,6 +120,7 @@ class TlsCmpTruststoreAssociationView(TlsSettingsContextMixin, CertificateTrusts
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
     content_url_name = 'management:tls-define-cert-content-cmp'
+    cancel_url_name = 'management:tls'
 
 
 class TlsDefineCertContentCmpView(TlsSettingsContextMixin, CertificateDefineCertContentView):
@@ -127,12 +131,12 @@ class TlsDefineCertContentCmpView(TlsSettingsContextMixin, CertificateDefineCert
     default_profile_name = 'tls_server'
     profile_credential_type = CertificateProfileModel.ProfileCredentialType.APPLICATION
     request_cert_url_name = 'management:tls-request-cert-cmp'
+    cancel_url_name = 'management:tls'
 
 
 class TlsRequestCertCmpView(TlsSettingsContextMixin, CmpRequestCertView):
     """Review the CMP request, then enroll the TLS certificate."""
 
-    template_name = 'management/tls/request_cert_cmp.html'
     title = 'Request TLS Certificate via CMP'
     description = 'Review the request and enroll the TLS server certificate from the external PKI via CMP.'
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
@@ -164,6 +168,7 @@ class TlsLocalCaKeyView(TlsSettingsContextMixin, CertificateRequestWizardView[Tl
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
     key_extractable = True
+    back_url_name = 'management:tls-add-method_select'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the key-step heading and action label."""
@@ -195,6 +200,7 @@ class TlsLocalCaSelectView(TlsSettingsContextMixin, CertificateRequestWizardView
     form_class = TlsLocalCaSelectForm
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
+    back_url_name = 'management:tls-add-method_select'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the Issuing CA selection heading and action label."""
@@ -221,6 +227,7 @@ class TlsLocalCaContentView(TlsSettingsContextMixin, CertificateDefineCertConten
     default_profile_name = 'tls_server'
     profile_credential_type = CertificateProfileModel.ProfileCredentialType.APPLICATION
     request_cert_url_name = 'management:tls-local-request'
+    cancel_url_name = 'management:tls'
 
 
 class TlsLocalCaRequestView(
@@ -253,9 +260,7 @@ class TlsLocalCaRequestView(
             'has_cert_content': bool(content),
             'cert_content_summary': build_cert_content_summary(content) if content else {},
             'edit_url_name': 'management:tls-local-content',
-            'issuing_ca': (
-                get_object_or_404(CaModel, pk=self.state['ca_pk']) if self.state.get('ca_pk') else None
-            ),
+            'issuing_ca': (get_object_or_404(CaModel, pk=self.state['ca_pk']) if self.state.get('ca_pk') else None),
         }
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:

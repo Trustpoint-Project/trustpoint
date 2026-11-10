@@ -165,9 +165,7 @@ def _persist_owner_credential_enrollment(  # noqa: PLR0913 - Persist needs the f
     if not isinstance(csr, x509.CertificateSigningRequest):
         msg = 'Enrollment did not produce a CSR request.'
         raise TypeError(msg)
-    requested_ca = any(
-        isinstance(ext.value, x509.BasicConstraints) and ext.value.ca for ext in csr.extensions
-    )
+    requested_ca = any(isinstance(ext.value, x509.BasicConstraints) and ext.value.ca for ext in csr.extensions)
     if is_ca != requested_ca:
         msg = 'The upstream certificate CA role does not match the request.'
         raise ValueError(msg)

@@ -40,6 +40,7 @@ class CmpRequestView(CertificateRequestView):
 class CmpRequestCertView(CertificateRequestCertView):
     """Step 4 (CMP): review the request, then enroll the certificate via CMP."""
 
+    template_name = 'pki/certificate_request/request_cert_cmp.html'
     title = 'Request Certificate via CMP'
     description = 'Review the request and enroll the certificate from the external PKI via CMP.'
     client_error_types = (CmpClientError,)

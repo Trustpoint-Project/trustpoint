@@ -953,9 +953,7 @@ class OwnerCredentialRequestCertEstView(
         """Build EST authentication and truststore arguments for this credential."""
         return build_owner_credential_est_context_kwargs(owner_credential, cert_profile, translate=_)
 
-    def _perform_enrollment(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> None:
+    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
         """Enroll the session's pending credential and persist the issued certificate."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
@@ -1037,9 +1035,7 @@ class OwnerCredentialRequestCertCmpView(OwnerCredentialRequestCertEstView):
         """Build CMP authentication and truststore arguments for this credential."""
         return build_owner_credential_cmp_context_kwargs(owner_credential, cert_profile, translate=_)
 
-    def _perform_enrollment(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> None:
+    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
         """Enroll the session's pending credential via CMP and persist the issued certificate."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)

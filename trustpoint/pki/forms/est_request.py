@@ -111,6 +111,4 @@ class CertificateTruststoreAssociationForm(forms.Form):
         """Limit the choice to TLS trust stores."""
         super().__init__(*args, **kwargs)
         trust_store_field = cast('forms.ModelChoiceField[TruststoreModel]', self.fields['trust_store'])
-        trust_store_field.queryset = TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
+        trust_store_field.queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS)

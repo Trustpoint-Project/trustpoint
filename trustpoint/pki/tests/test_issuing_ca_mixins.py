@@ -27,14 +27,17 @@ from pki.views.issuing_cas import (
 def test_certificate_content_summary_formats_subject_sans_and_validity() -> None:
     """Content summaries label all supplied subject, SAN, and validity fields."""
     view = IssuingCaRequestCertEstView()
-    summary = IssuingCaRequestCertMixin.__dict__['_build_cert_content_summary'](view, {
-        'common_name': 'ca.example',
-        'organization_name': 'Trustpoint',
-        'dns_names': ['ca.example'],
-        'uris': ['urn:ca'],
-        'days': 10,
-        'minutes': 5,
-    })
+    summary = IssuingCaRequestCertMixin.__dict__['_build_cert_content_summary'](
+        view,
+        {
+            'common_name': 'ca.example',
+            'organization_name': 'Trustpoint',
+            'dns_names': ['ca.example'],
+            'uris': ['urn:ca'],
+            'days': 10,
+            'minutes': 5,
+        },
+    )
 
     assert summary['subject'] == {'Common Name (CN)': 'ca.example', 'Organization (O)': 'Trustpoint'}
     assert summary['san'] == {'DNS Names': ['ca.example'], 'URIs': ['urn:ca']}

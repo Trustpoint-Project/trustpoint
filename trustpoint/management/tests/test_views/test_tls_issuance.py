@@ -79,9 +79,7 @@ def _truststore(name: str) -> TruststoreModel:
         .not_valid_before(now - dt.timedelta(days=1))
         .not_valid_after(now + dt.timedelta(days=365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-        .add_extension(
-            x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True
-        )
+        .add_extension(x509.KeyUsage(False, False, False, False, False, True, True, False, False), critical=True)
         .sign(issuer_key, hashes.SHA256())
     )
     return TruststoreAddForm.save_trust_store(name, TruststoreModel.IntendedUsage.TLS, [issuer_cert])
@@ -168,9 +166,7 @@ def test_est_request_page_renders_without_content() -> None:
 
     response = client.request('tls-request-est', method='post', data=EST_REQUEST)
     pk = resolve(response.url).kwargs['pk']
-    client.request(
-        'tls-truststore-association', pk=pk, method='post', data={'trust_store': truststore.pk}
-    )
+    client.request('tls-truststore-association', pk=pk, method='post', data={'trust_store': truststore.pk})
 
     response = client.request('tls-request-cert-est', pk=pk)
     response.render()

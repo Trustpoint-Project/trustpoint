@@ -76,7 +76,8 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validate and parse the uploaded private key with the shared helper."""
         return parse_private_key_upload(
-            self.cleaned_data.get('private_key_file'), self.data.get('private_key_file_password') or None,
+            self.cleaned_data.get('private_key_file'),
+            self.data.get('private_key_file_password') or None,
         )
 
     def clean_certificate(self) -> CertificateSerializer:
@@ -113,8 +114,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             if credential_qs.exists():
                 credential_in_db = credential_qs[0]
                 err_msg = (
-                    f'Owner Credential {credential_in_db.unique_name} is already configured '
-                    'with the same DevOwnerID.'
+                    f'Owner Credential {credential_in_db.unique_name} is already configured with the same DevOwnerID.'
                 )
                 raise ValidationError(err_msg)
 
@@ -177,7 +177,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer=private_key_serializer,
                 certificate_serializer=certificate_serializer,
-                certificate_collection_serializer=certificate_chain_serializer
+                certificate_collection_serializer=certificate_chain_serializer,
             )
 
             owner_credential = OwnerCredentialModel.create_new_owner_credential(
@@ -238,9 +238,11 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
             'A regex pattern to match valid IDevID serial numbers for this registration. '
             'Pre-populated from the DevOwnerID certificate references.'
         ),
-        widget=forms.TextInput(attrs={
-            'placeholder': 'e.g. ^[A-Z0-9-]+$ or specific pattern',
-        }),
+        widget=forms.TextInput(
+            attrs={
+                'placeholder': 'e.g. ^[A-Z0-9-]+$ or specific pattern',
+            }
+        ),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -267,9 +269,7 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
         try:
             file_bytes = trust_store_file.read()
         except (OSError, AttributeError) as original_exception:
-            raise ValidationError(
-                _('Unexpected error reading the truststore file.')
-            ) from original_exception
+            raise ValidationError(_('Unexpected error reading the truststore file.')) from original_exception
 
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(file_bytes)
@@ -325,9 +325,7 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
             dev_id_registration.save()
         except Exception as e:
             trust_store_model.delete()
-            raise ValidationError(
-                _('Failed to create the DevID registration pattern.')
-            ) from e
+            raise ValidationError(_('Failed to create the DevID registration pattern.')) from e
 
         cleaned_data['_truststore'] = trust_store_model
         cleaned_data['_dev_id_registration'] = dev_id_registration
@@ -353,9 +351,7 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
         super().__init__(*args, **kwargs)
 
         trust_store_field = cast('forms.ModelChoiceField[Any]', self.fields['trust_store'])
-        trust_store_field.queryset = TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
+        trust_store_field.queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS)
 
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
             trust_store_field.initial = self.instance.no_onboarding_config.trust_store
@@ -466,9 +462,7 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
         max_length=255,
         label=_('EST Server Path (Domain Credential)'),
         initial='/.well-known/est/simpleenroll',
-        help_text=_(
-            'Path component of the EST enrollment endpoint used to obtain the domain credential'
-        ),
+        help_text=_('Path component of the EST enrollment endpoint used to obtain the domain credential'),
     )
 
     def clean(self) -> dict[str, Any]:

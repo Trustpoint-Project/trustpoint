@@ -108,13 +108,14 @@ class CertificateRequestWizardView(
 ):
     """Base for the form-based certificate request steps."""
 
-    template_name = 'management/tls/issuance_config.html'
+    template_name = 'pki/certificate_request/config.html'
     pending_required = True
 
     # URL names (namespaced, set by concrete subclasses).
     truststore_url_name: ClassVar[str] = ''
     content_url_name: ClassVar[str] = ''
     request_cert_url_name: ClassVar[str] = ''
+    back_url_name: ClassVar[str] = ''
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Resolve the session-scoped pending credential."""
@@ -126,9 +127,10 @@ class CertificateRequestWizardView(
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Expose the pending credential alongside the page context."""
+        """Expose the pending credential and back URL alongside the page context."""
         return super().get_context_data(**kwargs) | {
             'credential': getattr(self, 'credential', None),
+            'back_url_name': self.back_url_name,
         }
 
 
@@ -179,19 +181,21 @@ class CertificateTruststoreAssociationView(CertificateRequestWizardView[Certific
     """Step 2: associate the trust store used to validate the issued certificate."""
 
     form_class = CertificateTruststoreAssociationForm
-    template_name = 'management/tls/truststore_association.html'
+    template_name = 'pki/certificate_request/truststore_association.html'
+    cancel_url_name: ClassVar[str] = ''
 
     def get_initial(self) -> dict[str, Any]:
         """Preselect a previously imported or selected trust store."""
         return {'trust_store': self.request.GET.get('truststore_id') or self.state.get('truststore_pk')}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Include the trust store import form."""
+        """Include the trust store import form and cancel URL."""
         context = super().get_context_data(**kwargs)
         context.setdefault(
             'import_form',
             TruststoreAddForm(initial={'intended_usage': TruststoreModel.IntendedUsage.TLS}),
         )
+        context['cancel_url_name'] = self.cancel_url_name
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -219,10 +223,11 @@ class CertificateDefineCertContentView(
 ):
     """Step 3: define the certificate content using a certificate profile."""
 
-    template_name = 'management/tls/external_csr_form.html'
+    template_name = 'pki/certificate_request/content.html'
     form_class = CertificateIssuanceForm
     default_profile_name: ClassVar[str] = ''
     profile_credential_type: str | None = None
+    cancel_url_name: ClassVar[str] = ''
     cert_profile: CertificateProfileModel
     available_profiles: list[CertificateProfileModel]
 
@@ -260,12 +265,13 @@ class CertificateDefineCertContentView(
         return super().get_form_kwargs() | {'profile': external_csr_profile(self.cert_profile).profile}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Show the available profiles and the selected profile."""
+        """Show the available profiles, the selected profile, and the cancel URL."""
         return super().get_context_data(**kwargs) | {
             'title': _('Define Certificate Content'),
             'submit_label': _('Continue'),
             'cert_profile': self.cert_profile,
             'available_profiles': self.available_profiles,
+            'cancel_url_name': self.cancel_url_name,
         }
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
@@ -387,6 +393,7 @@ class CertificateRequestCertView(CertificateRequestStateMixin, LoggerMixin, Deta
 class EstRequestCertView(CertificateRequestCertView):
     """Step 4 (EST): review the request, then enroll the certificate via EST."""
 
+    template_name = 'pki/certificate_request/request_cert_est.html'
     title = 'Request Certificate via EST'
     description = 'Review the request and enroll the certificate from the external EST PKI.'
     client_error_types = (EstClientError,)

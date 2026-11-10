@@ -367,7 +367,6 @@ urlpatterns = [
         views.AgentsBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete',
     ),
-
     path(
         'zero-touch-credentials/',
         ztc_views.OwnerCredentialTableView.as_view(),
@@ -484,8 +483,7 @@ urlpatterns = [
         name='zero_touch_credentials-aoki_demo_download',
     ),
     path(
-        'certificate-lifecycle-management/<int:pk>/no-onboarding/'
-        'issue-application-credential/scep/download-config/',
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/download-config/',
         devices_help_views.DownloadScepConfigView.as_view(),
         name='scep_config_download',
     ),
