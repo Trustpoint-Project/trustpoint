@@ -22,6 +22,7 @@ from management.forms import TlsAddRequestCmpForm, TlsAddRequestEstForm, TlsExte
 from management.views.tls import TlsSettingsContextMixin
 from pki.models import CaModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models.truststore import TruststoreModel
 from pki.services.tls_server_issuance import finalize_tls_server_enrollment, issue_tls_server_local
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary
@@ -121,6 +122,12 @@ class TlsCmpTruststoreAssociationView(TlsSettingsContextMixin, CertificateTrusts
     session_scope = TLS_SCOPE
     content_url_name = 'management:tls-define-cert-content-cmp'
     cancel_url_name = 'management:tls'
+    truststore_intended_usage = TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+    truststore_info_label = 'CMP:'
+    truststore_info_text = (
+        'Select or import the Issuing CA certificate of the remote PKI. '
+        'It is used to identify the recipient CA and verify CMP responses.'
+    )
 
 
 class TlsDefineCertContentCmpView(TlsSettingsContextMixin, CertificateDefineCertContentView):

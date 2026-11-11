@@ -183,25 +183,41 @@ class CertificateTruststoreAssociationView(CertificateRequestWizardView[Certific
     form_class = CertificateTruststoreAssociationForm
     template_name = 'pki/certificate_request/truststore_association.html'
     cancel_url_name: ClassVar[str] = ''
+    truststore_intended_usage: ClassVar[TruststoreModel.IntendedUsage] = TruststoreModel.IntendedUsage.TLS
+    truststore_info_label: ClassVar[str] = 'EST:'
+    truststore_info_text: ClassVar[str] = (
+        'Select or import the TLS server certificate of the remote PKI. '
+        'It is used to secure and validate the HTTPS connection.'
+    )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Pass the configured truststore usage to the association form."""
+        return super().get_form_kwargs() | {'truststore_intended_usage': self.truststore_intended_usage}
 
     def get_initial(self) -> dict[str, Any]:
         """Preselect a previously imported or selected trust store."""
         return {'trust_store': self.request.GET.get('truststore_id') or self.state.get('truststore_pk')}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Include the trust store import form and cancel URL."""
+        """Include the trust store import form, protocol info, and cancel URL."""
         context = super().get_context_data(**kwargs)
         context.setdefault(
             'import_form',
-            TruststoreAddForm(initial={'intended_usage': TruststoreModel.IntendedUsage.TLS}),
+            TruststoreAddForm(pinned_intended_usage=self.truststore_intended_usage),
         )
         context['cancel_url_name'] = self.cancel_url_name
+        context['truststore_info_label'] = self.truststore_info_label
+        context['truststore_info_text'] = self.truststore_info_text
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Route trust store import submissions through the existing import form."""
         if 'trust_store_file' in request.FILES or request.POST.get('import_truststore'):
-            import_form = TruststoreAddForm(request.POST, request.FILES)
+            import_form = TruststoreAddForm(
+                request.POST,
+                request.FILES,
+                pinned_intended_usage=self.truststore_intended_usage,
+            )
             if import_form.is_valid():
                 truststore = import_form.cleaned_data['truststore']
                 return redirect(

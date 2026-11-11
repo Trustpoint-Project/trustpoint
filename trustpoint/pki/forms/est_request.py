@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
@@ -99,6 +99,8 @@ class EstRequestFormMixin(CertificateRequestFormMixin):
 class CertificateTruststoreAssociationForm(forms.Form):
     """Select the trust store used to validate the externally issued certificate."""
 
+    truststore_intended_usage: ClassVar[TruststoreModel.IntendedUsage] = TruststoreModel.IntendedUsage.TLS
+
     trust_store = forms.ModelChoiceField(
         queryset=TruststoreModel.objects.none(),
         empty_label='----------',
@@ -108,7 +110,12 @@ class CertificateTruststoreAssociationForm(forms.Form):
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Limit the choice to TLS trust stores."""
+        """Limit the choice to the configured truststore usage."""
+        intended_usage = kwargs.pop('truststore_intended_usage', self.truststore_intended_usage)
         super().__init__(*args, **kwargs)
         trust_store_field = cast('forms.ModelChoiceField[TruststoreModel]', self.fields['trust_store'])
-        trust_store_field.queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS)
+        trust_store_field.queryset = TruststoreModel.objects.filter(intended_usage=intended_usage)
+        trust_store_field.help_text = {
+            TruststoreModel.IntendedUsage.TLS: _('Select a "TLS" trust store containing the external PKI CA chain.'),
+            TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN: _('Only "Issuing CA Chain" truststores can be associated.'),
+        }.get(intended_usage, _('Select a trust store to associate.'))

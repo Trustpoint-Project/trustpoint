@@ -458,6 +458,12 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         context['is_cmp'] = ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]
         context['is_est_ra'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA
         context['est_ra_step'] = 1 if (context['is_est_ra'] and not ca.certificate) else 2
+        # Defaults for the shared protocol-aware info alert (else/EST branch).
+        context['truststore_info_label'] = 'EST:'
+        context['truststore_info_text'] = (
+            'Select or import the TLS server certificate of the remote PKI. '
+            'It is used to secure and validate the HTTPS connection.'
+        )
         return context
 
     def _handle_ra_certificate_extraction(self, ca: CaModel) -> bool:
@@ -808,6 +814,12 @@ class IssuingCaCmpTruststoreAssociationView(
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
     session_scope = 'issuing-ca-cmp'
     content_url_name = 'pki:issuing_cas-define-cert-content-cmp'
+    truststore_intended_usage = TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+    truststore_info_label = 'CMP:'
+    truststore_info_text = (
+        'Select or import the Issuing CA certificate of the remote PKI. '
+        'It is used to identify the recipient CA and verify CMP responses.'
+    )
 
 
 class RemoteRaAddRequestCmpView(RemoteRaAddRequestCmpMixin, FormView[IssuingCaAddRequestCmpForm]):
