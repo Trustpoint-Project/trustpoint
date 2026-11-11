@@ -21,6 +21,7 @@ from .views import (
     settings,
     tls,
     tls_external_csr,
+    tls_issuance,
     user_authentication,
     user_management,
 )
@@ -72,6 +73,43 @@ urlpatterns = [
         name='tls-external-csr-content',
     ),
     path('tls/add/external-csr/<int:pk>/', tls_external_csr.TlsExternalCsrView.as_view(), name='tls-external-csr'),
+    # TLS issuance: external EST and local Issuing CA
+    path('tls/add/request-est/', tls_issuance.TlsAddRequestEstView.as_view(), name='tls-request-est'),
+    path(
+        'tls/truststore-association/<int:pk>/',
+        tls_issuance.TlsTruststoreAssociationView.as_view(),
+        name='tls-truststore-association',
+    ),
+    path(
+        'tls/define-cert-content-est/<int:pk>/',
+        tls_issuance.TlsDefineCertContentEstView.as_view(),
+        name='tls-define-cert-content-est',
+    ),
+    path(
+        'tls/request-cert-est/<int:pk>/',
+        tls_issuance.TlsRequestCertEstView.as_view(),
+        name='tls-request-cert-est',
+    ),
+    path('tls/add/request-cmp/', tls_issuance.TlsAddRequestCmpView.as_view(), name='tls-request-cmp'),
+    path(
+        'tls/cmp-truststore-association/<int:pk>/',
+        tls_issuance.TlsCmpTruststoreAssociationView.as_view(),
+        name='tls-cmp-truststore-association',
+    ),
+    path(
+        'tls/define-cert-content-cmp/<int:pk>/',
+        tls_issuance.TlsDefineCertContentCmpView.as_view(),
+        name='tls-define-cert-content-cmp',
+    ),
+    path(
+        'tls/request-cert-cmp/<int:pk>/',
+        tls_issuance.TlsRequestCertCmpView.as_view(),
+        name='tls-request-cert-cmp',
+    ),
+    path('tls/add/local/key/', tls_issuance.TlsLocalCaKeyView.as_view(), name='tls-local-key'),
+    path('tls/add/local/<int:pk>/ca/', tls_issuance.TlsLocalCaSelectView.as_view(), name='tls-local-ca'),
+    path('tls/add/local/<int:pk>/content/', tls_issuance.TlsLocalCaContentView.as_view(), name='tls-local-content'),
+    path('tls/add/local/<int:pk>/request/', tls_issuance.TlsLocalCaRequestView.as_view(), name='tls-local-request'),
     path(
         'tls/add/method-select/',
         tls.TlsAddMethodSelectView.as_view(),

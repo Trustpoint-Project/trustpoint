@@ -17,25 +17,29 @@ from pki.views.owner_credentials_api import (
 
 def test_build_request_data_normalizes_subject_sans_and_validity() -> None:
     """Flat API fields become the nested profile-request representation."""
-    result = _build_request_data({
-        'common_name': 'device.example',
-        'organization_name': '',
-        'dns_names': 'device.example, api.example',
-        'ip_addresses': [' 192.0.2.1 ', ''],
-        'uris': ['urn:device'],
-        'days': 30,
-        'hours': None,
-        'minutes': '5',
-        'seconds': 0,
-    })
+    result = _build_request_data(
+        {
+            'common_name': 'device.example',
+            'organization_name': '',
+            'dns_names': 'device.example, api.example',
+            'ip_addresses': [' 192.0.2.1 ', ''],
+            'uris': ['urn:device'],
+            'days': 30,
+            'hours': None,
+            'minutes': '5',
+            'seconds': 0,
+        }
+    )
 
     assert result == {
         'subj': {'common_name': 'device.example'},
-        'ext': {'subject_alternative_name': {
-            'dns_names': ['device.example', 'api.example'],
-            'ip_addresses': ['192.0.2.1'],
-            'uris': ['urn:device'],
-        }},
+        'ext': {
+            'subject_alternative_name': {
+                'dns_names': ['device.example', 'api.example'],
+                'ip_addresses': ['192.0.2.1'],
+                'uris': ['urn:device'],
+            }
+        },
         'validity': {'days': 30, 'minutes': 5, 'seconds': 0},
     }
 
@@ -102,9 +106,13 @@ def test_est_context_selects_matching_credentials_and_truststore(onboarding):
     owner = SimpleNamespace(
         owner_credential_type=(
             OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-            if onboarding else OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
+            if onboarding
+            else OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
         ),
-        remote_host='est.example.test', remote_port=8443, remote_path='/simpleenroll', est_username='device',
+        remote_host='est.example.test',
+        remote_port=8443,
+        remote_path='/simpleenroll',
+        est_username='device',
         no_onboarding_config=SimpleNamespace(est_password='secret', trust_store=basic_truststore),
         onboarding_config=SimpleNamespace(trust_store=mtls_truststore),
         domain_credential=SimpleNamespace(credential=credential),
@@ -141,7 +149,9 @@ def test_est_context_keeps_ui_errors_translated_and_api_errors_plain(ui, missing
     monkeypatch.setattr(owner_credentials, '_', lambda message: f'translated: {message}')
     owner = SimpleNamespace(
         owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
-        remote_host='est.example.test', remote_port=8443, remote_path='/simpleenroll',
+        remote_host='est.example.test',
+        remote_port=8443,
+        remote_path='/simpleenroll',
         onboarding_config=None,
         domain_credential=(
             SimpleNamespace(credential=SimpleNamespace(certificate=None)) if missing_certificate else None
@@ -149,9 +159,13 @@ def test_est_context_keeps_ui_errors_translated_and_api_errors_plain(ui, missing
     )
     consumer = owner_credentials.OwnerCredentialRequestCertEstView() if ui else DevOwnerIdViewSet()
     with pytest.raises(ValueError) as error:
-        consumer._build_est_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
+        if ui:
+            consumer._build_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
+        else:
+            consumer._build_est_context_kwargs(owner, CertificateProfileModel(unique_name='test-profile'))
     expected = (
-        'The domain credential has no certificate. Please issue a domain credential first.' if missing_certificate
+        'The domain credential has no certificate. Please issue a domain credential first.'
+        if missing_certificate
         else 'No domain credential found for this owner credential. Please issue a domain credential first.'
     )
     assert str(error.value) == (f'translated: {expected}' if ui else expected)

@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -21,6 +21,7 @@ from django.views.generic.list import ListView
 from devices.presentation import credential_expiry_display
 from pki.forms import (
     CertificateIssuanceForm,
+    OwnerCredentialAddRequestCmpForm,
     OwnerCredentialAddRequestEstNoOnboardingForm,
     OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialFileImportForm,
@@ -32,15 +33,18 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel
 from pki.services.owner_credential import (
     build_domain_credential_est_context_kwargs,
+    build_owner_credential_cmp_context_kwargs,
     build_owner_credential_est_context_kwargs,
     create_pending_owner_credential,
+    enroll_owner_credential_cmp,
     enroll_owner_credential_est,
 )
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
 from pki.views.mixins import CertificateProfileSelectionMixin
 from request.clients import EstClientError
-from request.request_context import EstCertificateRequestContext
+from request.clients.cmp_client import CmpClientError
+from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
@@ -288,6 +292,53 @@ class OwnerCredentialAddRequestEstOnboardingView(
         )
 
     def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
+        """Show form-level errors as Django messages."""
+        for error in form.non_field_errors():
+            messages.error(self.request, str(error))
+        return super().form_invalid(form)
+
+
+class OwnerCredentialAddRequestCmpView(
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestCmpForm]
+):
+    """View to request a Zero-Touch Credential via CMP using shared-secret authentication."""
+
+    template_name = 'devices/zero_touch_credentials/add/est_request.html'
+    form_class = OwnerCredentialAddRequestCmpForm
+    permission_required = AppPermissions.MANAGE_DEVICES
+    success_url = reverse_lazy('devices:zero_touch_credentials')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add heading context."""
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = _('Request Zero-Touch Credential via CMP — Shared Secret')
+        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add')
+        return context
+
+    def form_valid(self, form: OwnerCredentialAddRequestCmpForm) -> HttpResponse:
+        """Save the OwnerCredentialModel with its CMP shared-secret configuration."""
+        owner_credential = OwnerCredentialModel.objects.create(
+            unique_name=form.cleaned_data['unique_name'],
+            no_onboarding_config=form.cleaned_data['_no_onboarding_config'],
+            remote_host=form.cleaned_data['_remote_host'],
+            remote_port=form.cleaned_data['_remote_port'],
+            remote_path=form.cleaned_data['_remote_path'],
+            key_type=form.cleaned_data.get('key_type', 'ECC-SECP256R1'),
+            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_CMP,
+        )
+
+        messages.success(
+            self.request,
+            _(
+                'Zero-Touch Credential configuration "{name}" saved. '
+                'Now associate the TLS server certificate trust store.'
+            ).format(name=owner_credential.unique_name),
+        )
+        return HttpResponseRedirect(
+            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
+        )
+
+    def form_invalid(self, form: OwnerCredentialAddRequestCmpForm) -> HttpResponse:
         """Show form-level errors as Django messages."""
         for error in form.non_field_errors():
             messages.error(self.request, str(error))
@@ -684,6 +735,8 @@ class OwnerCredentialDefineCertContentEstView(
 
     default_profile_name = 'dev_owner_id'
     permission_required = AppPermissions.ISSUE_CERTIFICATES
+    protocol_name: ClassVar[str] = 'EST'
+    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-est'
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
@@ -798,9 +851,18 @@ class OwnerCredentialDefineCertContentEstView(
         self.request.session[session_key] = session_data
         messages.success(
             self.request,
-            _('Certificate content defined. Please proceed to request the DevOwnerID via EST.'),
+            _('Certificate content defined. Please proceed to request the DevOwnerID via {protocol}.').format(
+                protocol=self.protocol_name
+            ),
         )
-        return redirect('devices:zero_touch_credentials-request-cert-est', pk=self.owner_credential.pk)
+        return redirect(self.request_cert_url_name, pk=self.owner_credential.pk)
+
+
+class OwnerCredentialDefineCertContentCmpView(OwnerCredentialDefineCertContentEstView):
+    """Step 1 - Define the certificate content for a CMP DevOwnerID enrollment."""
+
+    protocol_name = 'CMP'
+    request_cert_url_name = 'devices:zero_touch_credentials-request-cert-cmp'
 
 
 class OwnerCredentialRequestCertEstView(
@@ -820,6 +882,11 @@ class OwnerCredentialRequestCertEstView(
     model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/request_cert_est.html'
     context_object_name = 'owner_credential'
+
+    protocol_name: ClassVar[str] = 'EST'
+    client_error_types: ClassVar[tuple[type[Exception], ...]] = (EstClientError,)
+    define_content_url_name: ClassVar[str] = 'devices:zero_touch_credentials-define-cert-content-est'
+    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-est'
 
     # ------------------------------------------------------------------
     # Helpers
@@ -878,7 +945,7 @@ class OwnerCredentialRequestCertEstView(
     # POST - perform EST enrollment
     # ------------------------------------------------------------------
 
-    def _build_est_context_kwargs(
+    def _build_context_kwargs(
         self,
         owner_credential: OwnerCredentialModel,
         cert_profile: CertificateProfileModel,
@@ -886,9 +953,7 @@ class OwnerCredentialRequestCertEstView(
         """Build EST authentication and truststore arguments for this credential."""
         return build_owner_credential_est_context_kwargs(owner_credential, cert_profile, translate=_)
 
-    def _perform_est_enrollment(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> None:
+    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
         """Enroll the session's pending credential and persist the issued certificate."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
@@ -896,7 +961,7 @@ class OwnerCredentialRequestCertEstView(
         if pending_issued.credential is None:
             msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
             raise ValueError(msg)
-        context = EstCertificateRequestContext(**self._build_est_context_kwargs(owner_credential, cert_profile))
+        context = EstCertificateRequestContext(**self._build_context_kwargs(owner_credential, cert_profile))
         context.request_data = self._build_request_data(cert_content_data)
         enroll_owner_credential_est(
             context,
@@ -907,7 +972,7 @@ class OwnerCredentialRequestCertEstView(
         )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Perform the EST enrollment and redirect to the CLM view."""
+        """Perform the enrollment and redirect to the CLM view."""
         owner_credential: OwnerCredentialModel = self.get_object()
         session_key = self._session_key(owner_credential)
         cert_content_data = request.session.get(session_key)
@@ -917,38 +982,70 @@ class OwnerCredentialRequestCertEstView(
                 request,
                 _('Certificate content data not found. Please define the certificate content first.'),
             )
-            return redirect('devices:zero_touch_credentials-define-cert-content-est', pk=owner_credential.pk)
+            return redirect(self.define_content_url_name, pk=owner_credential.pk)
 
         try:
-            self._perform_est_enrollment(owner_credential, cert_content_data)
+            self._perform_enrollment(owner_credential, cert_content_data)
             del request.session[session_key]
             messages.success(
                 request,
-                _('Successfully enrolled DevOwnerID certificate for "{name}" via EST.').format(
-                    name=owner_credential.unique_name
+                _('Successfully enrolled DevOwnerID certificate for "{name}" via {protocol}.').format(
+                    name=owner_credential.unique_name, protocol=self.protocol_name
                 ),
             )
             return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
         except (ValueError, KeyError, ProfileValidationError) as exc:
             messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect('devices:zero_touch_credentials-define-cert-content-est', pk=owner_credential.pk)
+            return redirect(self.define_content_url_name, pk=owner_credential.pk)
         except CertificateProfileModel.DoesNotExist:
             messages.error(request, _('Certificate profile "dev_owner_id" not found.'))
             return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
-        except EstClientError as exc:
-            self.logger.exception('EST client error during DevOwnerID enrollment')
+        except self.client_error_types as exc:
+            self.logger.exception('%s client error during DevOwnerID enrollment', self.protocol_name)
             messages.error(
                 request,
-                _('Failed to enroll DevOwnerID certificate via EST: {error}').format(error=str(exc)),
+                _('Failed to enroll DevOwnerID certificate via {protocol}: {error}').format(
+                    protocol=self.protocol_name, error=str(exc)
+                ),
             )
-            return redirect('devices:zero_touch_credentials-request-cert-est', pk=owner_credential.pk)
+            return redirect(self.request_cert_url_name, pk=owner_credential.pk)
         except Exception as exc:
-            self.logger.exception('Unexpected error during DevOwnerID EST enrollment')
+            self.logger.exception('Unexpected error during DevOwnerID %s enrollment', self.protocol_name)
             messages.error(
                 request,
                 _('Unexpected error during enrollment: {error}').format(error=str(exc)),
             )
-            return redirect('devices:zero_touch_credentials-request-cert-est', pk=owner_credential.pk)
+            return redirect(self.request_cert_url_name, pk=owner_credential.pk)
+
+
+class OwnerCredentialRequestCertCmpView(OwnerCredentialRequestCertEstView):
+    """Step 2 - Review and trigger the CMP enrollment for a new Zero-Touch certificate."""
+
+    template_name = 'devices/zero_touch_credentials/request_cert_cmp.html'
+    protocol_name = 'CMP'
+    client_error_types = (CmpClientError,)
+    define_content_url_name = 'devices:zero_touch_credentials-define-cert-content-cmp'
+    request_cert_url_name = 'devices:zero_touch_credentials-request-cert-cmp'
+
+    def _build_context_kwargs(
+        self,
+        owner_credential: OwnerCredentialModel,
+        cert_profile: CertificateProfileModel,
+    ) -> dict[str, Any]:
+        """Build CMP authentication and truststore arguments for this credential."""
+        return build_owner_credential_cmp_context_kwargs(owner_credential, cert_profile, translate=_)
+
+    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
+        """Enroll the session's pending credential via CMP and persist the issued certificate."""
+        profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
+        cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
+        pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
+        if pending_issued.credential is None:
+            msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
+            raise ValueError(msg)
+        context = CmpCertificateRequestContext(**self._build_context_kwargs(owner_credential, cert_profile))
+        context.request_data = self._build_request_data(cert_content_data)
+        enroll_owner_credential_cmp(context, owner_credential, pending_issued, logger=self.logger)
 
 
 # ---------------------------------------------------------------------------

@@ -34,9 +34,9 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
-    re_path(r'^truststores/add/(?P<pk>\d+)?/?$',
-            truststores.TruststoreCreateView.as_view(),
-            name='truststores-add-with-pk'),
+    re_path(
+        r'^truststores/add/(?P<pk>\d+)?/?$', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'
+    ),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
@@ -181,6 +181,16 @@ urlpatterns = [
         issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
         name='issuing_cas-truststore-association',
     ),
+    path(
+        'issuing-cas/est-truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaEstTruststoreAssociationView.as_view(),
+        name='issuing_cas-est-truststore-association',
+    ),
+    path(
+        'issuing-cas/cmp-truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaCmpTruststoreAssociationView.as_view(),
+        name='issuing_cas-cmp-truststore-association',
+    ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     # CA Rollover management
@@ -297,7 +307,7 @@ urlpatterns = [
     path(
         'domains/config/<int:pk>/help/onboarding-method-select-idevid/',
         domains.OnboardingMethodSelectIdevidHelpView.as_view(),
-        name='help_onboarding_method_select_idevid'
+        name='help_onboarding_method_select_idevid',
     ),
     path(
         'domains/config/<int:pk>/help/cmp-idevid-registration/',
@@ -325,13 +335,11 @@ urlpatterns = [
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
-
     re_path(
         r'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),
-
     path(
         'devid-registration/create/<int:pk>/<int:truststore_id>/',
         DevIdRegistrationCreateView.as_view(),
@@ -342,7 +350,6 @@ urlpatterns = [
         truststores.TruststoreCreateView.as_view(),
         name='truststores-add-from-device',
     ),
-
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),

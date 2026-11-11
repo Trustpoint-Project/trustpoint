@@ -59,6 +59,21 @@ class TruststoreAddForm(forms.Form):
 
     trust_store_file = forms.FileField(label=_('PEM, DER, or PKCS#7 File'), required=True)
 
+    def __init__(
+        self,
+        *args: Any,
+        pinned_intended_usage: TruststoreModel.IntendedUsage | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Pin the intended usage to a single choice when importing from a specific flow."""
+        super().__init__(*args, **kwargs)
+        self.pinned_intended_usage = pinned_intended_usage
+        if pinned_intended_usage is not None:
+            intended_usage_field = self.fields['intended_usage']
+            intended_usage_field.initial = pinned_intended_usage
+            intended_usage_field.disabled = True
+            intended_usage_field.required = False
+
     def clean_unique_name(self) -> str:
         """Validate the uniqueness of the truststore name.
 
@@ -75,10 +90,12 @@ class TruststoreAddForm(forms.Form):
         """Raise a form validation error."""
         raise ValidationError(message)
 
-    def clean(self) -> None:
+    def clean(self) -> None:  # noqa: C901 - Upload parsing and validation is inherently multi-branch.
         """Clean and validate the uploaded truststore."""
         cleaned_data = cast('dict[str, Any]', super().clean())
         unique_name = cleaned_data.get('unique_name')
+        if self.pinned_intended_usage is not None:
+            cleaned_data['intended_usage'] = self.pinned_intended_usage
         intended_usage = str(cleaned_data.get('intended_usage'))
 
         trust_store_file = cleaned_data.get('trust_store_file')

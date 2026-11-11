@@ -29,6 +29,7 @@ from crypto.models import CryptoManagedKeyModel
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
+from pki.forms.cmp_request import CmpRequestFormMixin
 from pki.forms.credentials import (
     encode_credential_password,
     parse_certificate_chain_upload,
@@ -36,6 +37,7 @@ from pki.forms.credentials import (
     parse_private_key_upload,
     read_pkcs12_upload,
 )
+from pki.forms.est_request import EstRequestFormMixin
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
@@ -103,8 +105,7 @@ class IssuingCaImportMixin:
             if issuing_ca_qs.exists():
                 ca_in_db = issuing_ca_qs[0]
                 err_msg = (
-                    f'Issuing CA {ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.'
+                    f'Issuing CA {ca_in_db.unique_name} is already configured with the same Issuing CA certificate.'
                 )
                 self._raise_validation_error(err_msg)
 
@@ -142,9 +143,7 @@ class IssuingCaImportMixin:
                 untrusted_intermediates=untrusted_intermediates,
             )
         except ValueError as e:
-            self._raise_validation_error(
-                f'CA certificate verification failed: {e}'
-            )
+            self._raise_validation_error(f'CA certificate verification failed: {e}')
 
     def _create_keyless_parent_hierarchy(
         self,
@@ -171,7 +170,10 @@ class IssuingCaImportMixin:
         return ca_by_subject.get(cert.issuer.public_bytes())
 
     def _finalize_issuing_ca_creation(
-        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
+        self,
+        unique_name: str | None,
+        cert: x509.Certificate,
+        credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
     ) -> CaModel:
         """Finalizes the creation of an imported Issuing CA after validation."""
@@ -568,6 +570,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         chain = list(credential_serializer.additional_certificates or [])
         self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer, chain)
 
+
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
@@ -575,9 +578,15 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
+
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'ca_type'
+            'unique_name',
+            'remote_host',
+            'remote_port',
+            'remote_path',
+            'est_username',
+            'ca_type',
         ]
 
     key_type = forms.ChoiceField(
@@ -634,9 +643,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
         unique_name = cleaned_data.get('unique_name')
         if unique_name and CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
-            self.add_error(
-                'unique_name', _('A cryptographic key with this name already exists.')
-            )
+            self.add_error('unique_name', _('A cryptographic key with this name already exists.'))
 
         return cleaned_data
 
@@ -671,9 +678,16 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
     class Meta:
         """Meta class for IssuingCaAddRequestEstForm."""
+
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'est_password', 'ca_type'
+            'unique_name',
+            'remote_host',
+            'remote_port',
+            'remote_path',
+            'est_username',
+            'est_password',
+            'ca_type',
         ]
 
     est_username = forms.CharField(
@@ -728,11 +742,55 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         return instance
 
 
+class IssuingCaRequestEstForm(EstRequestFormMixin, forms.Form):
+    """Request an Issuing CA certificate from an external EST PKI (session-based wizard)."""
+
+    key_type_choices = KEY_TYPE_CHOICES
+    key_type_initial = 'RSA-2048'
+    remote_port_initial = 443
+    est_authentication_required = True
+
+    unique_name = forms.CharField(
+        label=_('Unique Name'),
+        max_length=100,
+        required=True,
+        validators=[UniqueNameValidator()],
+        help_text=_('A unique name for the new Issuing CA.'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the Issuing CA defaults to the shared EST request fields."""
+        super().__init__(*args, **kwargs)
+        self._apply_est_request_defaults()
+
+
+class IssuingCaRequestCmpForm(CmpRequestFormMixin, forms.Form):
+    """Request an Issuing CA certificate from an external CMP PKI (session-based wizard)."""
+
+    key_type_choices = KEY_TYPE_CHOICES
+    key_type_initial = 'RSA-2048'
+    remote_port_initial = 443
+
+    unique_name = forms.CharField(
+        label=_('Unique Name'),
+        max_length=100,
+        required=True,
+        validators=[UniqueNameValidator()],
+        help_text=_('A unique name for the new Issuing CA.'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply the Issuing CA defaults to the shared CMP request fields."""
+        super().__init__(*args, **kwargs)
+        self._apply_cmp_request_defaults()
+
+
 class IssuingCaAddRequestExternalCsrForm(IssuingCaAddRequestMixin):
     """Form for generating a CSR for an external PKI issuance flow."""
 
     class Meta:
         """Meta class for IssuingCaAddRequestExternalCsrForm."""
+
         model = CaModel
         fields: ClassVar[list[str]] = ['unique_name', 'ca_type']
 
@@ -813,9 +871,15 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 
     class Meta:
         """Meta class for IssuingCaAddRequestCmpForm."""
+
         model = CaModel
         fields: ClassVar[list[str]] = [
-            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type', 'cmp_sender_kid'
+            'unique_name',
+            'remote_host',
+            'remote_port',
+            'remote_path',
+            'ca_type',
+            'cmp_sender_kid',
         ]
 
     cmp_shared_secret = forms.CharField(
@@ -865,7 +929,6 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 class IssuingCaTruststoreAssociationForm(forms.Form):
     """Form for associating a truststore with an Issuing CA."""
 
-
     trust_store = forms.ModelChoiceField(
         queryset=TruststoreModel.objects.none(),  # Set in __init__
         empty_label='----------',
@@ -907,9 +970,7 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
-            trust_store_field.help_text = _(
-                'Only "Issuing CA Chain" truststores can be associated.'
-            )
+            trust_store_field.help_text = _('Only "Issuing CA Chain" truststores can be associated.')
         else:
             trust_store_field.queryset = TruststoreModel.objects.filter(
                 intended_usage=TruststoreModel.IntendedUsage.TLS
@@ -989,9 +1050,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             cleaned_data = {}
 
         if self.instance and self.instance.pk and not self.instance.is_active:
-            raise ValidationError(
-                _('Cannot configure CRL settings: CA is deactivated.')
-            )
+            raise ValidationError(_('Cannot configure CRL settings: CA is deactivated.'))
 
         return cleaned_data
 
@@ -1003,6 +1062,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
         validity_float = float(validity)
 
         from management.models import SecurityConfig  # noqa: PLC0415
+
         try:
             cfg = SecurityConfig.objects.get()
         except SecurityConfig.DoesNotExist:
@@ -1021,7 +1081,8 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
                     _(
                         'CRL validity of %(hours).2f hours (%(days).1f days) exceeds the maximum of '
                         '%(max_days)d days permitted by the active security policy.'
-                    ) % {
+                    )
+                    % {
                         'hours': validity_float,
                         'days': validity_float / 24,
                         'max_days': max_days,

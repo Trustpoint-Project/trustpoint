@@ -263,9 +263,9 @@ def test_enrollment_rejects_invalid_material_before_saving(
     with pytest.raises((ValueError, ValidationError)):
         if protocol == 'est':
             with (
-                patch('pki.services.ca_enrollment.ProfileAwareCsrBuilder'),
-                patch('pki.services.ca_enrollment.EstDeviceCsrSignProcessor'),
-                patch('pki.services.ca_enrollment.EstClient') as client,
+                patch('pki.services.est_enrollment.ProfileAwareCsrBuilder'),
+                patch('pki.services.est_enrollment.EstDeviceCsrSignProcessor'),
+                patch('pki.services.est_enrollment.EstClient') as client,
                 patch.object(EstCaEnrollmentService, '_build_request_data_from_form', return_value={}),
             ):
                 client.return_value.simple_enroll.return_value = (wrong_cert, [])

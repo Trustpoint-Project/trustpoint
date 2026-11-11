@@ -14,18 +14,17 @@ from trustpoint_core.serializer import PrivateKeySerializer
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
+from pki.services.cmp_enrollment import enroll_cmp
+from pki.services.est_enrollment import enroll_est
 from pki.services.external_csr import certificate_matches_credential
 from pki.util.certificate_request import public_key_info_from_key_type
-from request.clients import EstClient
-from request.operation_processor.csr_build import ProfileAwareCsrBuilder
-from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 
 if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
 
     from pki.models.cert_profile import CertificateProfileModel
-    from request.request_context import EstCertificateRequestContext
+    from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 
 
 def build_owner_credential_est_context_kwargs(
@@ -118,32 +117,43 @@ def build_domain_credential_est_context_kwargs(
     }
 
 
-def enroll_owner_credential_est(
-    context: EstCertificateRequestContext,
+def build_owner_credential_cmp_context_kwargs(
+    owner_credential: OwnerCredentialModel,
+    cert_profile: CertificateProfileModel,
+    *,
+    translate: Callable[[str], str] = str,
+) -> dict[str, Any]:
+    """Build CMP authentication and truststore arguments for shared-secret auth."""
+    no_onboarding = owner_credential.no_onboarding_config
+    if no_onboarding is None:
+        msg = translate('No no-onboarding configuration found for this owner credential.')
+        raise ValueError(msg)
+    return {
+        'operation': 'certification',
+        'protocol': 'cmp',
+        'domain': None,
+        'cert_profile_str': cert_profile.unique_name,
+        'certificate_profile_model': cert_profile,
+        'allow_ca_certificate_request': True,
+        'cmp_server_host': owner_credential.remote_host,
+        'cmp_server_port': owner_credential.remote_port,
+        'cmp_server_path': owner_credential.remote_path,
+        'cmp_shared_secret': no_onboarding.cmp_shared_secret,
+        'cmp_server_truststore': no_onboarding.trust_store,
+    }
+
+
+def _persist_owner_credential_enrollment(  # noqa: PLR0913 - Persist needs the full enrollment context.
+    context: Any,
     owner_credential: OwnerCredentialModel,
     pending_issued: RemoteIssuedCredentialModel,
+    issued_cert: x509.Certificate,
     *,
     logger: logging.Logger,
-    domain_credential: bool = False,
+    domain_credential: bool,
 ) -> None:
-    """Enroll with the pending key, then persist the certificate and role-specific metadata."""
-    if context.certificate_profile_model is None:
-        msg = 'A certificate profile is required for owner credential enrollment.'
-        raise ValueError(msg)
+    """Validate the issued certificate against the pending key and persist it with role metadata."""
     signing_credential = pending_issued.credential
-    context.owner_credential = signing_credential
-    csr_builder = ProfileAwareCsrBuilder()
-    csr_builder.process_operation(context)
-    csr = csr_builder.get_csr()
-    context.cert_requested = csr
-
-    csr_signer = EstDeviceCsrSignProcessor()
-    csr_signer.process_operation(context)
-    signed_csr = csr_signer.get_signed_csr()
-
-    est_client = EstClient(context)
-    issued_cert, _ = est_client.simple_enroll(signed_csr)
-
     if not certificate_matches_credential(issued_cert, signing_credential):
         msg = 'The upstream certificate does not match the pending key.'
         raise ValueError(msg)
@@ -151,7 +161,11 @@ def enroll_owner_credential_est(
         is_ca = issued_cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca
     except x509.ExtensionNotFound:
         is_ca = False
-    requested_ca = any(isinstance(ext.value, x509.BasicConstraints) and ext.value.ca for ext in signed_csr.extensions)
+    csr = context.cert_requested
+    if not isinstance(csr, x509.CertificateSigningRequest):
+        msg = 'Enrollment did not produce a CSR request.'
+        raise TypeError(msg)
+    requested_ca = any(isinstance(ext.value, x509.BasicConstraints) and ext.value.ca for ext in csr.extensions)
     if is_ca != requested_ca:
         msg = 'The upstream certificate CA role does not match the request.'
         raise ValueError(msg)
@@ -184,3 +198,40 @@ def enroll_owner_credential_est(
             'Issued DevOwnerID certificate for "%s" has no SAN; no IDevID refs stored.',
             owner_credential.unique_name,
         )
+
+
+def enroll_owner_credential_est(
+    context: EstCertificateRequestContext,
+    owner_credential: OwnerCredentialModel,
+    pending_issued: RemoteIssuedCredentialModel,
+    *,
+    logger: logging.Logger,
+    domain_credential: bool = False,
+) -> None:
+    """Enroll with the pending key via EST, then persist the certificate."""
+    if context.certificate_profile_model is None:
+        msg = 'A certificate profile is required for owner credential enrollment.'
+        raise ValueError(msg)
+    context.owner_credential = pending_issued.credential
+    issued_cert, _ = enroll_est(context)
+    _persist_owner_credential_enrollment(
+        context, owner_credential, pending_issued, issued_cert, logger=logger, domain_credential=domain_credential
+    )
+
+
+def enroll_owner_credential_cmp(
+    context: CmpCertificateRequestContext,
+    owner_credential: OwnerCredentialModel,
+    pending_issued: RemoteIssuedCredentialModel,
+    *,
+    logger: logging.Logger,
+) -> None:
+    """Enroll with the pending key via CMP, then persist the certificate."""
+    if context.certificate_profile_model is None:
+        msg = 'A certificate profile is required for owner credential enrollment.'
+        raise ValueError(msg)
+    context.owner_credential = pending_issued.credential
+    issued_cert, _ = enroll_cmp(context)
+    _persist_owner_credential_enrollment(
+        context, owner_credential, pending_issued, issued_cert, logger=logger, domain_credential=False
+    )

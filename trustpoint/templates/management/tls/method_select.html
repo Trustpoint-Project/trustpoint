@@ -130,6 +130,44 @@
                         </div>
                     </a>
                 </div>
+                <div class="col-md-6">
+                    <a href="{% url 'management:tls-request-est' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">{% trans 'Enroll via EST' %}</h3>
+                                    </div>
+                                    <p class="text-muted">
+                                        {% trans 'Generate a keypair and automatically enroll the TLS certificate from an external PKI using EST.' %}
+                                    </p>
+                                </div>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Enroll via EST' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="{% url 'management:tls-request-cmp' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">{% trans 'Enroll via CMP' %}</h3>
+                                    </div>
+                                    <p class="text-muted">
+                                        {% trans 'Generate a keypair and automatically enroll the TLS certificate from an external PKI using CMP.' %}
+                                    </p>
+                                </div>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Enroll via CMP' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
             </div>
         </section>
 
@@ -174,6 +212,37 @@
                                 <div class="mt-auto">
                                     <span class="btn btn-primary">
                                         {% trans 'Generate TLS Certificate' %}
+                                    </span>
+                                </div>
+
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'management:tls-local-key' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <h3 class="h5 mb-2">
+                                            {% trans 'Issue from Local CA' %}
+                                        </h3>
+                                    </div>
+
+                                    <p class="text-muted">
+                                        {% trans 'Generate a keypair and issue the TLS certificate from a CA hosted in Trustpoint.' %}
+                                    </p>
+                                </div>
+
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">
+                                        {% trans 'Issue from Local CA' %}
                                     </span>
                                 </div>
 

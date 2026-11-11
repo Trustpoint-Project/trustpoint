@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -54,6 +53,8 @@ from pki.forms import (
     IssuingCaAddRequestExternalCsrForm,
     IssuingCaCrlCycleForm,
     IssuingCaExternalCsrCertificateForm,
+    IssuingCaRequestCmpForm,
+    IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
@@ -65,13 +66,18 @@ from pki.models.credential import PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
 from pki.rollover.import_ca import ImportCaRolloverForm
 from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
-from pki.services.ca_enrollment import CmpCaEnrollmentService, CmpContextParams, EstCaEnrollmentService
+from pki.services.ca_enrollment import finalize_cmp_issuing_ca, finalize_est_issuing_ca
 from pki.services.ca_rollover import CaRolloverService
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_ca_request_data
+from pki.views.cmp_request import CmpRequestCertView, CmpRequestView
+from pki.views.est_request import (
+    CertificateDefineCertContentView,
+    CertificateTruststoreAssociationView,
+    EstRequestCertView,
+    EstRequestView,
+)
 from pki.views.mixins import CertificateProfileSelectionMixin
-from request.clients import EstClientError
-from request.clients.cmp_client import CmpClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.request_context import CmpCertificateRequestContext
 from shared.views import AuditedBulkDeleteView, FormErrorMessageMixin
@@ -290,11 +296,27 @@ class IssuingCaRequestCreationView(IssuingCaContextMixin, FormView[IssuingCaAddR
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
-class IssuingCaAddRequestEstView(IssuingCaRequestCreationView):
-    """View to request an Issuing CA certificate using EST."""
+class IssuingCaAddRequestEstView(UserPermissionRequiredMixin, IssuingCaContextMixin, EstRequestView):
+    """Request an Issuing CA certificate using EST (abstract EST request wizard)."""
 
-    form_class = IssuingCaAddRequestEstForm
+    permission_required = AppPermissions.MANAGE_CAS
+    form_class = IssuingCaRequestEstForm
     template_name = 'pki/issuing_cas/add/request_est.html'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-est'
+    truststore_url_name = 'pki:issuing_cas-est-truststore-association'
+
+
+class IssuingCaEstTruststoreAssociationView(
+    UserPermissionRequiredMixin, IssuingCaContextMixin, CertificateTruststoreAssociationView
+):
+    """Associate the trust store for the EST Issuing CA request."""
+
+    permission_required = AppPermissions.MANAGE_CAS
+    template_name = 'pki/issuing_cas/truststore_association.html'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-est'
+    content_url_name = 'pki:issuing_cas-define-cert-content-est'
 
 
 class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[IssuingCaTruststoreAssociationForm]):
@@ -436,6 +458,12 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         context['is_cmp'] = ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]
         context['is_est_ra'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA
         context['est_ra_step'] = 1 if (context['is_est_ra'] and not ca.certificate) else 2
+        # Defaults for the shared protocol-aware info alert (else/EST branch).
+        context['truststore_info_label'] = 'EST:'
+        context['truststore_info_text'] = (
+            'Select or import the TLS server certificate of the remote PKI. '
+            'It is used to secure and validate the HTTPS connection.'
+        )
         return context
 
     def _handle_ra_certificate_extraction(self, ca: CaModel) -> bool:
@@ -569,17 +597,18 @@ class IssuingCaDefineCertContentMixin(
         raise NotImplementedError(msg)
 
 
-class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
-    """View to define certificate content using the issuing_ca profile before requesting via EST."""
+class IssuingCaDefineCertContentEstView(
+    UserPermissionRequiredMixin, IssuingCaContextMixin, CertificateDefineCertContentView
+):
+    """Define certificate content for the EST Issuing CA request."""
 
-    form_class = CertificateIssuanceForm
-    template_name = 'pki/issuing_cas/define_cert_content.html'
-    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-    redirect_url_name = 'pki:issuing_cas-request-cert-est'
-
-    def get_success_message(self) -> str:
-        """Get the success message for the form submission."""
-        return _('Certificate content defined. Please proceed to request the certificate via EST.')
+    permission_required = AppPermissions.MANAGE_CAS
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-est'
+    default_profile_name = 'issuing_ca'
+    profile_credential_type = None
+    request_cert_url_name = 'pki:issuing_cas-request-cert-est'
+    cancel_url_name = 'pki:issuing_cas'
 
 
 class IssuingCaDefineCertContentCsrView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
@@ -764,11 +793,33 @@ class IssuingCaAddRequestExternalCsrView(IssuingCaRequestCreationView):
     template_name = 'pki/issuing_cas/add/request_external_csr.html'
 
 
-class IssuingCaAddRequestCmpView(IssuingCaRequestCreationView):
-    """View to request an Issuing CA certificate using CMP."""
+class IssuingCaAddRequestCmpView(UserPermissionRequiredMixin, IssuingCaContextMixin, CmpRequestView):
+    """Request an Issuing CA certificate using CMP (abstract CMP request wizard)."""
 
-    form_class = IssuingCaAddRequestCmpForm
+    permission_required = AppPermissions.MANAGE_CAS
+    form_class = IssuingCaRequestCmpForm
     template_name = 'pki/issuing_cas/add/request_cmp.html'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-cmp'
+    truststore_url_name = 'pki:issuing_cas-cmp-truststore-association'
+
+
+class IssuingCaCmpTruststoreAssociationView(
+    UserPermissionRequiredMixin, IssuingCaContextMixin, CertificateTruststoreAssociationView
+):
+    """Associate the trust store for the CMP Issuing CA request."""
+
+    permission_required = AppPermissions.MANAGE_CAS
+    template_name = 'pki/issuing_cas/truststore_association.html'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-cmp'
+    content_url_name = 'pki:issuing_cas-define-cert-content-cmp'
+    truststore_intended_usage = TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+    truststore_info_label = 'CMP:'
+    truststore_info_text = (
+        'Select or import the Issuing CA certificate of the remote PKI. '
+        'It is used to identify the recipient CA and verify CMP responses.'
+    )
 
 
 class RemoteRaAddRequestCmpView(RemoteRaAddRequestCmpMixin, FormView[IssuingCaAddRequestCmpForm]):
@@ -807,17 +858,18 @@ class RemoteRaAddRequestEstView(RemoteRaAddRequestEstMixin, FormView[IssuingCaAd
     template_name = 'pki/issuing_cas/add/est_ra.html'
 
 
-class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
-    """View to define certificate content using the issuing_ca profile before requesting via CMP."""
+class IssuingCaDefineCertContentCmpView(
+    UserPermissionRequiredMixin, IssuingCaContextMixin, CertificateDefineCertContentView
+):
+    """Define certificate content for the CMP Issuing CA request."""
 
-    form_class = CertificateIssuanceForm
-    template_name = 'pki/issuing_cas/define_cert_content.html'
-    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
-
-    def get_success_message(self) -> str:
-        """Get the success message for the form submission."""
-        return _('Certificate content defined. Please proceed to request the certificate via CMP.')
+    permission_required = AppPermissions.MANAGE_CAS
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-cmp'
+    default_profile_name = 'issuing_ca'
+    profile_credential_type = None
+    request_cert_url_name = 'pki:issuing_cas-request-cert-cmp'
+    cancel_url_name = 'pki:issuing_cas'
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
@@ -924,309 +976,93 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         return self.render_to_response(context)
 
 
-class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
-    """Mixin for certificate request views for EST and CMP protocols."""
+class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextMixin, EstRequestCertView):
+    """Review the EST request, then create the Issuing CA from the issued certificate."""
 
-    context_object_name = 'issuing_ca'
-    ca_type_filter: CaModel.CaTypeChoice
-    redirect_url_name: str
+    permission_required = AppPermissions.MANAGE_CAS
+    title = 'Request CA Certificate via EST'
+    description = 'Review the request and enroll the Issuing CA certificate from the external EST PKI.'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-est'
+    allow_ca_certificate_request = True
+    edit_url_name = 'pki:issuing_cas-define-cert-content-est'
+    request_cert_url_name = 'pki:issuing_cas-request-cert-est'
+    cancel_url_name = 'pki:issuing_cas'
 
-    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only CAs matching the protocol-specific type filter."""
-        return CaModel.objects.filter(ca_type=self.ca_type_filter)
+    def build_request_data_for_enrollment(self, content: dict[str, Any]) -> dict[str, Any]:
+        """Build the CA-specific request data contract."""
+        return build_ca_request_data(content)
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the issuing_ca certificate profile and cert content summary to the context."""
-        context = super().get_context_data(**kwargs)
-
-        # Get certificate profile
-        try:
-            cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
-            context['cert_profile'] = cert_profile
-            context['profile_json'] = cert_profile.profile_json
-        except CertificateProfileModel.DoesNotExist:
-            self.logger.warning('issuing_ca certificate profile not found')
-            context['cert_profile'] = None
-            context['profile_json'] = None
-
-        # Get certificate content data from session
-        ca = self.get_object()  # type: ignore[attr-defined]
-        cert_content_key = f'cert_content_data_{ca.pk}'
-        cert_content_data = self.request.session.get(cert_content_key)  # type: ignore[attr-defined]
-
-        if cert_content_data:
-            context['cert_content_data'] = cert_content_data
-            context['has_cert_content'] = True
-
-            # Build a summary of the certificate content
-            summary = self._build_cert_content_summary(cert_content_data)
-            context['cert_content_summary'] = summary
-        else:
-            context['has_cert_content'] = False
-            context['cert_content_data'] = None
-            context['cert_content_summary'] = None
-
-        return context
-
-    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
-        """Build a human-readable summary of the certificate content."""
-        summary: dict[str, Any] = {'subject': {}, 'san': {}, 'validity': {}}
-
-        # Subject fields
-        subject_fields = [
-            ('common_name', 'Common Name (CN)'),
-            ('organization_name', 'Organization (O)'),
-            ('organizational_unit_name', 'Organizational Unit (OU)'),
-            ('country_name', 'Country (C)'),
-            ('state_or_province_name', 'State/Province (ST)'),
-            ('locality_name', 'Locality (L)'),
-            ('email_address', 'Email Address'),
-        ]
-
-        for field_name, label in subject_fields:
-            value = cert_data.get(field_name)
-            if value:
-                summary['subject'][label] = value
-
-        # SAN fields
-        san_fields = [
-            ('dns_names', 'DNS Names'),
-            ('ip_addresses', 'IP Addresses'),
-            ('rfc822_names', 'Email Addresses'),
-            ('uris', 'URIs'),
-        ]
-
-        for field_name, label in san_fields:
-            value = cert_data.get(field_name)
-            if value:
-                summary['san'][label] = value
-
-        # Validity
-        validity_parts = []
-        if cert_data.get('days'):
-            validity_parts.append(f'{cert_data["days"]} days')
-        if cert_data.get('hours'):
-            validity_parts.append(f'{cert_data["hours"]} hours')
-        if cert_data.get('minutes'):
-            validity_parts.append(f'{cert_data["minutes"]} minutes')
-        if cert_data.get('seconds'):
-            validity_parts.append(f'{cert_data["seconds"]} seconds')
-
-        summary['validity'] = ', '.join(validity_parts) if validity_parts else 'Not specified'
-
-        return summary
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle POST request to request certificate."""
-        ca = self.get_object()  # type: ignore[attr-defined]
-
-        # TODO(FlorianHandke): Implement certificate request client  # noqa: FIX002
-        messages.warning(request, self.get_not_implemented_message())
-        return redirect(self.redirect_url_name, pk=ca.pk)
-
-    def get_not_implemented_message(self) -> str:
-        """Get the not implemented message for the specific protocol."""
-        msg = 'Subclasses must implement get_not_implemented_message()'
-        raise NotImplementedError(msg)
-
-    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Convert CA form fields into the nested certificate request structure."""
-        self.logger.info('Building request data from: %s', cert_content_data)
-        return build_ca_request_data(cert_content_data)
-
-
-class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
-    """View to display the EST certificate request page."""
-
-    template_name = 'pki/issuing_cas/request_cert_est.html'
-    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
-    redirect_url_name = 'pki:issuing_cas-request-cert-est'
-
-    def get_not_implemented_message(self) -> str:
-        """Get the not implemented message for EST."""
-        return _('EST certificate request not yet implemented.')
-
-    def _perform_est_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
-        """Enroll through the shared service and clear the browser draft on success."""
-        cert_profile_pk = request.session.get(f'cert_profile_pk_{ca.pk}')
-        if not cert_profile_pk:
-            msg = 'Certificate profile not found in session'
-            raise ValueError(msg)
-        cert_profile = CertificateProfileModel.objects.get(pk=cert_profile_pk)
-        EstCaEnrollmentService().enroll(ca, cert_content_data, cert_profile)
-        del request.session[f'cert_content_data_{ca.pk}']
-        del request.session[f'cert_profile_pk_{ca.pk}']
-
-    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Delegate to the shared enrollment implementation."""
-        return EstCaEnrollmentService()._build_request_data_from_form(cert_content_data)  # noqa: SLF001
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle POST request to request certificate via EST."""
-        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        ca = self.get_object()
-
-        cert_content_key = f'cert_content_data_{ca.pk}'
-        cert_content_data = request.session.get(cert_content_key)
-
-        self.logger.info('Cert content data for CA %s: %s', ca.pk, cert_content_data)
-
-        if not cert_content_data:
-            messages.error(
-                request, _('Certificate content data not found. Please define the certificate content first.')
-            )
-            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
-
-        try:
-            self._perform_est_enrollment(ca, cert_content_data, request)
-            CaRolloverService.complete_awaiting_rollover_for_ca(ca)
-            messages.success(
-                request,
-                _('Successfully enrolled certificate for Issuing CA {name} via EST.').format(name=ca.unique_name),
-            )
-            return redirect('pki:issuing_cas-config', pk=ca.pk)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
-            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
-        except CertificateProfileModel.DoesNotExist:
-            messages.error(request, _('Certificate profile "issuing_ca" not found.'))
-            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
-        except EstClientError as exc:
-            self.logger.exception('EST client error during certificate enrollment')
-            messages.error(request, _('Failed to enroll certificate via EST: {error}').format(error=str(exc)))
-            return redirect(self.redirect_url_name, pk=ca.pk)
-        except Exception as exc:
-            self.logger.exception('Unexpected error during EST certificate enrollment')
-            messages.error(request, _('Unexpected error during certificate enrollment: {error}').format(error=str(exc)))
-            return redirect(self.redirect_url_name, pk=ca.pk)
-
-
-class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
-    """View to display the CMP certificate request page."""
-
-    template_name = 'pki/issuing_cas/request_cert_cmp.html'
-    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
-    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
-
-    def get_not_implemented_message(self) -> str:
-        """Get the not implemented message for CMP."""
-        return _('CMP certificate request not yet implemented.')
-
-    def _perform_cmp_enrollment(
+    def finalize(
         self,
-        ca: CaModel,
-        cert_content_data: dict[str, Any],
-        request: HttpRequest,
-        *,
-        sender_kid: int | None = None,
-    ) -> None:
-        """Enroll through the shared service and clear the browser draft on success."""
-        cert_profile_pk = request.session.get(f'cert_profile_pk_{ca.pk}')
-        if not cert_profile_pk:
-            msg = 'Certificate profile not found in session'
-            raise ValueError(msg)
-        cert_profile = CertificateProfileModel.objects.get(pk=cert_profile_pk)
-        CmpCaEnrollmentService().enroll(ca, cert_content_data, cert_profile, sender_kid=sender_kid)
-        del request.session[f'cert_content_data_{ca.pk}']
-        del request.session[f'cert_profile_pk_{ca.pk}']
+        credential: CredentialModel,
+        issued_cert: Any,
+        _extra_certs: list[Any],
+        truststore: TruststoreModel,
+    ) -> CaModel:
+        """Create the Issuing CA from the EST-issued certificate."""
+        profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
+        return finalize_est_issuing_ca(
+            credential=credential,
+            issued_cert=issued_cert,
+            truststore=truststore,
+            cert_profile=profile,
+            unique_name=self.state['unique_name'],
+            remote_host=self.state['remote_host'],
+            remote_port=self.state['remote_port'],
+            remote_path=self.state['remote_path'],
+            est_username=self.state['est_username'],
+            est_password=self.state['est_password'],
+        )
 
-    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._build_request_data_from_form(cert_content_data)  # noqa: SLF001
+    def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
+        """Return to the created CA's configuration page."""
+        return redirect('pki:issuing_cas-config', pk=result.pk)
 
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle POST request to request certificate via CMP."""
-        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        ca = self.get_object()
 
-        cert_content_key = f'cert_content_data_{ca.pk}'
-        cert_content_data = request.session.get(cert_content_key)
+class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextMixin, CmpRequestCertView):
+    """Review the CMP request, then create the Issuing CA from the issued certificate."""
 
-        self.logger.info('Cert content data for CA %s: %s', ca.pk, cert_content_data)
+    permission_required = AppPermissions.MANAGE_CAS
+    title = 'Request CA Certificate via CMP'
+    description = 'Review the request and enroll the Issuing CA certificate from the external PKI via CMP.'
+    credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
+    session_scope = 'issuing-ca-cmp'
+    allow_ca_certificate_request = True
+    edit_url_name = 'pki:issuing_cas-define-cert-content-cmp'
+    request_cert_url_name = 'pki:issuing_cas-request-cert-cmp'
+    cancel_url_name = 'pki:issuing_cas'
 
-        if not cert_content_data:
-            messages.error(
-                request, _('Certificate content data not found. Please define the certificate content first.')
-            )
-            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+    def build_request_data_for_enrollment(self, content: dict[str, Any]) -> dict[str, Any]:
+        """Build the CA-specific request data contract."""
+        return build_ca_request_data(content)
 
-        # Extract optional sender_kid from the form
-        sender_kid_raw = request.POST.get('sender_kid', '').strip()
-        sender_kid: int | None = int(sender_kid_raw) if sender_kid_raw else None
-
-        try:
-            self._perform_cmp_enrollment(ca, cert_content_data, request, sender_kid=sender_kid)
-            CaRolloverService.complete_awaiting_rollover_for_ca(ca)
-            messages.success(
-                request,
-                _('Successfully enrolled certificate for Issuing CA {name} via CMP.').format(name=ca.unique_name),
-            )
-            return redirect('pki:issuing_cas-config', pk=ca.pk)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
-            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
-        except CertificateProfileModel.DoesNotExist:
-            messages.error(request, _('Certificate profile "issuing_ca" not found.'))
-            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
-        except CmpClientError as exc:
-            self.logger.exception('CMP client error during certificate enrollment')
-            messages.error(request, _('Failed to enroll certificate via CMP: {error}').format(error=str(exc)))
-            return redirect(self.redirect_url_name, pk=ca.pk)
-        except Exception as exc:
-            self.logger.exception('Unexpected error during CMP certificate enrollment')
-            messages.error(request, _('Unexpected error during certificate enrollment: {error}').format(error=str(exc)))
-            return redirect(self.redirect_url_name, pk=ca.pk)
-
-    def _get_recipient_name_from_truststore(self, ca: CaModel) -> str:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._get_recipient_name_from_truststore(ca)  # noqa: SLF001
-
-    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey | Any:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._load_private_key(ca)  # noqa: SLF001
-
-    def _create_cmp_context(
+    def finalize(
         self,
-        ca: CaModel,
-        params: CmpContextParams,
-    ) -> CmpCertificateRequestContext:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._create_cmp_context(ca, params)  # noqa: SLF001
+        credential: CredentialModel,
+        issued_cert: Any,
+        extra_certs: list[Any],
+        truststore: TruststoreModel,
+    ) -> CaModel:
+        """Create the Issuing CA from the CMP-issued certificate and chain."""
+        profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
+        return finalize_cmp_issuing_ca(
+            credential=credential,
+            issued_cert=issued_cert,
+            chain_certs=extra_certs,
+            truststore=truststore,
+            cert_profile=profile,
+            unique_name=self.state['unique_name'],
+            remote_host=self.state['remote_host'],
+            remote_port=self.state['remote_port'],
+            remote_path=self.state['remote_path'],
+            cmp_shared_secret=self.state['cmp_shared_secret'],
+            cmp_sender_kid=self.state.get('cmp_sender_kid'),
+        )
 
-    def _save_cmp_certificates(
-        self,
-        ca: CaModel,
-        issued_cert: x509.Certificate,
-        chain_certs: list[x509.Certificate],
-        cert_profile: CertificateProfileModel,
-    ) -> None:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._save_cmp_certificates(ca, issued_cert, chain_certs, cert_profile)  # noqa: SLF001
-
-    def _build_ca_hierarchy(
-        self,
-        chain_ca_models: list[CaModel],
-    ) -> None:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._build_ca_hierarchy(chain_ca_models)  # noqa: SLF001
-
-    def _find_issuer_ca(
-        self,
-        issued_cert: x509.Certificate,
-        chain_ca_models: list[CaModel],
-    ) -> CaModel | None:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._find_issuer_ca(issued_cert, chain_ca_models)  # noqa: SLF001
-
-    def _build_certificate_chain_for_credential(self, credential: CredentialModel, parent_ca: CaModel | None) -> None:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._build_certificate_chain_for_credential(credential, parent_ca)  # noqa: SLF001
-
-    def _find_existing_ca_for_certificate(self, cert: x509.Certificate) -> CaModel | None:
-        """Delegate to the shared enrollment implementation."""
-        return CmpCaEnrollmentService()._find_existing_ca_for_certificate(cert)  # noqa: SLF001
+    def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
+        """Return to the created CA's configuration page."""
+        return redirect('pki:issuing_cas-config', pk=result.pk)
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

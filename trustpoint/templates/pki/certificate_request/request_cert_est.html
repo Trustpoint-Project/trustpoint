@@ -1,0 +1,83 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{{ title }}</h1>
+
+        <p class="mb-0 text-muted">{{ description }}</p>
+    </div>
+
+    <div class="card-body text-start">
+        <section class="mb-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">{% trans 'EST Connection' %}</h2>
+            </div>
+
+            <hr class="mb-4">
+
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Remote Host' %}</div>
+                    <div>{{ remote_host }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Port' %}</div>
+                    <div>{{ remote_port }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Path' %}</div>
+                    <div>{{ remote_path }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'EST Username' %}</div>
+                    <div>{% if est_username %}{{ est_username }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Trust Store' %}</div>
+                    <div>
+                        {% if truststore %}
+                            {{ truststore.unique_name }}
+                        {% else %}
+                            <span class="text-muted">{% trans 'Not configured' %}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {% if has_cert_content %}
+            {% include 'shared/partials/certificate_content_summary.html' with summary=cert_content_summary only %}
+        {% else %}
+            <div class="alert alert-warning mt-3" role="alert">
+                <strong>{% trans 'Note:' %}</strong>
+                {% trans 'No certificate content has been defined yet. Please go back and define the certificate content first.' %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="d-flex gap-2">
+            <a href="{% url cancel_url_name %}" class="btn btn-secondary">
+                {% trans 'Cancel' %}
+            </a>
+
+            <a href="{% url edit_url_name pk=credential.pk %}" class="btn btn-outline-secondary">
+                {% trans 'Edit Certificate Content' %}
+            </a>
+        </div>
+
+        <form method="post">
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="btn btn-primary"
+                {% if not has_cert_content %}disabled{% endif %}
+            >
+                {% trans 'Request Certificate' %}
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock content %}

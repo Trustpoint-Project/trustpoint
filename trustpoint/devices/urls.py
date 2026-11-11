@@ -367,7 +367,6 @@ urlpatterns = [
         views.AgentsBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete',
     ),
-
     path(
         'zero-touch-credentials/',
         ztc_views.OwnerCredentialTableView.as_view(),
@@ -404,6 +403,11 @@ urlpatterns = [
         name='zero_touch_credentials-add-est-onboarding',
     ),
     path(
+        'zero-touch-credentials/add/cmp/',
+        ztc_views.OwnerCredentialAddRequestCmpView.as_view(),
+        name='zero_touch_credentials-add-cmp',
+    ),
+    path(
         'zero-touch-credentials/truststore-association/<int:pk>/',
         ztc_views.OwnerCredentialTruststoreAssociationView.as_view(),
         name='zero_touch_credentials-truststore-association',
@@ -427,6 +431,16 @@ urlpatterns = [
         'zero-touch-credentials/request-cert-est/<int:pk>/',
         ztc_views.OwnerCredentialRequestCertEstView.as_view(),
         name='zero_touch_credentials-request-cert-est',
+    ),
+    path(
+        'zero-touch-credentials/define-cert-content-cmp/<int:pk>/',
+        ztc_views.OwnerCredentialDefineCertContentCmpView.as_view(),
+        name='zero_touch_credentials-define-cert-content-cmp',
+    ),
+    path(
+        'zero-touch-credentials/request-cert-cmp/<int:pk>/',
+        ztc_views.OwnerCredentialRequestCertCmpView.as_view(),
+        name='zero_touch_credentials-request-cert-cmp',
     ),
     path(
         'zero-touch-credentials/define-cert-content-domain-credential-est/<int:pk>/',
@@ -469,8 +483,7 @@ urlpatterns = [
         name='zero_touch_credentials-aoki_demo_download',
     ),
     path(
-        'certificate-lifecycle-management/<int:pk>/no-onboarding/'
-        'issue-application-credential/scep/download-config/',
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/download-config/',
         devices_help_views.DownloadScepConfigView.as_view(),
         name='scep_config_download',
     ),
