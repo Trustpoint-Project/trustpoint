@@ -9,12 +9,13 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
+from pki.util.keys import CryptographyUtils
+from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
 from users.models import TrustpointUser
 
 if TYPE_CHECKING:
@@ -133,9 +134,12 @@ def create_user_client_certificate(
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
         .add_extension(authority_key_identifier, critical=False)
     )
+    issuing_key = issuing_ca.credential.get_private_key()
+    actual_issuing_key = validate_certificate_signing_private_key(_unwrap_mldsa_managed_key(issuing_key))
+    hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_issuing_key)
     certificate = builder.sign(
-        private_key=issuing_ca.credential.get_private_key(),
-        algorithm=hashes.SHA256(),
+        private_key=actual_issuing_key,
+        algorithm=hash_algorithm,  # type: ignore[arg-type]
     )
     certificate.verify_directly_issued_by(issuer_certificate)
     return certificate, private_key

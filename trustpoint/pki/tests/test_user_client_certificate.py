@@ -21,6 +21,11 @@ from django.utils import timezone
 from pki.management.commands.create_user_client_certificate import create_user_client_certificate
 from users.models import TrustpointUser
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 
 class UserClientCertificateCreationTest(SimpleTestCase):
     """Verify the identity binding and TLS-client constraints of generated certificates."""
@@ -58,6 +63,41 @@ class UserClientCertificateCreationTest(SimpleTestCase):
             )
             .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
             .sign(key, hashes.SHA256())
+        )
+        return certificate, key
+
+    @staticmethod
+    def create_mldsa_issuer() -> tuple[x509.Certificate, object]:
+        """Return an ML-DSA issuer certificate and key."""
+        assert mldsa is not None
+        key = mldsa.MLDSA65PrivateKey.generate()
+        now = timezone.now()
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'ML-DSA Management CA')])
+        certificate = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(minutes=5))
+            .not_valid_after(now + timedelta(days=30))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+            .sign(key, None)
         )
         return certificate, key
 
@@ -103,6 +143,23 @@ class UserClientCertificateCreationTest(SimpleTestCase):
         assert certificate.subject.get_attributes_for_oid(NameOID.UNSTRUCTURED_NAME)[0].value == 'laptop'
         assert certificate.public_key().public_numbers() == private_key.public_key().public_numbers()
         certificate.verify_directly_issued_by(issuer_certificate)
+
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_generated_certificate_supports_mldsa_management_ca(self) -> None:
+        """ML-DSA management CAs sign client certificates without an explicit hash algorithm."""
+        issuer_certificate, issuer_key = self.create_mldsa_issuer()
+        user, issuing_ca = self.patch_dependencies(issuer_certificate, issuer_key)
+
+        with patch(
+            'pki.management.commands.create_user_client_certificate.TrustpointUser.objects.get',
+            return_value=user,
+        ):
+            certificate, _private_key = create_user_client_certificate(
+                user.pk, 'mldsa-client', issuing_ca=issuing_ca,
+            )
+
+        certificate.verify_directly_issued_by(issuer_certificate)
+        assert certificate.signature_hash_algorithm is None
 
     def test_generated_certificate_has_required_client_auth_extensions(self) -> None:
         issuer_certificate, issuer_key = self.create_issuer()

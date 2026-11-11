@@ -49,6 +49,7 @@ from pki.management.commands.create_user_client_certificate import create_user_c
 from pki.models import CaModel, CertificateModel
 from pki.services.management_ca import ManagementCAService
 from setup_wizard.models import SetupWizardCompletedModel
+from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin
 from users.authentication import CERTIFICATE_LOGIN_ERROR_SESSION_KEY, REJECTED_CERTIFICATE_SESSION_KEY
 from users.form import TrustpointUserDetailsForm, UserClientCertificateForm
@@ -257,7 +258,7 @@ class UserProfileMixin(ContextDataMixin, LoginRequiredMixin):
 
 
 @method_decorator(never_cache, name='dispatch')
-class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserClientCertificateForm]):
+class UserProfileCertificateAuthenticationView(UserProfileMixin, LoggerMixin, FormView[UserClientCertificateForm]):
     """List the user's client certificates and download newly generated credentials once."""
 
     template_name = 'users/profile_certificate_authentication.html'
@@ -340,10 +341,12 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
             ).exists():
                 form.add_error('identifier', _('You already have a client certificate with this identifier.'))
             else:
+                self.logger.exception('Failed to create client certificate due to a database integrity error.')
                 form.add_error(None, _('The client certificate could not be created.'))
         except CommandError as exc:
             form.add_error(None, str(exc))
         except (CryptoError, ValueError, RuntimeError):
+            self.logger.exception('Failed to create client certificate with the selected management CA.')
             form.add_error(
                 None,
                 _('The client certificate could not be created. Check the management CA configuration.'),
