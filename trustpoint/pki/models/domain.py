@@ -159,9 +159,12 @@ class DomainModel(models.Model):
         return self.signature_suite.public_key_info
 
     def clean(self) -> None:
-        """Validate that the issuing CA is not an auto-generated root CA."""
+        """Validate that the issuing CA can serve endpoint certificates."""
         if self.issuing_ca and self.issuing_ca.ca_type == CaModel.CaTypeChoice.AUTOGEN_ROOT:
             exc_msg = 'The issuing CA associated with the domain cannot be an auto-generated root CA.'
+            raise ValidationError(exc_msg)
+        if self.issuing_ca and not self.issuing_ca.can_issue_endpoint_certificates:
+            exc_msg = 'Management CAs cannot issue certificates for endpoint domains.'
             raise ValidationError(exc_msg)
 
     def get_issuing_ca_or_value_error(self) -> CaModel:
@@ -178,8 +181,9 @@ class DomainModel(models.Model):
             raise ValueError(err_msg)
         return self.issuing_ca
 
-    def get_allowed_cert_profiles(self, credential_type: CertificateProfileModel.ProfileCredentialType | None = None
-                                  ) -> models.QuerySet[DomainAllowedCertificateProfileModel]:
+    def get_allowed_cert_profiles(
+        self, credential_type: CertificateProfileModel.ProfileCredentialType | None = None
+    ) -> models.QuerySet[DomainAllowedCertificateProfileModel]:
         """Gets the allowed certificate profiles for this domain.
 
         Args:
@@ -217,9 +221,7 @@ class DomainModel(models.Model):
         profile_qs = self.certificate_profiles.filter(alias=cert_profile_str)
         if not profile_qs.exists():
             # fall back to unique_name
-            profile_qs = self.certificate_profiles.filter(
-                certificate_profile__unique_name=cert_profile_str
-            )
+            profile_qs = self.certificate_profiles.filter(certificate_profile__unique_name=cert_profile_str)
         if not profile_qs.exists():
             err_msg = f'Certificate profile "{cert_profile_str}" does not exist or not allowed in domain.'
             raise ValueError(err_msg)
@@ -259,9 +261,7 @@ class DomainModel(models.Model):
 
                 # Create new relation
                 DomainAllowedCertificateProfileModel.objects.create(
-                    domain=self,
-                    certificate_profile=profile,
-                    alias=alias_value
+                    domain=self, certificate_profile=profile, alias=alias_value
                 )
 
         return rejected_aliases
@@ -279,21 +279,14 @@ class DomainModel(models.Model):
 class DomainAllowedCertificateProfileModel(models.Model):
     """Model representing allowed certificate profiles for a domain."""
 
-    domain = models.ForeignKey(
-        DomainModel,
-        on_delete=models.CASCADE,
-        related_name='certificate_profiles'
-    )
-    certificate_profile = models.ForeignKey(
-        CertificateProfileModel,
-        on_delete=models.CASCADE,
-        related_name='domains'
-    )
+    domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='certificate_profiles')
+    certificate_profile = models.ForeignKey(CertificateProfileModel, on_delete=models.CASCADE, related_name='domains')
     # Domain-specific alias for the certificate profile name
     alias = models.CharField(max_length=255, default='')
 
     class Meta(TypedModelMeta):
         """Meta information."""
+
         constraints: ClassVar = [
             # allow duplicate empty aliases
             models.UniqueConstraint(
@@ -301,10 +294,7 @@ class DomainAllowedCertificateProfileModel(models.Model):
                 name='unique_domain_alias_when_not_empty',
                 condition=~Q(alias=''),
             ),
-            models.UniqueConstraint(
-                fields=['domain', 'certificate_profile'],
-                name='unique_domain_certificate_profile'
-            ),
+            models.UniqueConstraint(fields=['domain', 'certificate_profile'], name='unique_domain_certificate_profile'),
         ]
 
     def __str__(self) -> str:
@@ -315,8 +305,9 @@ class DomainAllowedCertificateProfileModel(models.Model):
         return name_str
 
     @staticmethod
-    def get_list_of_display_names(allowed_profiles: list[DomainAllowedCertificateProfileModel]
-                               ) -> list[tuple[int, str, str]]:
+    def get_list_of_display_names(
+        allowed_profiles: list[DomainAllowedCertificateProfileModel],
+    ) -> list[tuple[int, str, str]]:
         """Get display names for the allowed certificate profiles, ensuring uniqueness.
 
         Returns a list of tuples containing (profile_id, display_name, unique_name). If multiple profiles share the same

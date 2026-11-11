@@ -132,9 +132,19 @@ urlpatterns = [
     ),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
+        'issuing-cas/add/',
+        issuing_cas.CaAddRoleSelectView.as_view(),
+        name='issuing_cas-add-role_select',
+    ),
+    path(
         'issuing-cas/add/method-select/',
         issuing_cas.IssuingCaAddMethodSelectView.as_view(),
         name='issuing_cas-add-method_select',
+    ),
+    path(
+        'issuing-cas/add/self-signed-management-ca/',
+        issuing_cas.SelfSignedManagementCaAddView.as_view(),
+        name='issuing_cas-add-self_signed_management_ca',
     ),
     path(
         'issuing-cas/add/autogen/',

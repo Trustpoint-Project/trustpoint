@@ -51,6 +51,10 @@
                     <div>{{ issuing_ca.unique_name }}</div>
                 </div>
                 <div>
+                    <div>{% trans 'CA Role' %}</div>
+                    <div>{{ issuing_ca.get_ca_role_display }}</div>
+                </div>
+                <div>
                     <div>{% trans 'Issuing CA Certificate' %}</div>
                     <div>
                         {% if issuing_ca.ca_certificate_model %}

@@ -46,7 +46,7 @@ from trustpoint_core.serializer import CredentialFileFormat, CredentialSerialize
 from crypto.domain.errors import CryptoError
 from management.models import CertificateAuthenticationConfig, PasswordPolicy
 from pki.management.commands.create_user_client_certificate import create_user_client_certificate
-from pki.models import CertificateModel
+from pki.models import CaModel, CertificateModel
 from pki.services.management_ca import ManagementCAService
 from setup_wizard.models import SetupWizardCompletedModel
 from trustpoint.views.base import ContextDataMixin
@@ -66,7 +66,6 @@ from users.models import (
 if TYPE_CHECKING:
     from typing import Any
 
-    from cryptography import x509
     from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
     from django.db.models import QuerySet
     from django.http import HttpRequest, HttpResponse
@@ -286,17 +285,21 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
         return context
 
     @staticmethod
-    def _get_issuing_certificate() -> x509.Certificate:
+    def _get_issuing_ca() -> CaModel:
         """Lock and validate the enabled management CA inside the creation transaction."""
-        root_ca, issuing_ca = ManagementCAService.get_hierarchy(lock=True)
-        if issuing_ca is None or not ManagementCAService.is_complete(root_ca, issuing_ca):
+        issuing_ca = ManagementCAService.get_issuing_ca(lock=True)
+        if (
+            issuing_ca is None
+            or not issuing_ca.is_management_ca
+            or issuing_ca.credential is None
+            or issuing_ca.ca_certificate_model is None
+        ):
             raise ValidationError(_('The management CA is not ready.'))
         if not CertificateAuthenticationConfig.objects.filter(issuing_ca=issuing_ca, enabled=True).exists():
             raise ValidationError(_('Certificate based authentication is not enabled.'))
-        issuing_certificate = issuing_ca.get_certificate()
-        if issuing_certificate is None:
+        if issuing_ca.get_certificate() is None:
             raise ValidationError(_('The management CA has no certificate.'))
-        return issuing_certificate
+        return issuing_ca
 
     @sensitive_variables()
     def form_valid(self, form: UserClientCertificateForm) -> HttpResponse:
@@ -308,12 +311,17 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, FormView[UserCl
                 if UserClientCertificate.objects.filter(user=user, identifier=identifier).exists():
                     form.add_error('identifier', _('You already have a client certificate with this identifier.'))
                     return self.form_invalid(form)
-                issuing_certificate = self._get_issuing_certificate()
-                certificate, private_key = create_user_client_certificate(user.pk, identifier)
+                issuing_ca = self._get_issuing_ca()
+                issuing_certificate = issuing_ca.get_certificate()
+                certificate, private_key = create_user_client_certificate(
+                    user.pk,
+                    identifier,
+                    issuing_ca=issuing_ca,
+                )
                 credential = CredentialSerializer(
                     private_key=private_key,
                     certificate=certificate,
-                    additional_certificates=[issuing_certificate],
+                    additional_certificates=[issuing_certificate] if issuing_certificate else [],
                 )
                 pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
                 certificate_model = CertificateModel.save_certificate(certificate)

@@ -8,6 +8,7 @@ from .certificates import CertificateDownloadForm
 from .csr import CsrIssuanceForm
 from .devids import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from .issuing_cas import (
+    CaAddRoleSelectForm,
     IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
@@ -21,6 +22,7 @@ from .issuing_cas import (
     IssuingCaRequestCmpForm,
     IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
+    SelfSignedManagementCaForm,
 )
 from .owner_credential import (
     OwnerCredentialAddRequestCmpForm,
@@ -33,6 +35,7 @@ from .owner_credential import (
 from .truststores import TruststoreAddForm, TruststoreDownloadForm
 
 __all__ = [
+    'CaAddRoleSelectForm',
     'CertProfileConfigForm',
     'CertificateDownloadForm',
     'CertificateIssuanceForm',
@@ -59,6 +62,7 @@ __all__ = [
     'OwnerCredentialOnboardingSetupForm',
     'OwnerCredentialTruststoreAssociationForm',
     'ProfileBasedFormFieldBuilder',
+    'SelfSignedManagementCaForm',
     'TruststoreAddForm',
     'TruststoreDownloadForm',
 ]

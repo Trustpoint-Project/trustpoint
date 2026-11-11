@@ -43,6 +43,7 @@ from management.models.security import SecurityConfig
 from management.security_change_audit import audit_security_change, security_change
 from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
+    CaAddRoleSelectForm,
     CertificateIssuanceForm,
     IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
@@ -56,6 +57,7 @@ from pki.forms import (
     IssuingCaRequestCmpForm,
     IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
+    SelfSignedManagementCaForm,
     TruststoreAddForm,
 )
 from pki.forms.issuing_cas import IssuingCaAddRequestMixin, IssuingCaImportMixin
@@ -68,6 +70,7 @@ from pki.rollover.import_ca import ImportCaRolloverForm
 from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
 from pki.services.ca_enrollment import finalize_cmp_issuing_ca, finalize_est_issuing_ca
 from pki.services.ca_rollover import CaRolloverService
+from pki.services.management_ca import create_self_signed_management_ca
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_ca_request_data
 from pki.views.cmp_request import CmpRequestCertView, CmpRequestView
@@ -109,6 +112,69 @@ class KeylessCaContextMixin(ContextDataMixin):
 
     context_page_category = 'pki'
     context_page_name = 'cas'
+
+
+CA_ROLE_SESSION_KEY = 'ca_add_role'
+
+
+def selected_ca_role(request: HttpRequest) -> int:
+    """Return the role chosen before the add wizard, defaulting to issuing for old links."""
+    try:
+        return int(request.session.get(CA_ROLE_SESSION_KEY, CaModel.CaRole.ISSUING))
+    except (TypeError, ValueError):
+        return CaModel.CaRole.ISSUING
+
+
+class CaAddRoleSelectView(IssuingCaContextMixin, FormView[CaAddRoleSelectForm]):
+    """Choose the role of the CA before selecting how it will be created."""
+
+    template_name = 'pki/issuing_cas/add/role_select.html'
+    form_class = CaAddRoleSelectForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Only CA managers may start the add wizard."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def form_valid(self, form: CaAddRoleSelectForm) -> HttpResponse:
+        """Persist the role for the following wizard steps."""
+        self.request.session[CA_ROLE_SESSION_KEY] = form.cleaned_data['ca_role']
+        return redirect('pki:issuing_cas-add-method_select')
+
+
+class SelfSignedManagementCaAddView(IssuingCaContextMixin, LoggerMixin, FormView[SelfSignedManagementCaForm]):
+    """Create a self-signed management CA using the default issuing CA profile."""
+
+    template_name = 'pki/issuing_cas/add/self_signed_management_ca.html'
+    form_class = SelfSignedManagementCaForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Only CA managers may create a management CA."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def form_valid(self, form: SelfSignedManagementCaForm) -> HttpResponse:
+        """Generate and persist the self-signed management CA."""
+        try:
+            ca = create_self_signed_management_ca(
+                unique_name=form.cleaned_data['unique_name'],
+                key_type=form.cleaned_data['key_type'],
+            )
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        except Exception:
+            self.logger.exception('Failed to create self-signed management CA.')
+            form.add_error(None, _('The self-signed management CA could not be created.'))
+        else:
+            audit_security_change(target=ca, actor=self.request.user, before=None, action='created')
+            messages.success(
+                self.request,
+                _('Successfully created self-signed Management CA {name}.').format(name=ca.unique_name),
+            )
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        return self.form_invalid(form)
 
 
 class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], ListView[CaModel]):
@@ -160,12 +226,15 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         )
         if not can_generate:
             key_type_field.widget.attrs['disabled'] = 'disabled'
+        ca_role = selected_ca_role(self.request)
         context.update(
             {
                 'auto_gen_pki_form': auto_gen_form,
                 'auto_gen_pki_allowed': auto_gen_allowed,
                 'active_auto_gen_pki': active_auto_gen_pki,
-                'can_generate_auto_gen_pki': can_generate,
+                'can_generate_auto_gen_pki': can_generate and ca_role == CaModel.CaRole.ISSUING,
+                'ca_role': ca_role,
+                'management_ca': ca_role == CaModel.CaRole.MANAGEMENT,
             }
         )
         return context
@@ -210,6 +279,9 @@ class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGe
         """Enforce permissions and current security state before creating any CA."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
+        if selected_ca_role(self.request) == CaModel.CaRole.MANAGEMENT:
+            messages.error(self.request, _('Auto-generated PKI is only available for issuing CAs.'))
+            return redirect('pki:issuing_cas-add-method_select')
 
         security_config = SecurityConfig.objects.first()
         if not security_config or not security_config.auto_gen_pki:
@@ -241,6 +313,10 @@ class IssuingCaFileImportView(IssuingCaContextMixin, FormView[Form]):
 
     template_name = 'pki/issuing_cas/add/file_import.html'
     success_url = reverse_lazy('pki:issuing_cas')
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Apply the role selected before the add wizard started."""
+        return super().get_form_kwargs() | {'ca_role': selected_ca_role(self.request)}
 
     @transaction.atomic
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -277,6 +353,10 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaFileImportView):
 class IssuingCaRequestCreationView(IssuingCaContextMixin, FormView[IssuingCaAddRequestMixin]):
     """Create a pending remote CA and redirect to its truststore association."""
 
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Apply the role selected before the add wizard started."""
+        return super().get_form_kwargs() | {'ca_role': selected_ca_role(self.request)}
+
     @transaction.atomic
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Keep form persistence and the creation audit in one transaction."""
@@ -305,6 +385,10 @@ class IssuingCaAddRequestEstView(UserPermissionRequiredMixin, IssuingCaContextMi
     credential_type = CredentialModel.CredentialTypeChoice.ISSUING_CA
     session_scope = 'issuing-ca-est'
     truststore_url_name = 'pki:issuing_cas-est-truststore-association'
+
+    def get_initial(self) -> dict[str, Any]:
+        """Carry the role selected before the add wizard into the request form."""
+        return super().get_initial() | {'ca_role': selected_ca_role(self.request)}
 
 
 class IssuingCaEstTruststoreAssociationView(
@@ -771,6 +855,12 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
 
     request: HttpRequest
 
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Apply the role selected before the add wizard started."""
+        return cast('dict[str, Any]', super().get_form_kwargs()) | {  # type: ignore[misc]
+            'ca_role': selected_ca_role(self.request)
+        }
+
     @transaction.atomic
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle successful CMP RA configuration submission."""
@@ -803,6 +893,10 @@ class IssuingCaAddRequestCmpView(UserPermissionRequiredMixin, IssuingCaContextMi
     session_scope = 'issuing-ca-cmp'
     truststore_url_name = 'pki:issuing_cas-cmp-truststore-association'
 
+    def get_initial(self) -> dict[str, Any]:
+        """Carry the role selected before the add wizard into the request form."""
+        return super().get_initial() | {'ca_role': selected_ca_role(self.request)}
+
 
 class IssuingCaCmpTruststoreAssociationView(
     UserPermissionRequiredMixin, IssuingCaContextMixin, CertificateTruststoreAssociationView
@@ -833,6 +927,12 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
     """Mixin for EST RA configuration views."""
 
     request: HttpRequest
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Apply the role selected before the add wizard started."""
+        return cast('dict[str, Any]', super().get_form_kwargs()) | {  # type: ignore[misc]
+            'ca_role': selected_ca_role(self.request)
+        }
 
     @transaction.atomic
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
@@ -959,7 +1059,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 
         if not issuing_ca.is_active:
             messages.error(
-                request, _('Cannot update CRL settings for Issuing CA %s: CA is deactivated.') % issuing_ca.unique_name
+                request, _('Cannot update settings for Issuing CA %s: CA is deactivated.') % issuing_ca.unique_name
             )
             return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
@@ -1013,6 +1113,7 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
             remote_path=self.state['remote_path'],
             est_username=self.state['est_username'],
             est_password=self.state['est_password'],
+            ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
@@ -1058,6 +1159,7 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
             remote_path=self.state['remote_path'],
             cmp_shared_secret=self.state['cmp_shared_secret'],
             cmp_sender_kid=self.state.get('cmp_sender_kid'),
+            ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:

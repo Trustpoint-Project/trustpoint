@@ -139,13 +139,16 @@ def test_owner_form_and_api_preserve_their_classical_choices():
 
 
 def test_tls_and_signer_preserve_their_allowed_subsets():
-    """TLS and signer generation retain their existing values and omit P-521 and ML-DSA."""
+    """TLS supports ML-DSA keys but still omits P-521; signer choices are unchanged."""
     assert [value for value, _ in TLS_KEY_TYPE_CHOICES] == [
         'RSA-2048',
         'RSA-3072',
         'RSA-4096',
         'ECC-SECP256R1',
         'ECC-SECP384R1',
+        'MLDSA-44',
+        'MLDSA-65',
+        'MLDSA-87',
     ]
     assert [value for value, _ in SIGNER_KEY_TYPE_CHOICES] == [
         'rsa_2048',
@@ -171,7 +174,7 @@ def test_backend_filtering_agrees_across_flows(available):
         mldsa_variants=('mldsa65',),
     )
     ca_values = ['RSA-3072', 'ECC-SECP384R1', 'MLDSA-65'] if available else []
-    tls_values = ['RSA-3072', 'ECC-SECP384R1'] if available else []
+    tls_values = ['RSA-3072', 'ECC-SECP384R1', 'MLDSA-65'] if available else []
     signer_values = ['rsa_3072', 'ec_secp384r1'] if available else []
     assert [value for value, _ in supported_key_type_choices(report=report)] == ca_values
     with patch('pki.forms.issuing_cas.get_active_backend_capability_report', return_value=report):

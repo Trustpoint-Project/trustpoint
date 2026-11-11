@@ -19,6 +19,7 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 from uuid import uuid4
 
+from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.forms import Form
@@ -396,11 +397,13 @@ class CertificateRequestCertView(CertificateRequestStateMixin, LoggerMixin, Deta
             context = self.build_enrollment_context(credential, profile, content, truststore)
             issued_cert, extra_certs = self.enroll(context)
             result = self.finalize(credential, issued_cert, list(extra_certs), truststore)
-        except self.client_error_types:
+        except self.client_error_types as exc:
             self.logger.exception('Client error during certificate enrollment')
+            messages.error(request, _('Enrollment failed: {error}').format(error=exc))
             return redirect(self.request_cert_url_name, pk=credential.pk)
-        except (ValueError, KeyError, ProfileValidationError, CryptoError):
+        except (ValueError, KeyError, ProfileValidationError, CryptoError) as exc:
             self.logger.exception('Failed to enroll certificate')
+            messages.error(request, _('The certificate request could not be completed: {error}').format(error=exc))
             return redirect(self.edit_url_name, pk=credential.pk)
         del request.session[self.session_key]
         return self._redirect_after_finalize(result)

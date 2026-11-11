@@ -107,7 +107,6 @@ urlpatterns = [
         name='tls-request-cert-cmp',
     ),
     path('tls/add/local/key/', tls_issuance.TlsLocalCaKeyView.as_view(), name='tls-local-key'),
-    path('tls/add/local/<int:pk>/ca/', tls_issuance.TlsLocalCaSelectView.as_view(), name='tls-local-ca'),
     path('tls/add/local/<int:pk>/content/', tls_issuance.TlsLocalCaContentView.as_view(), name='tls-local-content'),
     path('tls/add/local/<int:pk>/request/', tls_issuance.TlsLocalCaRequestView.as_view(), name='tls-local-request'),
     path(

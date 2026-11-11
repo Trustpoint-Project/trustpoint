@@ -17,16 +17,20 @@ from trustpoint_core.oid import SignatureSuite
 from pki.models import CaModel, CredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
-from pki.services.external_csr import build_external_csr, certificate_matches_credential
+from pki.services.cmp_enrollment import enroll_cmp
+from pki.services.est_enrollment import enroll_est
+from pki.services.external_csr import build_external_csr, certificate_matches_credential, external_csr_profile
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from pki.util.certificate_path import validate_issued_certificate_path
+from pki.util.certificate_request import build_request_data
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
+from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 
 if TYPE_CHECKING:
     from pki.models.cert_profile import CertificateProfileModel
     from pki.models.truststore import TruststoreModel
 
-__all__ = ['finalize_tls_server_enrollment', 'issue_tls_server_local']
+__all__ = ['finalize_tls_server_enrollment', 'issue_tls_server_local', 'issue_tls_server_remote']
 
 
 @transaction.atomic
@@ -124,3 +128,60 @@ def issue_tls_server_local(
 
     _attach_certificate(credential, leaf, [ca_cert, *ca_credential.get_certificate_chain()])
     return credential
+
+
+def issue_tls_server_remote(
+    credential: CredentialModel,
+    cert_profile: CertificateProfileModel,
+    content: dict[str, Any],
+    ca: CaModel,
+) -> CredentialModel:
+    """Request a TLS server certificate from an external management CA acting as RA."""
+    config = ca.no_onboarding_config
+    if config is None or config.trust_store is None:
+        msg = 'The external management CA has no enrollment truststore.'
+        raise ValueError(msg)
+    anchors = ca.chain_truststore or config.trust_store
+    request_data = build_request_data(content, keep_empty_sans=True)
+    profile = external_csr_profile(cert_profile)
+
+    if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+        est_context = EstCertificateRequestContext(
+            operation='simpleenroll',
+            protocol='est',
+            domain=None,
+            cert_profile_str=profile.unique_name,
+            certificate_profile_model=profile,
+            allow_ca_certificate_request=False,
+            est_server_host=ca.remote_host,
+            est_server_port=ca.remote_port,
+            est_server_path=ca.remote_path,
+            est_username=ca.est_username,
+            est_password=config.est_password,
+            est_server_truststore=config.trust_store,
+        )
+        est_context.request_data = request_data
+        est_context.owner_credential = credential
+        issued_cert, extra_certs = enroll_est(est_context)
+    elif ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+        cmp_context = CmpCertificateRequestContext(
+            operation='certification',
+            protocol='cmp',
+            domain=None,
+            cert_profile_str=profile.unique_name,
+            certificate_profile_model=profile,
+            allow_ca_certificate_request=False,
+            cmp_server_host=ca.remote_host,
+            cmp_server_port=ca.remote_port,
+            cmp_server_path=ca.remote_path,
+            cmp_shared_secret=config.cmp_shared_secret,
+            cmp_server_truststore=config.trust_store,
+        )
+        cmp_context.request_data = request_data
+        cmp_context.owner_credential = credential
+        issued_cert, extra_certs = enroll_cmp(cmp_context, sender_kid=ca.cmp_sender_kid)
+    else:
+        msg = f'Management CA type {ca.get_ca_type_display()} cannot issue TLS certificates.'
+        raise ValueError(msg)
+
+    return finalize_tls_server_enrollment(credential, issued_cert, list(extra_certs), anchors)

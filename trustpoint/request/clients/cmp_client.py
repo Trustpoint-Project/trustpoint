@@ -656,6 +656,14 @@ class CmpClient(LoggerMixin):
             body = response_message['body']
             body_name = body.getName()
 
+            if body_name == 'error':
+                status_info = body['error']['pKIStatusInfo']
+                status = int(status_info['status'])
+                details = ' '.join(str(item) for item in status_info['statusString']) or 'No details provided'
+                fail_info = status_info['failInfo'].prettyPrint() if status_info['failInfo'].hasValue() else ''
+                suffix = f' (failInfo {fail_info})' if fail_info else ''
+                self._raise_cmp_client_error(f'CMP server rejected the request with status {status}{suffix}: {details}')
+
             if body_name not in ['cp', 'ip', 'kup']:
                 msg = f'Expected CP, IP, or KUP response, got: {body_name}'
                 self._raise_cmp_client_error(msg)
@@ -747,6 +755,12 @@ class CmpClient(LoggerMixin):
             raw_response = response.content
             response_message = self._parse_response(raw_response, request_data)
 
+        except requests.exceptions.SSLError as e:
+            msg = (
+                'CMP enrollment requires an HTTPS endpoint, but the TLS handshake with '
+                f'{url} failed. Check the remote host, port, and path: {e!s}'
+            )
+            raise CmpClientError(msg) from e
         except requests.exceptions.RequestException as e:
             msg = f'Failed to communicate with CMP server: {e!s}'
             raise CmpClientError(msg) from e

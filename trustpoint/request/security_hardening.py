@@ -536,7 +536,11 @@ def mark_cmp_client_nonce(context: CmpBaseRequestContext) -> None:
     if tx is None or not isinstance(context.parsed_message, rfc4210.PKIMessage):
         return
     tx.last_client_nonce = context.parsed_message['header']['senderNonce'].asOctets()
-    tx.save(update_fields=['last_client_nonce', 'updated_at'])
+    try:
+        tx.save(update_fields=['last_client_nonce', 'updated_at'])
+    except CmpTransactionModel.NotUpdated:
+        # The transaction may already have been rolled back after a rejected request.
+        return
 
 
 def record_cmp_response_nonce(context: CmpBaseRequestContext) -> None:
@@ -561,7 +565,11 @@ def record_cmp_response_nonce(context: CmpBaseRequestContext) -> None:
         tx.last_server_nonce = response_message['header']['senderNonce'].asOctets()
     if isinstance(context.parsed_message, rfc4210.PKIMessage):
         tx.last_client_nonce = context.parsed_message['header']['senderNonce'].asOctets()
-    tx.save(update_fields=['last_server_nonce', 'last_client_nonce', 'updated_at'])
+    try:
+        tx.save(update_fields=['last_server_nonce', 'last_client_nonce', 'updated_at'])
+    except CmpTransactionModel.NotUpdated:
+        # The transaction may already have been rolled back after a rejected request.
+        return
 
 
 def _certconf_hash_algorithm(

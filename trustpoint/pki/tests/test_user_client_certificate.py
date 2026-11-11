@@ -27,7 +27,8 @@ class UserClientCertificateCreationTest(SimpleTestCase):
 
     @staticmethod
     def create_issuer(
-        *, valid_for: timedelta = timedelta(days=30),
+        *,
+        valid_for: timedelta = timedelta(days=30),
     ) -> tuple[x509.Certificate, ec.EllipticCurvePrivateKey]:
         key = ec.generate_private_key(ec.SECP256R1())
         now = timezone.now()
@@ -89,10 +90,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, private_key = create_user_client_certificate(user.pk, 'laptop')
 
         common_name = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -113,10 +114,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, _private_key = create_user_client_certificate(user.pk, 'workstation')
 
         basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
@@ -137,10 +138,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, _private_key = create_user_client_certificate(user.pk, 'short-lived', validity_days=365)
 
         assert certificate.not_valid_after_utc == issuer_certificate.not_valid_after_utc
@@ -179,11 +180,11 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=None,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = None
-            with pytest.raises(CommandError, match='Management Issuing CA is missing'):
+            with pytest.raises(CommandError, match='No management CA is configured'):
                 create_user_client_certificate(user.pk, 'device')
 
     def test_issuing_ca_missing_required_extensions_is_rejected(self) -> None:
@@ -207,10 +208,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             with pytest.raises(CommandError, match='missing required CA extensions'):
                 create_user_client_certificate(user.pk, 'device')
 
@@ -249,9 +250,9 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             with pytest.raises(CommandError, match='does not permit certificate signing'):
                 create_user_client_certificate(user.pk, 'device')

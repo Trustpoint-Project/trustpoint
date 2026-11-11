@@ -75,7 +75,7 @@ OWNER_CREDENTIAL_KEY_TYPE_CHOICES = [
 TLS_KEY_TYPE_CHOICES = [
     (definition.value, definition.label)
     for definition in KEY_TYPES
-    if isinstance(definition.key_spec, RsaKeySpec)
+    if isinstance(definition.key_spec, (RsaKeySpec, MlDsaKeySpec))
     or (isinstance(definition.key_spec, EcKeySpec) and definition.key_spec.curve != EllipticCurveName.SECP521R1)
 ]
 SIGNER_KEY_TYPE_CHOICES = [definition.signer_choice for definition in KEY_TYPES if definition.signer_choice]

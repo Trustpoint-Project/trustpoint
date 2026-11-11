@@ -2,15 +2,16 @@
 # SPDX-License-Identifier: MIT
 
 """CSR operation processor classes."""
+
 from abc import abstractmethod
 from typing import get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
 from pki.models import CredentialModel
+from pki.util.keys import CryptographyUtils
 from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -57,14 +58,14 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
             raise ValueError(exc_msg)
 
         if not isinstance(context.cert_requested, x509.CertificateSigningRequest):
-            exc_msg = (
-                f'cert_requested must be a CertificateSigningRequest, '
-                f'but found {type(context.cert_requested)}.'
-            )
+            exc_msg = f'cert_requested must be a CertificateSigningRequest, but found {type(context.cert_requested)}.'
             raise TypeError(exc_msg)
 
         signing_credential = self._get_signing_credential(context)
         csr = context.cert_requested
+        private_key = signing_credential.get_private_key()
+        actual_private_key = _unwrap_mldsa_managed_key(private_key)
+        actual_private_key = validate_certificate_signing_private_key(actual_private_key)
 
         # Determine hash algorithm
         if signing_credential.certificate:
@@ -72,13 +73,10 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
             hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
             hash_algorithm = None if hash_algorithm_enum is None else hash_algorithm_enum.hash_algorithm()
         else:
-            hash_algorithm = hashes.SHA256()
+            hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(actual_private_key)
 
         if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = (
-                f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
-                f'but found {type(hash_algorithm)}'
-            )
+            err_msg = f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
             raise TypeError(err_msg)
 
         csr_builder = x509.CertificateSigningRequestBuilder()
@@ -87,17 +85,11 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         for extension in csr.extensions:
             csr_builder = csr_builder.add_extension(extension.value, extension.critical)
 
-        private_key = signing_credential.get_private_key()
-        actual_private_key = _unwrap_mldsa_managed_key(private_key)
-        actual_private_key = validate_certificate_signing_private_key(actual_private_key)
-        self._signed_csr = csr_builder.sign(
-            private_key=actual_private_key, algorithm=hash_algorithm
-        )
+        self._signed_csr = csr_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)
 
         if signing_credential.certificate:
             self.logger.info(
-                'Signed CSR for EST with credential: %s',
-                signing_credential.get_certificate().subject.rfc4514_string()
+                'Signed CSR for EST with credential: %s', signing_credential.get_certificate().subject.rfc4514_string()
             )
         else:
             self.logger.info('Signed CSR for EST with credential (certificate pending)')

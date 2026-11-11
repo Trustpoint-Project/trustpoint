@@ -20,8 +20,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from management.models import CertificateAuthenticationConfig
-from pki.management.commands.create_management_ca import ISSUING_CA_NAME
-from pki.models import CertificateModel
+from pki.models import CaModel, CertificateModel
 from pki.util.x509 import ClientCertificateAuthenticationError, NginxTLSClientCertExtractor
 
 from .models import ServiceAccountCredential, TrustpointUser, UserClientCertificate
@@ -62,9 +61,14 @@ class ClientCertificateBackend(ModelBackend):
         except ValueError as exc:
             raise ValidationError(_('The client certificate subject could not be read.')) from exc
         fingerprint = certificate.fingerprint(hashes.SHA256()).hex().upper()
-        association = UserClientCertificate.objects.select_related('certificate').filter(
-            user=user, certificate__sha256_fingerprint=fingerprint,
-        ).first()
+        association = (
+            UserClientCertificate.objects.select_related('certificate')
+            .filter(
+                user=user,
+                certificate__sha256_fingerprint=fingerprint,
+            )
+            .first()
+        )
         if association is None:
             raise ValidationError(_('The client certificate is not configured for the user identified in its subject.'))
         if not association.is_active:
@@ -137,7 +141,8 @@ class ClientCertificateBackend(ModelBackend):
         except x509.ExtensionNotFound as exc:
             raise ValidationError(_('The certificate is missing required TLS client extensions.')) from exc
         if (
-            basic_constraints.ca or not key_usage.digital_signature
+            basic_constraints.ca
+            or not key_usage.digital_signature
             or ExtendedKeyUsageOID.CLIENT_AUTH not in extended_usage
         ):
             raise ValidationError(_('The certificate does not permit TLS client authentication.'))
@@ -145,9 +150,14 @@ class ClientCertificateBackend(ModelBackend):
     @classmethod
     def _validate_issuer(cls, certificate: x509.Certificate) -> None:
         """Validate the certificate path against the explicitly enabled management issuing CA."""
-        config = CertificateAuthenticationConfig.objects.select_related('issuing_ca__credential__certificate').filter(
-            enabled=True, issuing_ca__unique_name=ISSUING_CA_NAME,
-        ).first()
+        config = (
+            CertificateAuthenticationConfig.objects.select_related('issuing_ca__credential__certificate')
+            .filter(
+                enabled=True,
+                issuing_ca__ca_role=CaModel.CaRole.MANAGEMENT,
+            )
+            .first()
+        )
         if config is None:
             raise ValidationError(_('Certificate based authentication is not enabled.'))
         issuer_model = config.issuing_ca.ca_certificate_model
@@ -163,10 +173,15 @@ class ClientCertificateBackend(ModelBackend):
             ) from exc
         # Our client certificates identify users in the subject and intentionally have no SAN.
         leaf_policy = ExtensionPolicy.webpki_defaults_ee().may_be_present(
-            x509.SubjectAlternativeName, Criticality.NON_CRITICAL, None,
+            x509.SubjectAlternativeName,
+            Criticality.NON_CRITICAL,
+            None,
         )
         verifier = (
-            PolicyBuilder().store(Store([issuer])).time(timezone.now()).max_chain_depth(0)
+            PolicyBuilder()
+            .store(Store([issuer]))
+            .time(timezone.now())
+            .max_chain_depth(0)
             .extension_policies(ca_policy=ExtensionPolicy.webpki_defaults_ca(), ee_policy=leaf_policy)
             .build_client_verifier()
         )
@@ -174,7 +189,8 @@ class ClientCertificateBackend(ModelBackend):
             verifier.verify(certificate, [])
         except VerificationError as exc:
             raise ValidationError(
-                _('Client certificate validation failed: %(reason)s.'), params={'reason': str(exc)},
+                _('Client certificate validation failed: %(reason)s.'),
+                params={'reason': str(exc)},
             ) from exc
 
 

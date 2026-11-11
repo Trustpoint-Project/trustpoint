@@ -37,7 +37,7 @@ class CertificateRequestFormMixin(forms.Form):
     key_type = forms.ChoiceField(
         label=_('Key Type'),
         required=True,
-        help_text=_('Select the cryptographic key type and parameters.'),
+        help_text=_('Select the cryptographic key type and parameters. It must match the issuing CA key type.'),
     )
     remote_host = forms.CharField(
         label=_('Remote Host'),

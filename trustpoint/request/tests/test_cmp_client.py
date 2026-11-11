@@ -573,6 +573,31 @@ class TestCmpClient:
         with pytest.raises(CmpClientError, match='Certificate issuance failed with status 1'):
             client._extract_issued_certificate(mock_message, b'raw_data')
 
+    def test_extract_issued_certificate_error_body(self, valid_context: CmpBaseRequestContext) -> None:
+        """A CMP error response surfaces its status string instead of a generic body-type error."""
+        client = CmpClient(valid_context)
+        fail_info = Mock()
+        fail_info.hasValue.return_value = True
+        fail_info.prettyPrint.return_value = 'badRequest'
+        status_info = Mock()
+        status_info.__getitem__ = Mock(
+            side_effect=lambda key: {
+                'status': 2,
+                'statusString': ['key type mismatch'],
+                'failInfo': fail_info,
+            }[key]
+        )
+        error_body = Mock()
+        error_body.__getitem__ = Mock(return_value=status_info)
+        body = Mock()
+        body.getName.return_value = 'error'
+        body.__getitem__ = Mock(return_value=error_body)
+        message = Mock()
+        message.__getitem__ = Mock(return_value=body)
+
+        with pytest.raises(CmpClientError, match='status 2.*key type mismatch'):
+            client._extract_issued_certificate(message, b'raw_data')
+
     def test_extract_issued_certificate_wrong_body_type(self, valid_context: CmpBaseRequestContext) -> None:
         """Test extracting certificate fails with wrong body type."""
         client = CmpClient(valid_context)

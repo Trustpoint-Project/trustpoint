@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT
 
 """CSR build operation processor classes."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from cryptography.x509 import (
     CertificateSigningRequest,
     CertificateSigningRequestBuilder,
@@ -19,6 +19,7 @@ from cryptography.x509 import (
 
 from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from pki.util.keys import CryptographyUtils
 from pki.util.san import parse_ip_addresses, split_san_values
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from request.template_vars import resolve_template_variables
@@ -69,7 +70,8 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
             msg = 'Expected a CSR builder.'
             raise TypeError(msg)
 
-        self._csr = extended_builder.sign(private_key, hashes.SHA256())
+        hash_algorithm = CryptographyUtils.get_hash_algorithm_for_private_key(private_key)  # type: ignore[arg-type]
+        self._csr = extended_builder.sign(private_key, hash_algorithm)  # type: ignore[arg-type]
 
         self.logger.info('Built CSR with subject: %s', subject.rfc4514_string())
 

@@ -71,6 +71,18 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
         REMOTE_ISSUING_CSR = 8, _('Remote-Issuing-CSR')  # Trustpoint = CA, CSR external issuance
 
+    class CaRole(models.IntegerChoices):
+        """The CaRole limits what a CA may be used for.
+
+        Issuing CAs issue certificates for endpoints (devices, agents, domains).
+        Management CAs only issue certificates for Trustpoint itself, such as
+        TLS server certificates and user authentication client certificates.
+        Both roles reuse the same CaTypeChoice values for key storage/enrollment.
+        """
+
+        ISSUING = 0, _('Issuing CA')
+        MANAGEMENT = 1, _('Management CA')
+
     unique_name = models.CharField(
         verbose_name=_('CA Name'),
         max_length=100,
@@ -102,6 +114,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         help_text=_('Type of CA - KEYLESS for keyless CAs'),
+    )
+
+    # Role field: issuing CAs serve endpoints, management CAs serve Trustpoint itself
+    ca_role = models.IntegerField(
+        verbose_name=_('CA Role'),
+        choices=CaRole,
+        default=CaRole.ISSUING,
+        db_index=True,
+        help_text=_('Issuing CAs serve endpoints; management CAs only issue Trustpoint management certificates.'),
     )
 
     # For keyless CAs: certificate without private key
@@ -234,7 +255,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration'),
-            )
+            ),
+            models.CheckConstraint(
+                condition=(models.Q(ca_role=0) | models.Q(ca_role=1, ca_type__in=[2, 3, 4, 5, 6, 7, 8])),
+                name='management_ca_role_constraint',
+                violation_error_message=_('Management CAs cannot use this CA type'),
+            ),
         ]
 
     def __str__(self) -> str:
@@ -257,6 +283,16 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             self.CaTypeChoice.REMOTE_CMP_RA,
             self.CaTypeChoice.REMOTE_EST_RA,
         )
+
+    @property
+    def is_management_ca(self) -> bool:
+        """Returns True if this CA issues Trustpoint management certificates only."""
+        return self.ca_role == self.CaRole.MANAGEMENT
+
+    @property
+    def can_issue_endpoint_certificates(self) -> bool:
+        """Returns True if this CA may be assigned to endpoint domains/devices."""
+        return self.ca_type != self.CaTypeChoice.KEYLESS and not self.is_management_ca
 
     @property
     def is_keyless_ca(self) -> bool:
@@ -386,6 +422,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     def clean(self) -> None:
         """Validates that exactly one of certificate or credential is set."""
         super().clean()
+        if self.ca_role == self.CaRole.MANAGEMENT:
+            if self.ca_type in (
+                self.CaTypeChoice.KEYLESS,
+                self.CaTypeChoice.AUTOGEN_ROOT,
+                self.CaTypeChoice.AUTOGEN,
+            ):
+                raise ValidationError(_('This CA type cannot be used as a management CA.'))
+            if self.pk is not None and self.domains.exists():
+                raise ValidationError(_('A CA assigned to a domain cannot be changed to a management CA.'))
         if (
             self.crl_cycle_enabled
             and self.crl_cycle_interval_hours

@@ -4,17 +4,27 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <h1 class="mb-1">{% trans 'Issue TLS Certificate from Local CA' %}</h1>
+        <h1 class="mb-1">
+            {% if remote_issuance %}
+                {% trans 'Request TLS Certificate from External CA' %}
+            {% else %}
+                {% trans 'Issue TLS Certificate from Management CA' %}
+            {% endif %}
+        </h1>
 
         <p class="mb-0 text-muted">
-            {% trans 'Review the request and issue the TLS server certificate from the selected Issuing CA.' %}
+            {% if remote_issuance %}
+                {% trans 'Review the request and forward it to the selected external management CA.' %}
+            {% else %}
+                {% trans 'Review the request and issue the TLS server certificate with the selected management CA.' %}
+            {% endif %}
         </p>
     </div>
 
     <div class="card-body text-start">
         <section class="mb-5">
             <div class="mb-3">
-                <h2 class="h4 mb-1">{% trans 'Issuing CA' %}</h2>
+                <h2 class="h4 mb-1">{% trans 'Management CA' %}</h2>
             </div>
 
             <hr class="mb-4">
@@ -23,6 +33,20 @@
                 <div>
                     <div>{% trans 'CA Name' %}</div>
                     <div>{% if issuing_ca %}{{ issuing_ca.unique_name }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+                </div>
+                <div>
+                    <div>{% trans 'CA Type' %}</div>
+                    <div>{% if issuing_ca %}{{ issuing_ca.get_ca_type_display }}{% else %}<span class="text-muted">—</span>{% endif %}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Issuance' %}</div>
+                    <div>
+                        {% if remote_issuance %}
+                            {% trans 'External CA request' %}
+                        {% else %}
+                            {% trans 'Local signing' %}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </section>
@@ -55,7 +79,11 @@
                 class="btn btn-primary"
                 {% if not has_cert_content %}disabled{% endif %}
             >
-                {% trans 'Issue Certificate' %}
+                {% if remote_issuance %}
+                    {% trans 'Request Certificate' %}
+                {% else %}
+                    {% trans 'Issue Certificate' %}
+                {% endif %}
             </button>
         </form>
     </div>

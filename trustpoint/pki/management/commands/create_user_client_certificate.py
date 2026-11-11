@@ -15,18 +15,21 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from pki.models import CaModel
 from users.models import TrustpointUser
-
-from .create_management_ca import ISSUING_CA_NAME
 
 if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
     from django.core.management.base import CommandParser
 
+    from pki.models import CaModel
+
 
 def create_user_client_certificate(
-    user_id: int, subject_identifier: str, *, validity_days: int = 365,
+    user_id: int,
+    subject_identifier: str,
+    *,
+    validity_days: int = 365,
+    issuing_ca: CaModel | None = None,
 ) -> tuple[x509.Certificate, ec.EllipticCurvePrivateKey]:
     """Return a new client certificate and private key for an existing human user.
 
@@ -34,8 +37,9 @@ def create_user_client_certificate(
     serialNumber=<user ID>, and unstructuredName=<subject_identifier>. The
     caller-supplied string is preserved unchanged. The certificate has a separate
     random serial number.
-    Validity is capped at the management issuing CA's expiry. The client key is
+    Validity is capped at the management CA's expiry. The client key is
     generated only in memory; persistence and delivery are left to the caller.
+    The selected management CA is used, falling back to the built-in one.
     """
     if validity_days <= 0:
         msg = 'The validity period must be a positive number of days.'
@@ -43,48 +47,56 @@ def create_user_client_certificate(
 
     try:
         user = TrustpointUser.objects.get(
-            pk=user_id, account_type=TrustpointUser.AccountType.HUMAN, is_active=True,
+            pk=user_id,
+            account_type=TrustpointUser.AccountType.HUMAN,
+            is_active=True,
         )
     except TrustpointUser.DoesNotExist as exc:
         msg = f'No active human user exists with ID {user_id}.'
         raise CommandError(msg) from exc
 
-    issuing_ca = CaModel.objects.select_related('credential__certificate').filter(unique_name=ISSUING_CA_NAME).first()
+    if issuing_ca is None:
+        from pki.services.management_ca import ManagementCAService  # noqa: PLC0415
+
+        issuing_ca = ManagementCAService.get_issuing_ca()
     if issuing_ca is None or issuing_ca.credential is None:
-        msg = 'The Management Issuing CA is missing. Run create_management_ca first.'
+        msg = 'No management CA is configured for user certificate issuance.'
         raise CommandError(msg)
     issuer_certificate = issuing_ca.get_certificate()
     if issuer_certificate is None:
-        msg = 'The Management Issuing CA has no certificate.'
+        msg = 'The management CA has no certificate.'
         raise CommandError(msg)
 
     try:
         basic_constraints = issuer_certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
         key_usage = issuer_certificate.extensions.get_extension_for_class(x509.KeyUsage).value
     except x509.ExtensionNotFound as exc:
-        msg = 'The Management Issuing CA is missing required CA extensions.'
+        msg = 'The management CA is missing required CA extensions.'
         raise CommandError(msg) from exc
     if not basic_constraints.ca or not key_usage.key_cert_sign:
-        msg = 'The Management Issuing CA certificate does not permit certificate signing.'
+        msg = 'The management CA certificate does not permit certificate signing.'
         raise CommandError(msg)
 
     now = timezone.now()
     if not issuer_certificate.not_valid_before_utc <= now < issuer_certificate.not_valid_after_utc:
-        msg = 'The Management Issuing CA certificate is not currently valid.'
+        msg = 'The management CA certificate is not currently valid.'
         raise CommandError(msg)
     remaining_days = (issuer_certificate.not_valid_after_utc - now).days + 1
     not_valid_after = min(
-        now + timedelta(days=min(validity_days, remaining_days)), issuer_certificate.not_valid_after_utc,
+        now + timedelta(days=min(validity_days, remaining_days)),
+        issuer_certificate.not_valid_after_utc,
     )
 
     private_key = ec.generate_private_key(ec.SECP256R1())
     public_key = private_key.public_key()
-    subject = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, 'trustpoint-client-certificate'),
-        x509.NameAttribute(NameOID.USER_ID, user.username),
-        x509.NameAttribute(NameOID.SERIAL_NUMBER, str(user.pk)),
-        x509.NameAttribute(NameOID.UNSTRUCTURED_NAME, subject_identifier),
-    ])
+    subject = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, 'trustpoint-client-certificate'),
+            x509.NameAttribute(NameOID.USER_ID, user.username),
+            x509.NameAttribute(NameOID.SERIAL_NUMBER, str(user.pk)),
+            x509.NameAttribute(NameOID.UNSTRUCTURED_NAME, subject_identifier),
+        ]
+    )
 
     try:
         issuer_key_identifier = issuer_certificate.extensions.get_extension_for_class(x509.SubjectKeyIdentifier).value
@@ -122,7 +134,8 @@ def create_user_client_certificate(
         .add_extension(authority_key_identifier, critical=False)
     )
     certificate = builder.sign(
-        private_key=issuing_ca.credential.get_private_key(), algorithm=hashes.SHA256(),
+        private_key=issuing_ca.credential.get_private_key(),
+        algorithm=hashes.SHA256(),
     )
     certificate.verify_directly_issued_by(issuer_certificate)
     return certificate, private_key
@@ -148,5 +161,7 @@ class Command(BaseCommand):
     def handle(self, *_args: Any, **options: Any) -> None:
         """Generate the credential and leave it in memory for the calling code."""
         self.certificate, self.private_key = create_user_client_certificate(
-            options['user_id'], options['subject_identifier'], validity_days=options['validity_days'],
+            options['user_id'],
+            options['subject_identifier'],
+            validity_days=options['validity_days'],
         )

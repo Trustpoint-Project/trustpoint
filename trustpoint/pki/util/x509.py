@@ -385,6 +385,7 @@ class CertificateGenerator:
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
         ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_PKCS11,
+        ca_role: CaModel.CaRole = CaModel.CaRole.ISSUING,
         parent_ca: CaModel | None = None,
     ) -> CaModel:
         """Saves an Issuing CA certificate to the database and returns the CaModel.
@@ -395,6 +396,7 @@ class CertificateGenerator:
             private_key: The private key for the issuing CA.
             unique_name: Unique name for this CA.
             ca_type: The type of issuing CA.
+            ca_role: Whether this CA serves endpoints or Trustpoint management certificates.
             parent_ca: Optional parent CA in the hierarchy (the CA that issued this certificate).
 
         Returns:
@@ -413,6 +415,7 @@ class CertificateGenerator:
                 unique_name=unique_name,
                 credential=credential,
                 ca_type=ca_type,
+                ca_role=ca_role,
                 parent_ca=parent_ca,
             )
             issuing_ca.save()
