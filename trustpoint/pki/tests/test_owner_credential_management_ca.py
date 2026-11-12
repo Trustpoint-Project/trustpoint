@@ -117,9 +117,7 @@ def test_clm_shows_management_ca_and_issuance_link() -> None:
     content = response.content.decode()
 
     assert ca.unique_name in content
-    content_url = reverse(
-        'devices:zero_touch_credentials-define-cert-content-management-ca', kwargs={'pk': owner.pk}
-    )
+    content_url = reverse('devices:zero_touch_credentials-define-cert-content-management-ca', kwargs={'pk': owner.pk})
     assert content_url in content
     assert 'Remote Host' not in content
 
@@ -203,8 +201,7 @@ def test_add_view_creates_management_ca_owner_credential() -> None:
     assert owner.issued_credential_type == RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
     assert client.get(reverse('devices:zero_touch_credentials')).status_code == 200  # noqa: PLR2004
     assert (
-        client.get(reverse('devices:zero_touch_credentials-details', kwargs={'pk': owner.pk})).status_code
-        == 200  # noqa: PLR2004
+        client.get(reverse('devices:zero_touch_credentials-details', kwargs={'pk': owner.pk})).status_code == 200  # noqa: PLR2004
     )
 
     content_url = reverse('devices:zero_touch_credentials-define-cert-content-management-ca', kwargs={'pk': owner.pk})
