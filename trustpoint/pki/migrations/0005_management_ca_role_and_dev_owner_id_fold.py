@@ -85,11 +85,18 @@ class Migration(migrations.Migration):
             ),
         ),
         migrations.RunPython(fold_owner_credentials, migrations.RunPython.noop),
-        migrations.RemoveField(
-            model_name='remoteissuedcredentialmodel',
-            name='owner_credential',
-        ),
-        migrations.DeleteModel(
-            name='OwnerCredentialModel',
+        # shortcut: keep the legacy owner column/table in the database for one release so
+        # base-branch code can still boot after a rollback; drop them in a follow-up release.
+        migrations.SeparateDatabaseAndState(
+            state_operations=[
+                migrations.RemoveField(
+                    model_name='remoteissuedcredentialmodel',
+                    name='owner_credential',
+                ),
+                migrations.DeleteModel(
+                    name='OwnerCredentialModel',
+                ),
+            ],
+            database_operations=[],
         ),
     ]

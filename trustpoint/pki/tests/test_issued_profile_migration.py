@@ -76,13 +76,14 @@ def test_imported_owner_migration_keeps_profile_empty(credential_instance, label
     apps = executor.loader.project_state(OLD).apps
     profiles = apps.get_model('pki', 'CertificateProfileModel')
     profiles.objects.create(unique_name='dev_owner_id', profile_json={})
+    owner_name = f'imported-owner-{label or "none"}'
     owner = apps.get_model('pki', 'OwnerCredentialModel').objects.create(
-        unique_name='imported-owner',
+        unique_name=owner_name,
         owner_credential_type=0,
     )
     records = apps.get_model('pki', 'RemoteIssuedCredentialModel')
     record = records.objects.create(
-        common_name='imported-owner',
+        common_name=owner_name,
         issued_credential_type=2,
         owner_credential_id=owner.pk,
         credential_id=credential_instance['credential'].pk,
