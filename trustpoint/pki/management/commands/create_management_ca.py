@@ -53,6 +53,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             private_key=root_ca_key,
             chain=[],
             unique_name=ROOT_CA_NAME,
+            ca_role=CaModel.CaRole.MANAGEMENT,
         )
 
         issuing_ca_key = self.create_backend_ec_private_key(alias='management-ca', curve=ec.SECP256R1())
@@ -68,6 +69,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             private_key=issuing_ca_key,
             chain=[root_ca_cert],
             unique_name=ISSUING_CA_NAME,
+            ca_role=CaModel.CaRole.MANAGEMENT,
             parent_ca=root_ca,
         )
         self.stdout.write(self.style.SUCCESS('Management CA hierarchy created.'))

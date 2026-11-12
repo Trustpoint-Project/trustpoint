@@ -1,151 +1,64 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Shared request configuration for remote owner-credential enrollment."""
+"""Shared request configuration for DevOwnerID enrollment."""
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
 from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import PrivateKeySerializer
 
-from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
+from pki.models import CaModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
-from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
+from pki.models.credential import (
+    CertificateChainOrderModel,
+    CredentialModel,
+    IDevIDReferenceModel,
+    PrimaryCredentialCertificate,
+)
 from pki.services.cmp_enrollment import enroll_cmp
 from pki.services.est_enrollment import enroll_est
-from pki.services.external_csr import certificate_matches_credential
-from pki.util.certificate_request import public_key_info_from_key_type
+from pki.services.external_csr import build_external_csr, certificate_matches_credential
+from pki.services.management_issuance import (
+    external_ca_cmp_context_kwargs,
+    external_ca_est_context_kwargs,
+    key_type_for_management_ca,
+    sign_certificate_request,
+)
+from pki.util.certificate_request import build_request_data, public_key_info_from_key_type
 
 if TYPE_CHECKING:
     import logging
-    from collections.abc import Callable
 
     from pki.models.cert_profile import CertificateProfileModel
     from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 
 
-def build_owner_credential_est_context_kwargs(
-    owner_credential: OwnerCredentialModel,
-    cert_profile: CertificateProfileModel,
-    *,
-    translate: Callable[[str], str] = str,
-) -> dict[str, Any]:
-    """Build EST authentication and truststore arguments for basic auth or mTLS."""
-    kwargs: dict[str, Any] = {
-        'operation': 'simpleenroll',
-        'protocol': 'est',
-        'domain': None,
-        'cert_profile_str': cert_profile.unique_name,
-        'certificate_profile_model': cert_profile,
-        'allow_ca_certificate_request': True,
-        'est_server_host': owner_credential.remote_host,
-        'est_server_port': owner_credential.remote_port,
-        'est_server_path': owner_credential.remote_path,
-    }
-    is_onboarding = (
-        owner_credential.owner_credential_type == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-    )
-    if is_onboarding:
-        onboarding_config = owner_credential.onboarding_config
-        kwargs['est_server_truststore'] = onboarding_config.trust_store if onboarding_config else None
-        domain_cred_issued = owner_credential.domain_credential
-        if domain_cred_issued is None or domain_cred_issued.credential is None:
-            msg = translate(
-                'No domain credential found for this owner credential. Please issue a domain credential first.'
-            )
-            raise ValueError(msg)
-        dc = domain_cred_issued.credential
-        if dc.certificate is None:
-            msg = translate('The domain credential has no certificate. Please issue a domain credential first.')
-            raise ValueError(msg)
-        kwargs['est_client_cert_pem'] = dc.certificate.cert_pem
-        kwargs['est_client_key_pem'] = dc.private_key
-    else:
-        no_onboarding = owner_credential.no_onboarding_config
-        kwargs['est_username'] = owner_credential.est_username
-        kwargs['est_password'] = no_onboarding.est_password if no_onboarding else None
-        kwargs['est_server_truststore'] = no_onboarding.trust_store if no_onboarding else None
-    return kwargs
-
-
-def create_pending_owner_credential(
-    owner_credential: OwnerCredentialModel,
-    cert_profile: CertificateProfileModel,
-    cred_type: RemoteIssuedCredentialModel.RemoteIssuedCredentialType,
-    credential_model_type: CredentialModel.CredentialTypeChoice,
-) -> RemoteIssuedCredentialModel:
-    """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel."""
-    key_type = owner_credential.key_type or 'ECC-SECP256R1'
+def create_pending_dev_owner_id(management_ca: CaModel) -> RemoteIssuedCredentialModel:
+    """Generate a fresh key pair and a key-only DevOwnerID credential for a management CA."""
+    key_type = key_type_for_management_ca(management_ca)
     private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info_from_key_type(key_type))
     private_key_pem = PrivateKeySerializer(private_key).as_pkcs8_pem().decode()
     credential_model = CredentialModel.objects.create(
-        credential_type=credential_model_type,
+        credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         private_key=private_key_pem,
         certificate=None,
     )
     return RemoteIssuedCredentialModel.objects.create(
-        common_name=owner_credential.unique_name,
-        issued_credential_type=cred_type,
-        certificate_profile=cert_profile,
+        common_name='',
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+        certificate_profile=None,
         credential=credential_model,
-        owner_credential=owner_credential,
+        ca=management_ca,
     )
 
 
-def build_domain_credential_est_context_kwargs(
-    owner_credential: OwnerCredentialModel,
-    cert_profile: CertificateProfileModel,
-) -> dict[str, Any]:
-    """Build basic-auth EST arguments for the domain-credential endpoint."""
-    onboarding = owner_credential.onboarding_config
-    return {
-        'operation': 'simpleenroll',
-        'protocol': 'est',
-        'domain': None,
-        'cert_profile_str': cert_profile.unique_name,
-        'certificate_profile_model': cert_profile,
-        'allow_ca_certificate_request': False,
-        'est_server_host': owner_credential.remote_host,
-        'est_server_port': owner_credential.remote_port,
-        'est_server_path': owner_credential.remote_path_domain_credential,
-        'est_username': owner_credential.est_username,
-        'est_password': onboarding.est_password if onboarding else None,
-        'est_server_truststore': onboarding.trust_store if onboarding else None,
-    }
-
-
-def build_owner_credential_cmp_context_kwargs(
-    owner_credential: OwnerCredentialModel,
-    cert_profile: CertificateProfileModel,
-    *,
-    translate: Callable[[str], str] = str,
-) -> dict[str, Any]:
-    """Build CMP authentication and truststore arguments for shared-secret auth."""
-    no_onboarding = owner_credential.no_onboarding_config
-    if no_onboarding is None:
-        msg = translate('No no-onboarding configuration found for this owner credential.')
-        raise ValueError(msg)
-    return {
-        'operation': 'certification',
-        'protocol': 'cmp',
-        'domain': None,
-        'cert_profile_str': cert_profile.unique_name,
-        'certificate_profile_model': cert_profile,
-        'allow_ca_certificate_request': True,
-        'cmp_server_host': owner_credential.remote_host,
-        'cmp_server_port': owner_credential.remote_port,
-        'cmp_server_path': owner_credential.remote_path,
-        'cmp_shared_secret': no_onboarding.cmp_shared_secret,
-        'cmp_server_truststore': no_onboarding.trust_store,
-    }
-
-
-def _persist_owner_credential_enrollment(  # noqa: PLR0913 - Persist needs the full enrollment context.
+def _persist_owner_credential_enrollment(
     context: Any,
-    owner_credential: OwnerCredentialModel,
     pending_issued: RemoteIssuedCredentialModel,
     issued_cert: x509.Certificate,
     *,
@@ -178,7 +91,7 @@ def _persist_owner_credential_enrollment(  # noqa: PLR0913 - Persist needs the f
         certificate=cert_model,
         defaults={'is_primary': True},
     )
-    pending_issued.common_name = cert_model.common_name or owner_credential.unique_name
+    pending_issued.common_name = cert_model.common_name or pending_issued.common_name
     pending_issued.certificate_profile = context.certificate_profile_model
     pending_issued.save(update_fields=['common_name', 'certificate_profile'])
     if domain_credential:
@@ -189,20 +102,19 @@ def _persist_owner_credential_enrollment(  # noqa: PLR0913 - Persist needs the f
         for san in san_ext.value:
             if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
                 IDevIDReferenceModel.objects.get_or_create(
-                    dev_owner_id=owner_credential,
+                    dev_owner_id=pending_issued,
                     idevid_ref=san.value,
                     defaults={'dev_owner_id_certificate': cert_model},
                 )
     except x509.ExtensionNotFound:
         logger.warning(
             'Issued DevOwnerID certificate for "%s" has no SAN; no IDevID refs stored.',
-            owner_credential.unique_name,
+            pending_issued.common_name,
         )
 
 
 def enroll_owner_credential_est(
     context: EstCertificateRequestContext,
-    owner_credential: OwnerCredentialModel,
     pending_issued: RemoteIssuedCredentialModel,
     *,
     logger: logging.Logger,
@@ -215,23 +127,111 @@ def enroll_owner_credential_est(
     context.owner_credential = pending_issued.credential
     issued_cert, _ = enroll_est(context)
     _persist_owner_credential_enrollment(
-        context, owner_credential, pending_issued, issued_cert, logger=logger, domain_credential=domain_credential
+        context, pending_issued, issued_cert, logger=logger, domain_credential=domain_credential
     )
 
 
 def enroll_owner_credential_cmp(
     context: CmpCertificateRequestContext,
-    owner_credential: OwnerCredentialModel,
     pending_issued: RemoteIssuedCredentialModel,
     *,
     logger: logging.Logger,
+    sender_kid: int | None = None,
 ) -> None:
     """Enroll with the pending key via CMP, then persist the certificate."""
     if context.certificate_profile_model is None:
         msg = 'A certificate profile is required for owner credential enrollment.'
         raise ValueError(msg)
     context.owner_credential = pending_issued.credential
-    issued_cert, _ = enroll_cmp(context)
+    issued_cert, _ = enroll_cmp(context, sender_kid=sender_kid)
+    _persist_owner_credential_enrollment(context, pending_issued, issued_cert, logger=logger, domain_credential=False)
+
+
+def persist_owner_credential_certificate(  # noqa: PLR0913
+    pending_issued: RemoteIssuedCredentialModel,
+    cert_profile: CertificateProfileModel,
+    csr: x509.CertificateSigningRequest,
+    issued_cert: x509.Certificate,
+    chain: list[x509.Certificate],
+    *,
+    logger: logging.Logger,
+) -> None:
+    """Persist an externally issued DevOwnerID certificate for a pending key."""
+    context = SimpleNamespace(cert_requested=csr, certificate_profile_model=cert_profile)
     _persist_owner_credential_enrollment(
-        context, owner_credential, pending_issued, issued_cert, logger=logger, domain_credential=False
+        context,
+        pending_issued,
+        issued_cert,
+        logger=logger,
+        domain_credential=False,
     )
+    if chain and pending_issued.credential is not None and pending_issued.credential.certificate is not None:
+        issuers = [cert for cert in chain if cert != issued_cert]
+        for order, issuer in enumerate(reversed(issuers)):
+            CertificateChainOrderModel.objects.create(
+                credential=pending_issued.credential,
+                certificate=CertificateModel.save_certificate(issuer),
+                primary_certificate=pending_issued.credential.certificate,
+                order=order,
+            )
+
+
+def issue_owner_credential_from_management_ca(
+    pending_issued: RemoteIssuedCredentialModel,
+    cert_profile: CertificateProfileModel,
+    content: dict[str, Any],
+    ca: CaModel,
+    *,
+    logger: logging.Logger,
+) -> None:
+    """Issue a DevOwnerID locally or request it from an external management CA."""
+    if ca.is_issuing_ca:
+        csr = build_external_csr(pending_issued.credential, cert_profile, content, allow_ca=True)
+        issued_cert, _chain = sign_certificate_request(csr, cert_profile, ca)
+        local_context = SimpleNamespace(cert_requested=csr, certificate_profile_model=cert_profile)
+        _persist_owner_credential_enrollment(
+            local_context,
+            pending_issued,
+            issued_cert,
+            logger=logger,
+            domain_credential=False,
+        )
+        return
+
+    if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+        from request.request_context import EstCertificateRequestContext  # noqa: PLC0415
+
+        est_context = EstCertificateRequestContext(
+            **external_ca_est_context_kwargs(
+                ca,
+                cert_profile,
+                allow_ca_certificate_request=True,
+                external_profile=False,
+            )
+        )
+        est_context.request_data = build_request_data(content)
+        enroll_owner_credential_est(est_context, pending_issued, logger=logger)
+        return
+
+    if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+        from request.request_context import CmpCertificateRequestContext  # noqa: PLC0415
+
+        cmp_context = CmpCertificateRequestContext(
+            **external_ca_cmp_context_kwargs(
+                ca,
+                cert_profile,
+                allow_ca_certificate_request=True,
+                external_profile=False,
+            )
+        )
+        cmp_context.request_data = build_request_data(content)
+        enroll_owner_credential_cmp(
+            cmp_context,
+            pending_issued,
+            logger=logger,
+            sender_kid=ca.cmp_sender_kid,
+        )
+        return
+
+    msg = f'Management CA type {ca.get_ca_type_display()} cannot issue DevOwnerID certificates.'
+    raise ValueError(msg)

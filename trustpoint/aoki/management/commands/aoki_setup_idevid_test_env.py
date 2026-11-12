@@ -21,8 +21,7 @@ from trustpoint_core.serializer import CredentialSerializer
 from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
 from aoki.management.setup_helpers import AokiCommandLoggingMixin
 from pki.management.commands.base_commands import CertificateCreationCommandMixin
-from pki.models import CaModel, CertificateModel, DevIdRegistration, DomainModel
-from pki.models.credential import OwnerCredentialModel
+from pki.models import CaModel, CertificateModel, DevIdRegistration, DomainModel, RemoteIssuedCredentialModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 
 if TYPE_CHECKING:
@@ -61,7 +60,6 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
         'onboarding testing. Run ``aoki_gen_test_certs`` first to generate the required certs.'
     )
 
-
     def handle(self, *args: Any, **kwargs: Any) -> None:
         """Execute the command."""
         del args, kwargs  # Unused
@@ -78,13 +76,13 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
             unique_name=OWNER_CRED_UNIQUE_NAME,
             cert_path=OWNER_ID_CERT_PATH,
             key_path=OWNER_ID_KEY_PATH,
-            ca_cert_path=OWNER_CA_CERT_PATH
+            ca_cert_path=OWNER_CA_CERT_PATH,
         )
         self._get_or_create_owner_credential(
             unique_name=DOMAIN_BASED_OWNER_CRED_UNIQUE_NAME,
             cert_path=DOMAIN_BASED_OWNER_ID_CERT_PATH,
             key_path=DOMAIN_BASED_OWNER_ID_KEY_PATH,
-            ca_cert_path=OWNER_CA_CERT_PATH
+            ca_cert_path=OWNER_CA_CERT_PATH,
         )
 
         self.log_and_stdout('\n=== AOKI IDevID test environment ready ===')
@@ -118,9 +116,7 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
     def _get_or_create_issuing_ca(self) -> CaModel:
         """Return an existing AOKI issuing CA or create a new one."""
         if CaModel.objects.filter(unique_name=ISSUING_CA_UNIQUE_NAME).exists():
-            self.log_and_stdout(
-                f'Issuing CA "{ISSUING_CA_UNIQUE_NAME}" already exists, skipping creation.'
-            )
+            self.log_and_stdout(f'Issuing CA "{ISSUING_CA_UNIQUE_NAME}" already exists, skipping creation.')
             return CaModel.objects.get(unique_name=ISSUING_CA_UNIQUE_NAME)
 
         root_key = self.create_backend_rsa_private_key(alias=f'{ISSUING_CA_UNIQUE_NAME}-root', key_size=2048)
@@ -204,9 +200,7 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
         self.log_and_stdout(f'Created IDevID truststore "{IDEVID_TRUSTSTORE_UNIQUE_NAME}".')
         return truststore
 
-    def _get_or_create_devid_registration(
-        self, truststore: TruststoreModel, domain: DomainModel
-    ) -> DevIdRegistration:
+    def _get_or_create_devid_registration(self, truststore: TruststoreModel, domain: DomainModel) -> DevIdRegistration:
         """Return an existing DevID registration or create one linking truststore and domain."""
         if DevIdRegistration.objects.filter(unique_name=DEVID_REGISTRATION_UNIQUE_NAME).exists():
             self.log_and_stdout(
@@ -230,13 +224,15 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
 
     def _get_or_create_owner_credential(
         self, unique_name: str, cert_path: Path, key_path: Path, ca_cert_path: Path
-    ) -> OwnerCredentialModel:
+    ) -> RemoteIssuedCredentialModel:
         """Return an existing owner credential or create one from the generated DevOwnerID files."""
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            self.log_and_stdout(
-                f'Owner credential "{unique_name}" already exists, skipping creation.'
-            )
-            return OwnerCredentialModel.objects.get(unique_name=unique_name)
+        existing = RemoteIssuedCredentialModel.objects.filter(
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            common_name=unique_name,
+        ).first()
+        if existing is not None:
+            self.log_and_stdout(f'Owner credential "{unique_name}" already exists, skipping creation.')
+            return existing
 
         owner_cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
         raw_key = load_pem_private_key(key_path.read_bytes(), password=None)
@@ -255,8 +251,8 @@ class Command(CertificateCreationCommandMixin, AokiCommandLoggingMixin, BaseComm
             additional_certificates=[owner_ca_cert],
         )
 
-        owner_credential = OwnerCredentialModel.create_new_owner_credential(
-            unique_name=unique_name,
+        owner_credential = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+            common_name=unique_name,
             credential_serializer=credential_serializer,
         )
         self.log_and_stdout(f'Created owner credential "{unique_name}".')

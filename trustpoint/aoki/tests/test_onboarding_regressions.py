@@ -15,8 +15,8 @@ from trustpoint_core.serializer import CredentialSerializer
 from aoki.tests.client import AokiClient, AokiClientOwnerIdCertVerificationError
 from aoki.views import AokiServiceMixin
 from est.tests.client import ESTClient
-from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
-from pki.models.credential import CredentialModel
+from pki.models import RemoteIssuedCredentialModel
+from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.util.x509 import CertificateGenerator
 from request.message_responder.est import EstCertificateMessageResponder
 from request.request_context import EstCertificateRequestContext
@@ -42,34 +42,39 @@ def test_owner_lookup_skips_pending_and_unrelated_credentials(reference_kind, do
     }
     reference = references[reference_kind]
     cert, private_key = owner_certificate(ca, key, [reference])
-    owner = OwnerCredentialModel.create_new_owner_credential(
-        unique_name='owner',
+    owner = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+        common_name='owner',
         credential_serializer=CredentialSerializer(private_key=private_key, certificate=cert),
     )
-    original = owner.dev_owner_id_credential.credential
+    original = owner.credential
 
     def lookup():
         if reference_kind == 'ca':
             return AokiServiceMixin.get_domain_based_owner_credential(domain_instance['domain'])
         return AokiServiceMixin.get_owner_credential(idevid)
 
-    def add_credential(certificate, private_key):
+    def add_credential(certificate, private_key, stored_ref: str | None = reference):
         credential = CredentialModel.save_credential_serializer(
             CredentialSerializer(private_key=private_key, certificate=certificate),
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        RemoteIssuedCredentialModel.objects.create(
-            owner_credential=owner,
+        record = RemoteIssuedCredentialModel.objects.create(
             credential=credential,
             common_name='new-owner',
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
         )
+        if stored_ref is not None:
+            IDevIDReferenceModel.objects.create(
+                dev_owner_id=record,
+                idevid_ref=stored_ref,
+                dev_owner_id_certificate=credential.certificate,
+            )
         return credential
 
     add_credential(None, private_key)
     assert lookup() == original
     unrelated, unrelated_key = owner_certificate(ca, key, ['dev-owner:uri:other-device'])
-    add_credential(unrelated, unrelated_key)
+    add_credential(unrelated, unrelated_key, stored_ref=None)
     assert lookup() == original
     expired = (
         x509.CertificateBuilder()
@@ -86,15 +91,19 @@ def test_owner_lookup_skips_pending_and_unrelated_credentials(reference_kind, do
     no_san, no_san_key = CertificateGenerator.create_ee(
         issuer_private_key=key, issuer_name=ca.subject, subject_name='No reference'
     )
-    add_credential(no_san, no_san_key)
+    add_credential(no_san, no_san_key, stored_ref=None)
     keyless = CredentialModel.objects.create(
         credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID, certificate=original.certificate
     )
-    RemoteIssuedCredentialModel.objects.create(
-        owner_credential=owner,
+    keyless_record = RemoteIssuedCredentialModel.objects.create(
         credential=keyless,
         common_name='keyless',
         issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+    )
+    IDevIDReferenceModel.objects.create(
+        dev_owner_id=keyless_record,
+        idevid_ref=reference,
+        dev_owner_id_certificate=original.certificate,
     )
     assert lookup() == original
     renewed, renewed_key = owner_certificate(ca, key, [reference])

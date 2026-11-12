@@ -14,7 +14,6 @@ from crypto.domain.specs import EcKeySpec, MlDsaKeySpec, RsaKeySpec
 from management.forms import TlsExternalCsrKeyForm
 from pki.auto_gen_pki import AutoGenPki
 from pki.forms.issuing_cas import IssuingCaAddRequestMixin
-from pki.forms.owner_credential import OwnerCredentialAddRequestEstNoOnboardingForm
 from pki.key_types import (
     KEY_TYPES,
     KEY_TYPE_CHOICES,
@@ -25,7 +24,6 @@ from pki.key_types import (
     normalize_key_type,
     public_key_info_from_key_type,
 )
-from pki.serializer.owner_credential import OwnerCredentialEstBasicAuthSerializer, OwnerCredentialEstMtlsSerializer
 from pki.services.key_generation import supported_key_type_choices
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from signer.forms import SignerGenerateForm
@@ -128,24 +126,23 @@ def test_catalog_identifiers_are_unique():
     assert len(KEY_TYPE_CHOICES) == 9
 
 
-def test_owner_form_and_api_preserve_their_classical_choices():
-    """Sharing a larger catalog must not expose PQC or legacy aliases in owner enrollment."""
+def test_owner_credential_catalog_keeps_its_classical_choices():
+    """The owner credential catalog does not expose PQC or legacy aliases."""
     expected = ['RSA-2048', 'RSA-3072', 'RSA-4096', 'ECC-SECP256R1', 'ECC-SECP384R1', 'ECC-SECP521R1']
-    form = OwnerCredentialAddRequestEstNoOnboardingForm()
-    assert [value for value, _ in form.fields['key_type'].choices] == expected
     assert [value for value, _ in OWNER_CREDENTIAL_KEY_TYPE_CHOICES] == expected
-    for serializer_type in (OwnerCredentialEstBasicAuthSerializer, OwnerCredentialEstMtlsSerializer):
-        assert list(serializer_type().fields['key_type'].choices) == expected
 
 
 def test_tls_and_signer_preserve_their_allowed_subsets():
-    """TLS and signer generation retain their existing values and omit P-521 and ML-DSA."""
+    """TLS supports ML-DSA keys but still omits P-521; signer choices are unchanged."""
     assert [value for value, _ in TLS_KEY_TYPE_CHOICES] == [
         'RSA-2048',
         'RSA-3072',
         'RSA-4096',
         'ECC-SECP256R1',
         'ECC-SECP384R1',
+        'MLDSA-44',
+        'MLDSA-65',
+        'MLDSA-87',
     ]
     assert [value for value, _ in SIGNER_KEY_TYPE_CHOICES] == [
         'rsa_2048',
@@ -171,7 +168,7 @@ def test_backend_filtering_agrees_across_flows(available):
         mldsa_variants=('mldsa65',),
     )
     ca_values = ['RSA-3072', 'ECC-SECP384R1', 'MLDSA-65'] if available else []
-    tls_values = ['RSA-3072', 'ECC-SECP384R1'] if available else []
+    tls_values = ['RSA-3072', 'ECC-SECP384R1', 'MLDSA-65'] if available else []
     signer_values = ['rsa_3072', 'ec_secp384r1'] if available else []
     assert [value for value, _ in supported_key_type_choices(report=report)] == ca_values
     with patch('pki.forms.issuing_cas.get_active_backend_capability_report', return_value=report):

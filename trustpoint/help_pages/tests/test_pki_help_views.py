@@ -9,8 +9,9 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 from trustpoint_core import oid
 
-from pki.models import CaModel
 from help_pages.commands import EstUsernamePasswordCommandBuilder
+from pki.models import CaModel
+
 from ..help_section import HelpSection, ValueRenderType
 from ..pki_help_views import (
     BaseHelpView,
@@ -23,12 +24,10 @@ from ..pki_help_views import (
     DomainHelpView,
     IssuedCredentialDetailView,
     IssuedCredentialHelpView,
-    OnboardingCmpIdevidRegistrationHelpView,
     OnboardingCmpIdevIdDomainCredentialStrategy,
-    OnboardingEstIdevidRegistrationHelpView,
+    OnboardingCmpIdevidRegistrationHelpView,
     OnboardingEstIdevIdDomainCredentialStrategy,
-    OwnerCredentialDetailView,
-    OwnerCredentialHelpView,
+    OnboardingEstIdevidRegistrationHelpView,
 )
 
 
@@ -511,45 +510,6 @@ class PkiDetailAndHelpContextTests(TestCase):
         assert mock_issuing_ca.called
         assert mock_tls.called
 
-    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.40')
-    def test_owner_credential_detail_context_contains_device_and_credential(self, mock_ip: Mock) -> None:
-        """Test owner credential detail context exposes device, domain, and credential."""
-        domain = _domain()
-        device = _device(domain)
-        owner_credential = Mock(device=device)
-        view = self._prepare_view(OwnerCredentialDetailView(), owner_credential)
-
-        context = view.get_context_data()
-
-        assert context['owner_credential'] == owner_credential
-        assert context['device'] == device
-        assert context['domain_unique_name'] == 'test-domain'
-        assert context['host_base'] == 'https://192.0.2.40:9443'
-        assert mock_ip.called
-
-    @patch('help_pages.pki_help_views.build_tls_trust_store_section', return_value=_section('TLS'))
-    @patch('help_pages.pki_help_views.build_issuing_ca_cert_section', return_value=_section('Issuing CA'))
-    @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.40')
-    def test_owner_credential_help_context_builds_owner_certificate_sections(
-        self, mock_ip: Mock, mock_issuing_ca: Mock, mock_tls: Mock
-    ) -> None:
-        """Test owner credential help context includes owner certificate helper sections."""
-        domain = _domain()
-        device = _device(domain)
-        view = self._prepare_view(OwnerCredentialHelpView(), Mock(device=device))
-
-        help_context = view._make_context()
-
-        assert [section.heading for section in help_context.help_sections] == [
-            'Key Generation',
-            'Issuing CA',
-            'TLS',
-        ]
-        assert 'owner_cert' in help_context.help_sections[0].rows[0].value
-        assert mock_ip.called
-        assert mock_issuing_ca.called
-        assert mock_tls.called
-
     @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address', return_value='192.0.2.50')
     def test_ca_detail_context_uses_minimal_help_context(self, mock_ip: Mock) -> None:
         """Test CA detail context exposes CA and host details without domain data."""
@@ -587,12 +547,9 @@ class PkiDetailAndHelpContextTests(TestCase):
         device.public_key_info = None
 
         issued_view = self._prepare_view(IssuedCredentialDetailView(), Mock(device=None))
-        owner_view = self._prepare_view(OwnerCredentialDetailView(), Mock(device=None))
         issued_missing_key_view = self._prepare_view(IssuedCredentialDetailView(), Mock(device=device))
 
         with self.assertRaises(Http404):
             issued_view._make_context()
-        with self.assertRaises(Http404):
-            owner_view._make_context()
         with self.assertRaises(Http404):
             issued_missing_key_view._make_context()

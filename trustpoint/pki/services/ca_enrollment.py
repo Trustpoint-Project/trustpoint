@@ -52,6 +52,7 @@ def finalize_est_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configura
     remote_path: str,
     est_username: str,
     est_password: str,
+    ca_role: CaModel.CaRole = CaModel.CaRole.ISSUING,
 ) -> CaModel:
     """Create the Issuing CA from an EST-issued certificate and its pending key."""
     CaModel._validate_ca_certificate(issued_cert)  # noqa: SLF001
@@ -77,6 +78,7 @@ def finalize_est_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configura
         unique_name=unique_name,
         credential=credential,
         ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST,
+        ca_role=ca_role,
         remote_host=remote_host,
         remote_port=remote_port,
         remote_path=remote_path,
@@ -116,6 +118,7 @@ def finalize_cmp_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configura
     remote_path: str,
     cmp_shared_secret: str,
     cmp_sender_kid: int | None = None,
+    ca_role: CaModel.CaRole = CaModel.CaRole.ISSUING,
 ) -> CaModel:
     """Create the Issuing CA from a CMP-issued certificate and its pending key."""
     no_onboarding_config = NoOnboardingConfigModel.objects.create(
@@ -127,6 +130,7 @@ def finalize_cmp_issuing_ca(  # noqa: PLR0913 - Mirrors the remote PKI configura
         unique_name=unique_name,
         credential=credential,
         ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+        ca_role=ca_role,
         remote_host=remote_host,
         remote_port=remote_port,
         remote_path=remote_path,

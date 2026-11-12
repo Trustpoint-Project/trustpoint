@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "**/migrations/**"
+      - trustpoint/pki/tests/test_management_ca_migration.py
       - .github/workflows/test-migrations-compatibility.yml
       - .github/actions/setup-uv-action/**
 
@@ -16,6 +17,39 @@ permissions:
   contents: read
 
 jobs:
+  test-management-ca-migration-postgresql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: review
+          POSTGRES_PASSWORD: migration-test
+          POSTGRES_DB: management_ca_migration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U review -d management_ca_migration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TRUSTPOINT_OPERATIONAL_DATABASE: postgresql
+      DATABASE_HOST: localhost
+      DATABASE_PORT: "5432"
+      DATABASE_USER: review
+      DATABASE_PASSWORD: migration-test
+      POSTGRES_DB: management_ca_migration
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Test DevOwnerID ownership migration on PostgreSQL
+        run: uv run pytest trustpoint/pki/tests/test_management_ca_migration.py -q -o md_report=false
+
   test-migrations:
     runs-on: ubuntu-latest
     steps:

@@ -13,20 +13,16 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.password_validation import CommonPasswordValidator
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.management import CommandError
-from django.db import DatabaseError, transaction
-from django.db.models import ProtectedError
+from django.db import transaction
 from django.http import FileResponse, Http404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
 
-from crypto.domain.errors import CryptoError
-from management.forms import CertificateAuthenticationEnabledForm, ManagementCAActionForm, PasswordPolicyForm
+from management.forms import CertificateAuthenticationEnabledForm, ManagementCASelectionForm, PasswordPolicyForm
 from management.models import CertificateAuthenticationConfig, PasswordPolicy
 from pki.services.management_ca import ManagementCAService
-from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.permissions import AppPermissions
 
@@ -35,7 +31,10 @@ if TYPE_CHECKING:
 
 
 class UserAuthenticationView(
-    ContextDataMixin, LoginRequiredMixin, SuperuserRequiredMixin, FormView[CertificateAuthenticationEnabledForm],
+    ContextDataMixin,
+    LoginRequiredMixin,
+    SuperuserRequiredMixin,
+    FormView[CertificateAuthenticationEnabledForm],
 ):
     """Display authentication settings and persist the certificate authentication preference."""
 
@@ -49,19 +48,25 @@ class UserAuthenticationView(
     def get_initial(self) -> dict[str, Any]:
         """Read the saved switch without creating configuration on a page visit."""
         initial = super().get_initial()
-        root_ca, issuing_ca = ManagementCAService.get_hierarchy()
-        if issuing_ca is not None and ManagementCAService.is_complete(root_ca, issuing_ca):
+        issuing_ca = ManagementCAService.get_issuing_ca()
+        if issuing_ca is not None and issuing_ca.ca_certificate_model is not None:
             initial['issuing_ca_id'] = issuing_ca.pk
             initial['enabled'] = CertificateAuthenticationConfig.objects.filter(
-                issuing_ca=issuing_ca, enabled=True,
+                issuing_ca=issuing_ca,
+                enabled=True,
             ).exists()
         return initial
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Make the switch available once the management CA hierarchy is generated."""
+        """Make the switch available once a usable management CA is configured."""
         context = super().get_context_data(**kwargs)
-        root_ca, issuing_ca = ManagementCAService.get_hierarchy()
-        context['management_ca_complete'] = ManagementCAService.is_complete(root_ca, issuing_ca)
+        issuing_ca = ManagementCAService.get_issuing_ca()
+        context['management_ca_complete'] = (
+            issuing_ca is not None
+            and issuing_ca.is_active
+            and issuing_ca.credential is not None
+            and issuing_ca.ca_certificate_model is not None
+        )
         return context
 
     def form_valid(self, form: CertificateAuthenticationEnabledForm) -> HttpResponse:
@@ -69,72 +74,78 @@ class UserAuthenticationView(
         if not self.request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION):
             raise PermissionDenied
         with transaction.atomic():
-            root_ca, issuing_ca = ManagementCAService.get_hierarchy(lock=True)
-            if issuing_ca is None or not ManagementCAService.is_complete(root_ca, issuing_ca):
-                form.add_error(None, _('Generate the management CA before enabling certificate authentication.'))
+            issuing_ca = ManagementCAService.get_issuing_ca(lock=True)
+            if (
+                issuing_ca is None
+                or not issuing_ca.is_management_ca
+                or issuing_ca.credential is None
+                or issuing_ca.ca_certificate_model is None
+            ):
+                form.add_error(None, _('Configure a management CA before enabling certificate authentication.'))
             elif issuing_ca.pk != form.cleaned_data['issuing_ca_id']:
                 form.add_error(None, _('The management CA has changed. Reload the page and try again.'))
             else:
-                CertificateAuthenticationConfig.objects.update_or_create(
-                    issuing_ca=issuing_ca, defaults={'enabled': form.cleaned_data['enabled']},
+                config, _created = CertificateAuthenticationConfig.objects.update_or_create(
+                    issuing_ca=issuing_ca,
+                    defaults={'enabled': form.cleaned_data['enabled']},
                 )
+                if config.enabled:
+                    CertificateAuthenticationConfig.objects.exclude(pk=config.pk).update(enabled=False)
                 messages.success(self.request, _('Certificate authentication setting saved.'))
                 return super().form_valid(form)
         return self.form_invalid(form)
 
 
 class CertificateAuthenticationConfigureView(
-    ContextDataMixin, LoginRequiredMixin, SuperuserRequiredMixin, LoggerMixin, FormView[ManagementCAActionForm],
+    ContextDataMixin,
+    LoginRequiredMixin,
+    SuperuserRequiredMixin,
+    FormView[ManagementCASelectionForm],
 ):
     """Configure the management CA used for user certificate authentication."""
 
     template_name = 'management/certificate_authentication.html'
-    form_class = ManagementCAActionForm
+    form_class = ManagementCASelectionForm
     success_url = reverse_lazy('management:certificate_authentication')
     context_page_category = 'management'
     context_page_name = 'user_authentication'
     http_method_names = ('get', 'post')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Show the current hierarchy without creating CA records on a page visit."""
+        """Show the selected CA and the management CAs available for selection."""
         context = super().get_context_data(**kwargs)
-        root_ca, issuing_ca = ManagementCAService.get_hierarchy()
-        context['root_ca'] = root_ca
-        context['issuing_ca'] = issuing_ca
-        context['management_ca_exists'] = root_ca is not None or issuing_ca is not None
-        context['management_ca_complete'] = ManagementCAService.is_complete(root_ca, issuing_ca)
+        selected_ca = ManagementCAService.get_issuing_ca()
+        context['selected_ca'] = selected_ca
+        context['management_cas'] = ManagementCAService.get_available_issuing_cas()
+        context['certificate_authentication_enabled'] = bool(
+            selected_ca is not None
+            and selected_ca.ca_certificate_model is not None
+            and CertificateAuthenticationConfig.objects.filter(issuing_ca=selected_ca, enabled=True).exists()
+        )
         return context
 
-    def form_valid(self, form: ManagementCAActionForm) -> HttpResponse:
-        """Apply the requested lifecycle operation and report actionable errors."""
+    def form_valid(self, form: ManagementCASelectionForm) -> HttpResponse:
+        """Store the selected management CA for certificate authentication."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
         try:
-            ManagementCAService.apply(
-                form.cleaned_data['action'],
-                root_ca_id=form.cleaned_data['root_ca_id'],
-                issuing_ca_id=form.cleaned_data['issuing_ca_id'],
-            )
-        except ProtectedError:
-            form.add_error(None, _('The management CA is still referenced by other objects and cannot be removed.'))
+            selected_ca = ManagementCAService.select_issuing_ca(form.cleaned_data['selected_ca_id'])
         except ValidationError as exc:
             form.add_error(None, exc)
-        except (CommandError, CryptoError, DatabaseError, RuntimeError, TypeError, ValueError):
-            self.logger.exception('Management CA operation failed.')
-            form.add_error(None, _('The management CA operation failed. Check the crypto backend and try again.'))
         else:
-            success_messages = {
-                'generate': _('Management CA generated successfully.'),
-                'replace': _('Management CA replaced successfully.'),
-                'delete': _('Management CA deleted successfully.'),
-            }
-            messages.success(self.request, success_messages[form.cleaned_data['action']])
+            messages.success(
+                self.request,
+                _('Management CA saved: {name}.').format(name=selected_ca.unique_name),
+            )
             return super().form_valid(form)
         return self.form_invalid(form)
 
 
 class PasswordPolicyConfigureView(
-    ContextDataMixin, LoginRequiredMixin, SuperuserRequiredMixin, FormView[PasswordPolicyForm],
+    ContextDataMixin,
+    LoginRequiredMixin,
+    SuperuserRequiredMixin,
+    FormView[PasswordPolicyForm],
 ):
     """Edit the policy used for password creation and changes."""
 
@@ -187,7 +198,10 @@ class PasswordPolicyListDownloadView(LoginRequiredMixin, SuperuserRequiredMixin,
             raise Http404(_('The selected password list is not available.')) from exc
 
         response = FileResponse(
-            password_file, as_attachment=True, filename=filename, content_type='application/octet-stream',
+            password_file,
+            as_attachment=True,
+            filename=filename,
+            content_type='application/octet-stream',
         )
         response['Cache-Control'] = 'private, no-store'
         response['X-Content-Type-Options'] = 'nosniff'

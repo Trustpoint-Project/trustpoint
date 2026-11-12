@@ -77,6 +77,13 @@ def get_ca_type_from_config() -> CaModel.CaTypeChoice:
 class IssuingCaImportMixin:
     """Mixin for Issuing CA import forms providing common validation and creation logic."""
 
+    ca_role: CaModel.CaRole
+
+    def __init__(self, *args: Any, ca_role: CaModel.CaRole = CaModel.CaRole.ISSUING, **kwargs: Any) -> None:
+        """Remember the role selected before the add wizard started."""
+        self.ca_role = ca_role
+        super().__init__(*args, **kwargs)
+
     def _raise_validation_error(self, message: str) -> NoReturn:
         """Helper method to raise a ValidationError with a given message.
 
@@ -255,6 +262,7 @@ class IssuingCaImportMixin:
             unique_name=unique_name,
             credential=credential_model,
             ca_type=ca_type,
+            ca_role=self.ca_role,
             parent_ca=parent_ca,
         )
         issuing_ca.save()
@@ -287,6 +295,17 @@ class IssuingCaImportMixin:
         """Validate the serializer before the key is imported through the crypto backend."""
         if credential_serializer.private_key is None:
             self._raise_validation_error('Private key is missing from credential serializer.')
+
+
+class CaAddRoleSelectForm(forms.Form):
+    """Choose whether the new CA serves endpoints or Trustpoint management certificates."""
+
+    ca_role = forms.TypedChoiceField(
+        choices=CaModel.CaRole.choices,
+        coerce=int,
+        initial=CaModel.CaRole.ISSUING,
+        widget=forms.HiddenInput,
+    )
 
 
 class IssuingCaAddMethodSelectForm(forms.Form):
@@ -346,6 +365,27 @@ class IssuingCaAddAutoGenForm(forms.Form):
         if key_type not in supported_types:
             raise ValidationError(_('The active crypto backend does not support this key type.'))
         return key_type
+
+
+class SelfSignedManagementCaForm(IssuingCaAddAutoGenForm):
+    """Create a self-signed management CA with a chosen name and key algorithm."""
+
+    unique_name = forms.CharField(
+        label=_('Unique Name'),
+        max_length=100,
+        required=True,
+        validators=[UniqueNameValidator()],
+        help_text=_('Used as the Trustpoint CA name and as the certificate common name.'),
+    )
+
+    def clean_unique_name(self) -> str:
+        """Reject names already used by a CA or a managed key."""
+        unique_name = cast('str', self.cleaned_data['unique_name'])
+        if CaModel.objects.filter(unique_name=unique_name).exists():
+            raise ValidationError(_('A CA with this unique name already exists.'))
+        if CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
+            raise ValidationError(_('A cryptographic key with this name already exists.'))
+        return unique_name
 
 
 class IssuingCaFileTypeSelectForm(forms.Form):
@@ -575,6 +615,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
     KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = KEY_TYPE_CHOICES
+    ca_role: CaModel.CaRole
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
@@ -594,11 +635,17 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         choices=KEY_TYPE_CHOICES,
         initial='RSA-2048',
         required=True,
-        help_text=_('Select the cryptographic key type and parameters'),
+        help_text=_('Select the cryptographic key type and parameters. It must match the issuing CA key type.'),
     )
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize backend-capability-aware key choices."""
+    def __init__(
+        self,
+        *args: Any,
+        ca_role: CaModel.CaRole = CaModel.CaRole.ISSUING,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize backend-capability-aware key choices and the selected CA role."""
+        self.ca_role = ca_role
         super().__init__(*args, **kwargs)
         supported_choices = self._supported_key_type_choices()
         key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
@@ -667,6 +714,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         key is required (e.g. not for RA-mode configurations).
         """
         instance = super().save(commit=False)
+        instance.ca_role = self.ca_role
 
         if commit:
             instance.save()
@@ -742,7 +790,18 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         return instance
 
 
-class IssuingCaRequestEstForm(EstRequestFormMixin, forms.Form):
+class CaRoleFormMixin(forms.Form):
+    """Carry the CA role chosen before the add wizard through to finalization."""
+
+    ca_role = forms.TypedChoiceField(
+        choices=CaModel.CaRole.choices,
+        coerce=int,
+        initial=CaModel.CaRole.ISSUING,
+        widget=forms.HiddenInput,
+    )
+
+
+class IssuingCaRequestEstForm(CaRoleFormMixin, EstRequestFormMixin, forms.Form):
     """Request an Issuing CA certificate from an external EST PKI (session-based wizard)."""
 
     key_type_choices = KEY_TYPE_CHOICES
@@ -764,7 +823,7 @@ class IssuingCaRequestEstForm(EstRequestFormMixin, forms.Form):
         self._apply_est_request_defaults()
 
 
-class IssuingCaRequestCmpForm(CmpRequestFormMixin, forms.Form):
+class IssuingCaRequestCmpForm(CaRoleFormMixin, CmpRequestFormMixin, forms.Form):
     """Request an Issuing CA certificate from an external CMP PKI (session-based wizard)."""
 
     key_type_choices = KEY_TYPE_CHOICES

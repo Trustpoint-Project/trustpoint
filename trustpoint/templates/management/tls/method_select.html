@@ -3,166 +3,65 @@
 
 {% block content %}
 <div class="card">
-
     <div class="card-header">
-        <h1 class="mb-1">
-            {% trans 'Add New TLS Certificate' %}
-        </h1>
-
+        <h1 class="mb-1">{% trans 'Add New TLS Certificate' %}</h1>
         <p class="mb-0 text-muted">
-            {% trans 'Choose how the TLS certificate should be imported or generated.' %}
+            {% trans 'Import a TLS certificate, generate a CSR for an external PKI, or issue the certificate from a management CA.' %}
         </p>
     </div>
 
     <div class="card-body">
-
-        {# ============================================================ #}
-        {# Import Existing TLS Certificate                              #}
-        {# ============================================================ #}
         <section class="mb-5">
-
             <div class="mb-3">
-                <h2 class="h4 mb-1">
-                    {% trans 'Import Existing TLS Certificate' %}
-                </h2>
-
+                <h2 class="h4 mb-1">{% trans 'Import or Request TLS Certificate' %}</h2>
                 <p class="text-muted mb-0">
-                    {% trans 'Import an existing private key and TLS certificate into Trustpoint.' %}
+                    {% trans 'Provide an existing credential or generate a CSR for an external PKI.' %}
                 </p>
             </div>
 
             <div class="row g-3">
-
-                <div class="col-md-6">
-                    <a
-                        href="{% url 'management:tls-add-file_import-pkcs12' %}"
-                        class="text-decoration-none text-reset"
-                    >
+                <div class="col-lg-4">
+                    <a href="{% url 'management:tls-add-file_import-pkcs12' %}" class="text-decoration-none text-reset">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">
-                                            {% trans 'PKCS#12 File' %}
-                                        </h3>
-                                    </div>
-
-                                    <p class="text-muted">
-                                        {% trans 'Import the private key and TLS certificate from a single PKCS#12 container.' %}
-                                    </p>
-                                </div>
-
+                                <h3 class="h5 mb-2">{% trans 'PKCS#12 File' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Import the private key and TLS certificate from a single PKCS#12 container.' %}
+                                </p>
                                 <div class="mt-auto">
-                                    <span class="btn btn-primary">
-                                        {% trans 'Import PKCS#12' %}
-                                    </span>
+                                    <span class="btn btn-primary">{% trans 'Import PKCS#12' %}</span>
                                 </div>
-
                             </div>
                         </div>
                     </a>
                 </div>
 
-
-                <div class="col-md-6">
-                    <a
-                        href="{% url 'management:tls-add-file_import-separate_files' %}"
-                        class="text-decoration-none text-reset"
-                    >
+                <div class="col-lg-4">
+                    <a href="{% url 'management:tls-add-file_import-separate_files' %}" class="text-decoration-none text-reset">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">
-                                            {% trans 'Separate Files' %}
-                                        </h3>
-                                    </div>
-
-                                    <p class="text-muted">
-                                        {% trans 'Import the private key and TLS certificate from separate files.' %}
-                                    </p>
-                                </div>
-
+                                <h3 class="h5 mb-2">{% trans 'Separate Files' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Import the private key and TLS certificate from separate files.' %}
+                                </p>
                                 <div class="mt-auto">
-                                    <span class="btn btn-primary">
-                                        {% trans 'Import Files' %}
-                                    </span>
+                                    <span class="btn btn-primary">{% trans 'Import Files' %}</span>
                                 </div>
-
                             </div>
                         </div>
                     </a>
                 </div>
 
-            </div>
-        </section>
-
-
-        {# ============================================================ #}
-        {# Generate TLS Certificate                                     #}
-        {# ============================================================ #}
-        <section class="mb-5">
-            <div class="mb-3">
-                <h2 class="h4 mb-1">{% trans 'External PKI' %}</h2>
-                <p class="text-muted mb-0">
-                    {% trans 'Generate a keypair in Trustpoint and request a TLS certificate from an external PKI.' %}
-                </p>
-            </div>
-            <div class="row g-3">
-                <div class="col-md-6">
+                <div class="col-lg-4">
                     <a href="{% url 'management:tls-external-csr-key' %}" class="text-decoration-none text-reset">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">{% trans 'Generate CSR' %}</h3>
-                                    </div>
-                                    <p class="text-muted">
-                                        {% trans 'Create a certificate signing request and upload the TLS certificate issued by your external PKI.' %}
-                                    </p>
-                                </div>
+                                <h3 class="h5 mb-2">{% trans 'Generate CSR' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Create a certificate signing request and upload the TLS certificate issued by an external PKI.' %}
+                                </p>
                                 <div class="mt-auto">
                                     <span class="btn btn-primary">{% trans 'Generate CSR' %}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a href="{% url 'management:tls-request-est' %}" class="text-decoration-none text-reset">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body d-flex flex-column">
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">{% trans 'Enroll via EST' %}</h3>
-                                    </div>
-                                    <p class="text-muted">
-                                        {% trans 'Generate a keypair and automatically enroll the TLS certificate from an external PKI using EST.' %}
-                                    </p>
-                                </div>
-                                <div class="mt-auto">
-                                    <span class="btn btn-primary">{% trans 'Enroll via EST' %}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </a>
-                </div>
-                <div class="col-md-6">
-                    <a href="{% url 'management:tls-request-cmp' %}" class="text-decoration-none text-reset">
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body d-flex flex-column">
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">{% trans 'Enroll via CMP' %}</h3>
-                                    </div>
-                                    <p class="text-muted">
-                                        {% trans 'Generate a keypair and automatically enroll the TLS certificate from an external PKI using CMP.' %}
-                                    </p>
-                                </div>
-                                <div class="mt-auto">
-                                    <span class="btn btn-primary">{% trans 'Enroll via CMP' %}</span>
                                 </div>
                             </div>
                         </div>
@@ -172,99 +71,35 @@
         </section>
 
         <section>
-
             <div class="mb-3">
-                <h2 class="h4 mb-1">
-                    {% trans 'Generate TLS Certificate' %}
-                </h2>
-
+                <h2 class="h4 mb-1">{% trans 'Issue TLS Certificate' %}</h2>
                 <p class="text-muted mb-0">
-                    {% trans 'Generate a new keypair and TLS certificate.' %}
+                    {% trans 'Generate a keypair and obtain the TLS certificate from a selected management CA.' %}
                 </p>
             </div>
 
             <div class="row g-3">
-
-                <div class="col-md-6">
-                    <a
-                        href="{% url 'management:tls-generate' %}"
-                        class="text-decoration-none text-reset"
-                    >
+                <div class="col-lg-6">
+                    <a href="{% url 'management:tls-local-key' %}" class="text-decoration-none text-reset">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">
-                                            {% trans 'Self-signed' %}
-                                        </h3>
-
-                                        <span class="badge text-bg-danger">
-                                            {% trans 'self-signed' %}
-                                        </span>
-                                    </div>
-
-                                    <p class="text-muted">
-                                        {% trans 'Generate a self-signed keypair and TLS certificate.' %}
-                                    </p>
-                                </div>
-
+                                <h3 class="h5 mb-2">{% trans 'Issue from Management CA' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Select a management CA. Internal CAs sign the certificate in Trustpoint; external CAs receive the request through their configured EST or CMP RA.' %}
+                                </p>
                                 <div class="mt-auto">
-                                    <span class="btn btn-primary">
-                                        {% trans 'Generate TLS Certificate' %}
-                                    </span>
+                                    <span class="btn btn-primary">{% trans 'Select Management CA' %}</span>
                                 </div>
-
                             </div>
                         </div>
                     </a>
                 </div>
-
-                <div class="col-md-6">
-                    <a
-                        href="{% url 'management:tls-local-key' %}"
-                        class="text-decoration-none text-reset"
-                    >
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body d-flex flex-column">
-
-                                <div>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <h3 class="h5 mb-2">
-                                            {% trans 'Issue from Local CA' %}
-                                        </h3>
-                                    </div>
-
-                                    <p class="text-muted">
-                                        {% trans 'Generate a keypair and issue the TLS certificate from a CA hosted in Trustpoint.' %}
-                                    </p>
-                                </div>
-
-                                <div class="mt-auto">
-                                    <span class="btn btn-primary">
-                                        {% trans 'Issue from Local CA' %}
-                                    </span>
-                                </div>
-
-                            </div>
-                        </div>
-                    </a>
-                </div>
-
             </div>
         </section>
-
     </div>
-
 
     <div class="card-footer">
-        <a
-            href="{% url 'management:tls' %}"
-            class="btn btn-secondary"
-        >
-            {% trans 'Cancel' %}
-        </a>
+        <a href="{% url 'management:tls' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
     </div>
-
 </div>
 {% endblock content %}

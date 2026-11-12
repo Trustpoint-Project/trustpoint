@@ -243,6 +243,12 @@ class EstClient(LoggerMixin):
             content_type_header = response.headers.get('Content-Type', '')
             issued_cert, chain = self._parse_response(response.content, content_type_header)
 
+        except requests.exceptions.SSLError as e:
+            msg = (
+                'EST enrollment requires an HTTPS endpoint, but the TLS handshake with '
+                f'{url} failed. Check the remote host, port, and path: {e!s}'
+            )
+            raise EstClientError(msg) from e
         except requests.exceptions.RequestException as e:
             msg = f'Failed to communicate with EST server: {e!s}'
             raise EstClientError(msg) from e
@@ -298,6 +304,12 @@ class EstClient(LoggerMixin):
 
             ca_certs = CertificateCollectionSerializer.from_pkcs7_der(pkcs7_data).as_crypto()
 
+        except requests.exceptions.SSLError as e:
+            msg = (
+                'EST enrollment requires an HTTPS endpoint, but the TLS handshake with '
+                f'{url} failed. Check the remote host, port, and path: {e!s}'
+            )
+            raise EstClientError(msg) from e
         except requests.exceptions.RequestException as e:
             msg = f'Failed to retrieve CA certificates: {e!s}'
             raise EstClientError(msg) from e

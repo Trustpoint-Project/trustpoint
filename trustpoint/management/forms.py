@@ -60,6 +60,7 @@ from pki.services import credential_upload as uploads
 from pki.services.credential_upload import parse_pkcs12
 from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
 from pki.services.key_generation import supported_key_type_choices
+from pki.services.management_issuance import available_management_cas
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 
@@ -193,12 +194,17 @@ class TlsAddRequestCmpForm(CmpRequestFormMixin, forms.Form):
 
 
 class TlsLocalCaSelectForm(forms.Form):
-    """Select a local Issuing CA hosted in Trustpoint to sign the TLS credential."""
+    """Select the management CA used to issue or forward the TLS credential."""
 
     issuing_ca = forms.ModelChoiceField(
-        queryset=CaModel.objects.filter(is_active=True, credential__isnull=False),
-        label=_('Issuing CA'),
+        queryset=CaModel.objects.none(),
+        label=_('Management CA'),
     )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Offer only management CAs that can issue locally or forward to an external RA."""
+        super().__init__(*args, **kwargs)
+        cast('forms.ModelChoiceField[CaModel]', self.fields['issuing_ca']).queryset = available_management_cas()
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
@@ -304,8 +310,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                     '{% load i18n %}'
                     '{% if form.instance.auto_gen_pki %}'
                     '<p class="form-text mt-0 mb-3">'
-                    '<a href="{% url \'pki:issuing_cas-add-method_select\' %}">'
-                    "{% trans 'Create an auto-generated PKI' %}"
+                    '<a href="{% url \'pki:issuing_cas-add-role_select\' %}">'
+                    "{% trans 'Add a CA' %}"
                     '</a></p>'
                     '{% endif %}'
                 ),
@@ -1285,15 +1291,10 @@ class CertificateAuthenticationEnabledForm(forms.Form):
     issuing_ca_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
 
 
-class ManagementCAActionForm(forms.Form):
-    """Validate an explicit management CA action and the hierarchy shown to the administrator."""
+class ManagementCASelectionForm(forms.Form):
+    """Validate the management CA selected for certificate authentication."""
 
-    action = forms.ChoiceField(
-        choices=[('generate', _('Generate')), ('replace', _('Generate new CA')), ('delete', _('Delete'))],
-        widget=forms.HiddenInput,
-    )
-    root_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
-    issuing_ca_id = forms.IntegerField(required=False, min_value=1, widget=forms.HiddenInput)
+    selected_ca_id = forms.IntegerField(min_value=1)
 
 
 class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):

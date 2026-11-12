@@ -72,32 +72,33 @@ class TestDevIdRegistrationForm:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.domain = DomainModel.objects.create(
-            unique_name='test-domain'
-        )
+        self.domain = DomainModel.objects.create(unique_name='test-domain')
         self.truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
 
     def test_form_valid_with_all_fields(self):
         """Test form is valid with all required and optional fields."""
-        form = DevIdRegistrationForm(data={
-            'unique_name': 'test-devidreg',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{10}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': 'test-devidreg',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{10}$',
+            }
+        )
         assert form.is_valid()
 
     def test_form_valid_without_optional_unique_name(self):
         """Test form is valid without the optional unique_name field."""
-        form = DevIdRegistrationForm(data={
-            'unique_name': '',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{10}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': '',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{10}$',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -115,16 +116,18 @@ class TestDevIdRegistrationForm:
             unique_name='duplicate-name',
             truststore=self.truststore,
             domain=self.domain,
-            serial_number_pattern=r'^\d{10}$'
+            serial_number_pattern=r'^\d{10}$',
         )
-        
+
         # Try to create another with the same name
-        form = DevIdRegistrationForm(data={
-            'unique_name': 'duplicate-name',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{8}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': 'duplicate-name',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{8}$',
+            }
+        )
         assert not form.is_valid()
 
     def test_form_has_expected_fields(self):
@@ -229,38 +232,34 @@ class TestTruststoreDownloadForm:
 
     def test_form_valid_with_all_fields(self):
         """Test form is valid with all fields provided."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pem'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_zip_container(self):
         """Test form is valid with zip container."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'zip',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'der'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'zip', 'cert_chain_incl': 'chain_incl', 'cert_file_format': 'der'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_tar_gz_container(self):
         """Test form is valid with tar_gz container."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'tar_gz',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pkcs7_pem'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'tar_gz', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pkcs7_pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_der_format(self):
         """Test form is valid with pkcs7_der format."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'pkcs7_der'
-        })
+        form = TruststoreDownloadForm(
+            data={
+                'cert_file_container': 'single_file',
+                'cert_chain_incl': 'chain_incl',
+                'cert_file_format': 'pkcs7_der',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -290,38 +289,34 @@ class TestCertificateDownloadForm:
 
     def test_form_valid_with_pem_format(self):
         """Test form is valid with PEM format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pem'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_der_format(self):
         """Test form is valid with DER format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'der'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'chain_incl', 'cert_file_format': 'der'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_format(self):
         """Test form is valid with PKCS7 PEM format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pkcs7_pem'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pkcs7_pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_der_format(self):
         """Test form is valid with PKCS7 DER format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'pkcs7_der'
-        })
+        form = CertificateDownloadForm(
+            data={
+                'cert_file_container': 'single_file',
+                'cert_chain_incl': 'chain_incl',
+                'cert_file_format': 'pkcs7_der',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -350,22 +345,16 @@ class TestCertProfileConfigForm:
     def test_form_is_model_form(self):
         """Test that form is a ModelForm for CertificateProfileModel."""
         from pki.models.cert_profile import CertificateProfileModel
+
         form = CertProfileConfigForm()
         assert form._meta.model == CertificateProfileModel
 
     def test_form_with_valid_json(self):
         """Test form with valid JSON profile data."""
-        json_data = {
-            'version': 1,
-            'subject': {
-                'common_name': 'test.example.com'
-            }
-        }
-        form = CertProfileConfigForm(data={
-            'unique_name': 'test-profile',
-            'profile_json': json_data,
-            'is_default': False
-        })
+        json_data = {'version': 1, 'subject': {'common_name': 'test.example.com'}}
+        form = CertProfileConfigForm(
+            data={'unique_name': 'test-profile', 'profile_json': json_data, 'is_default': False}
+        )
         # Just check it doesn't crash - full validation depends on Pydantic schema
         assert 'unique_name' in form.fields
 
@@ -408,24 +397,27 @@ class TestTruststoreAddFormValidation:
         der_file_path = 'tests/data/issuing_cas/ee0_valid.der'
         with open(der_file_path, 'rb') as f:
             der_data = f.read()
-        
+
         uploaded_file = SimpleUploadedFile('certificate.der', der_data, content_type='application/x-x509-ca-cert')
-        
+
         form_data = {
             'intended_usage': TruststoreModel.IntendedUsage.GENERIC.value,
         }
         form = TruststoreAddForm(data=form_data, files={'trust_store_file': uploaded_file})
-        
-        assert form.is_valid(), f"Form should be valid but got errors: {form.errors}"
+
+        assert form.is_valid(), f'Form should be valid but got errors: {form.errors}'
         assert 'truststore' in form.cleaned_data
         truststore = form.cleaned_data['truststore']
-        assert truststore.number_of_certificates == 1  
+        assert truststore.number_of_certificates == 1
+
+
 class TestIssuingCaAddFileImportPkcs12Form:
     """Test IssuingCaAddFileImportPkcs12Form."""
 
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import IssuingCaAddFileImportPkcs12Form
+
         form = IssuingCaAddFileImportPkcs12Form()
         assert 'unique_name' in form.fields
         assert 'pkcs12_file' in form.fields
@@ -434,6 +426,7 @@ class TestIssuingCaAddFileImportPkcs12Form:
     def test_form_unique_name_not_required(self):
         """Test that unique_name field is not required."""
         from pki.forms import IssuingCaAddFileImportPkcs12Form
+
         form = IssuingCaAddFileImportPkcs12Form()
         assert form.fields['unique_name'].required is False
 
@@ -464,6 +457,7 @@ class TestIssuingCaAddFileImportSeparateFilesForm:
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import IssuingCaAddFileImportSeparateFilesForm
+
         form = IssuingCaAddFileImportSeparateFilesForm()
         assert 'unique_name' in form.fields
         assert 'ca_certificate' in form.fields
@@ -474,6 +468,7 @@ class TestIssuingCaAddFileImportSeparateFilesForm:
     def test_form_optional_fields_not_required(self):
         """Test that optional fields are not required."""
         from pki.forms import IssuingCaAddFileImportSeparateFilesForm
+
         form = IssuingCaAddFileImportSeparateFilesForm()
         assert form.fields['unique_name'].required is False
         assert form.fields['ca_certificate_chain'].required is False
@@ -487,9 +482,8 @@ class TestOwnerCredentialFileImportForm:
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import OwnerCredentialFileImportForm
-        
+
         form = OwnerCredentialFileImportForm()
-        assert 'unique_name' in form.fields
         assert 'certificate' in form.fields
         assert 'certificate_chain' in form.fields
         assert 'private_key_file' in form.fields
@@ -498,9 +492,8 @@ class TestOwnerCredentialFileImportForm:
     def test_form_optional_fields_not_required(self):
         """Test that optional fields are not required."""
         from pki.forms import OwnerCredentialFileImportForm
-        
+
         form = OwnerCredentialFileImportForm()
-        assert form.fields['unique_name'].required is False
         assert form.fields['certificate_chain'].required is False
         assert form.fields['private_key_file_password'].required is False
 
@@ -518,7 +511,7 @@ class TestIssuingCaFileTypeSelectForm:
         form = IssuingCaFileTypeSelectForm()
         choices = form.fields['method_select'].choices
         choice_values = [c[0] for c in choices]
-        
+
         assert 'pkcs_12' in choice_values
         assert 'other' in choice_values
 
@@ -539,7 +532,7 @@ class TestFormFieldAttributes:
     def test_dev_id_registration_form_fields(self):
         """Test DevIdRegistrationForm field configuration."""
         form = DevIdRegistrationForm()
-        
+
         # Check that form has the correct fields
         assert 'unique_name' in form.fields
         assert 'domain' in form.fields
@@ -549,7 +542,7 @@ class TestFormFieldAttributes:
     def test_certificate_download_form_format_choices(self):
         """Test CertificateDownloadForm has correct format fields."""
         form = CertificateDownloadForm()
-        
+
         assert 'cert_file_format' in form.fields
         assert 'cert_file_container' in form.fields
         assert 'cert_chain_incl' in form.fields
@@ -557,7 +550,7 @@ class TestFormFieldAttributes:
     def test_truststore_download_form_format_choices(self):
         """Test TruststoreDownloadForm has correct format fields."""
         form = TruststoreDownloadForm()
-        
+
         assert 'cert_file_format' in form.fields
         assert 'cert_file_container' in form.fields
         assert 'cert_chain_incl' in form.fields
@@ -565,18 +558,18 @@ class TestFormFieldAttributes:
     def test_cert_profile_config_form_widgets(self):
         """Test CertProfileConfigForm widget configuration."""
         form = CertProfileConfigForm()
-        
+
         # Check that profile_json has textarea widget
         assert 'profile_json' in form.fields
         # Widget should be configured for JSON input
-        
+
     def test_issuing_ca_add_method_select_form_choices(self):
         """Test IssuingCaAddMethodSelectForm has correct choices."""
         form = IssuingCaAddMethodSelectForm()
-        
+
         assert 'method_select' in form.fields
         choices = [c[0] for c in form.fields['method_select'].choices]
-        
+
         assert 'local_file_import' in choices
         assert 'local_request' in choices
         assert 'remote_est' in choices
@@ -590,13 +583,8 @@ class TestProfileBasedFormFieldBuilder:
         """Test that ProfileBasedFormFieldBuilder initializes correctly."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
-        profile = {
-            'type': 'cert_profile',
-            'subj': {'cn': {'required': True}},
-            'ext': {},
-            'validity': {'days': 365}
-        }
+
+        profile = {'type': 'cert_profile', 'subj': {'cn': {'required': True}}, 'ext': {}, 'validity': {'days': 365}}
         builder = ProfileBasedFormFieldBuilder(profile)
         assert builder.profile == profile
         assert builder.verifier == mock_verifier
@@ -610,25 +598,19 @@ class TestProfileBasedFormFieldBuilder:
         sample_request = {
             'subject': {'cn': 'CHANGEME_common_name', 'o': 'TestOrg'},
             'extensions': {'subject_alternative_name': {'dns_names': ['CHANGEME_dns']}},
-            'validity': {'days': 365}
+            'validity': {'days': 365},
         }
         mock_verifier.get_sample_request.return_value = sample_request
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
             'subject': {
                 'common_name': {'required': True, 'mutable': True},
-                'organization_name': {'required': False, 'mutable': True}
+                'organization_name': {'required': False, 'mutable': True},
             },
-            'extensions': {
-                'subject_alternative_name': {
-                    'dns_names': {'required': False, 'mutable': True}
-                }
-            },
-            'validity': {
-                'days': {'required': True, 'mutable': True, 'value': 365}
-            }
+            'extensions': {'subject_alternative_name': {'dns_names': {'required': False, 'mutable': True}}},
+            'validity': {'days': {'required': True, 'mutable': True, 'value': 365}},
         }
         builder = ProfileBasedFormFieldBuilder(profile)
         fields = builder.build_all_fields()
@@ -650,14 +632,14 @@ class TestProfileBasedFormFieldBuilder:
         """Test building all subject fields when allow='*'."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {
                 'allow': '*',
                 'common_name': {'required': True, 'mutable': False, 'value': 'test'},
-                'organization_name': {'required': False, 'mutable': True}
-            }
+                'organization_name': {'required': False, 'mutable': True},
+            },
         }
         builder = ProfileBasedFormFieldBuilder(profile)
         builder._build_all_subject_fields(profile['subj'])
@@ -679,16 +661,16 @@ class TestProfileBasedFormFieldBuilder:
         """Test building all SAN fields when allow='*'."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
             'ext': {
                 'subject_alternative_name': {
                     'allow': '*',
                     'dns_names': {'required': True, 'mutable': True, 'value': ['example.com']},
-                    'ip_addresses': {'required': False, 'mutable': False}
+                    'ip_addresses': {'required': False, 'mutable': False},
                 }
-            }
+            },
         }
         builder = ProfileBasedFormFieldBuilder(profile)
         builder._build_all_san_fields(profile['ext']['subject_alternative_name'])
@@ -709,19 +691,16 @@ class TestProfileBasedFormFieldBuilder:
         """Test building subject fields from sample request."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
-            'subject': {
-                'common_name': {'required': True},
-                'organization_name': {'mutable': False, 'value': 'TestOrg'}
-            }
+            'subject': {'common_name': {'required': True}, 'organization_name': {'mutable': False, 'value': 'TestOrg'}},
         }
         builder = ProfileBasedFormFieldBuilder(profile)
         sample_subject = {
             'common_name': 'CHANGEME_common_name',
             'organization_name': 'TestOrg',
-            'organizational_unit_name': 'TestUnit'
+            'organizational_unit_name': 'TestUnit',
         }
         builder._build_subject_fields_from_sample(sample_subject)
 
@@ -742,22 +721,18 @@ class TestProfileBasedFormFieldBuilder:
         """Test building SAN fields from sample request."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
             'extensions': {
                 'subject_alternative_name': {
                     'dns_names': {'required': True},
-                    'ip_addresses': {'mutable': False, 'value': ['192.168.1.1']}
+                    'ip_addresses': {'mutable': False, 'value': ['192.168.1.1']},
                 }
-            }
+            },
         }
         builder = ProfileBasedFormFieldBuilder(profile)
-        sample_san = {
-            'dns_names': ['CHANGEME_dns'],
-            'ip_addresses': ['192.168.1.1'],
-            'uris': ['https://example.com']
-        }
+        sample_san = {'dns_names': ['CHANGEME_dns'], 'ip_addresses': ['192.168.1.1'], 'uris': ['https://example.com']}
         builder._build_san_fields_from_sample(sample_san)
 
         assert 'dns_names' in builder.fields
@@ -776,20 +751,13 @@ class TestProfileBasedFormFieldBuilder:
         """Test building validity fields from sample request."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
-            'validity': {
-                'days': {'required': True, 'value': 365},
-                'hours': {'mutable': False}
-            }
+            'validity': {'days': {'required': True, 'value': 365}, 'hours': {'mutable': False}},
         }
         builder = ProfileBasedFormFieldBuilder(profile)
-        sample_validity = {
-            'days': 365,
-            'hours': 0,
-            'minutes': 'CHANGEME_minutes'
-        }
+        sample_validity = {'days': 365, 'hours': 0, 'minutes': 'CHANGEME_minutes'}
         builder._build_validity_fields_from_sample(sample_validity)
 
         assert 'days' in builder.fields
@@ -809,14 +777,8 @@ class TestProfileBasedFormFieldBuilder:
         """Test that country fields have proper validation."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
-        profile = {
-            'type': 'cert_profile',
-            'subj': {
-                'allow': '*',
-                'country_name': {'required': True}
-            }
-        }
+
+        profile = {'type': 'cert_profile', 'subj': {'allow': '*', 'country_name': {'required': True}}}
         builder = ProfileBasedFormFieldBuilder(profile)
         builder._build_all_subject_fields(profile['subj'])
 
@@ -835,21 +797,21 @@ class TestCertificateIssuanceForm:
         """Test that CertificateIssuanceForm initializes correctly."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         profile = {
             'type': 'cert_profile',
             'subject': {'common_name': {'required': True}},
             'extensions': {},
-            'validity': {'days': 365}
+            'validity': {'days': 365},
         }
         # Mock get_profile to return the normalized profile
         mock_verifier.get_profile.return_value = profile
-        
+
         mock_builder = Mock()
         mock_builder.fields = {'cn': Mock()}
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         form = CertificateIssuanceForm(profile)
 
         assert form.profile == profile
@@ -863,25 +825,25 @@ class TestCertificateIssuanceForm:
         """Test form with subject fields from profile."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'cn': forms.CharField(required=True),
             'o': forms.CharField(required=False),
-            'c': forms.CharField(required=True, initial='US', disabled=True)
+            'c': forms.CharField(required=True, initial='US', disabled=True),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {
                 'cn': {'required': True, 'mutable': True},
                 'o': {'required': False, 'mutable': True},
-                'c': {'required': True, 'mutable': False, 'value': 'US'}
+                'c': {'required': True, 'mutable': False, 'value': 'US'},
             },
             'ext': {},
-            'validity': {}
+            'validity': {},
         }
         form = CertificateIssuanceForm(profile)
         form.fields = mock_builder.fields
@@ -901,25 +863,20 @@ class TestCertificateIssuanceForm:
         """Test form with SAN fields from profile."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'dns_names': forms.CharField(required=True),
-            'ip_addresses': forms.CharField(required=False)
+            'ip_addresses': forms.CharField(required=False),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {},
-            'ext': {
-                'subject_alternative_name': {
-                    'dns_names': {'required': True},
-                    'ip_addresses': {'required': False}
-                }
-            },
-            'validity': {}
+            'ext': {'subject_alternative_name': {'dns_names': {'required': True}, 'ip_addresses': {'required': False}}},
+            'validity': {},
         }
         form = CertificateIssuanceForm(profile)
         form.fields = mock_builder.fields
@@ -934,23 +891,20 @@ class TestCertificateIssuanceForm:
         """Test form with validity fields from profile."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'days': forms.IntegerField(required=True, initial=365),
-            'hours': forms.IntegerField(required=False)
+            'hours': forms.IntegerField(required=False),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {},
             'ext': {},
-            'validity': {
-                'days': {'required': True, 'value': 365},
-                'hours': {'required': False}
-            }
+            'validity': {'days': {'required': True, 'value': 365}, 'hours': {'required': False}},
         }
         form = CertificateIssuanceForm(profile)
         form.fields = mock_builder.fields
@@ -967,37 +921,28 @@ class TestCertificateIssuanceForm:
         """Test form validation with valid data."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'cn': forms.CharField(required=True),
             'o': forms.CharField(required=False),
             'dns_names': forms.CharField(required=False),
-            'days': forms.IntegerField(required=True)
+            'days': forms.IntegerField(required=True),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
-            'subj': {
-                'cn': {'required': True},
-                'o': {'required': False}
-            },
-            'ext': {
-                'subject_alternative_name': {
-                    'dns_names': {'required': False}
-                }
-            },
-            'validity': {
-                'days': {'required': True, 'value': 365}
-            }
+            'subj': {'cn': {'required': True}, 'o': {'required': False}},
+            'ext': {'subject_alternative_name': {'dns_names': {'required': False}}},
+            'validity': {'days': {'required': True, 'value': 365}},
         }
         form_data = {
             'cn': 'test.example.com',
             'o': 'Test Organization',
             'dns_names': 'www.example.com, api.example.com',
-            'days': 365
+            'days': 365,
         }
         form = CertificateIssuanceForm(profile, data=form_data)
         form.fields = mock_builder.fields
@@ -1014,22 +959,13 @@ class TestCertificateIssuanceForm:
         """Test form validation fails when required field is missing."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
-        mock_builder.fields = {
-            'cn': forms.CharField(required=True)
-        }
+        mock_builder.fields = {'cn': forms.CharField(required=True)}
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
-        profile = {
-            'type': 'cert_profile',
-            'subj': {
-                'cn': {'required': True}
-            },
-            'ext': {},
-            'validity': {}
-        }
+
+        profile = {'type': 'cert_profile', 'subj': {'cn': {'required': True}}, 'ext': {}, 'validity': {}}
         form_data = {}  # Missing required 'cn'
         form = CertificateIssuanceForm(profile, data=form_data)
         form.fields = mock_builder.fields
@@ -1043,7 +979,7 @@ class TestCertificateIssuanceForm:
         """Test conversion of form data to JSON request format."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {}
         mock_builder.build_all_fields.return_value = mock_builder.fields
@@ -1056,18 +992,15 @@ class TestCertificateIssuanceForm:
             'days': 'Days',
         }
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {'cn': {'required': True}},
             'ext': {},
-            'validity': {'days': {'required': True}}
+            'validity': {'days': {'required': True}},
         }
         form = CertificateIssuanceForm(profile)
-        form.cleaned_data = {
-            'cn': 'test.example.com',
-            'days': 365
-        }
+        form.cleaned_data = {'cn': 'test.example.com', 'days': 365}
 
         request = form._form_data_to_json_request()
 
@@ -1082,7 +1015,7 @@ class TestCertificateIssuanceForm:
         """Test building subject DN from form data."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {}
         mock_builder.build_all_fields.return_value = mock_builder.fields
@@ -1096,23 +1029,19 @@ class TestCertificateIssuanceForm:
             'country_name': 'Country (C)',
         }
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
         form = CertificateIssuanceForm(profile)
         cleaned_data = {
             'cn': 'test.example.com',
             'o': 'Test Org',
             'c': 'US',
-            'days': 365  # Should be filtered out
+            'days': 365,  # Should be filtered out
         }
 
         subject = form._build_subject_from_form_data(cleaned_data)
 
-        assert subject == {
-            'cn': 'test.example.com',
-            'o': 'Test Org',
-            'c': 'US'
-        }
+        assert subject == {'cn': 'test.example.com', 'o': 'Test Org', 'c': 'US'}
 
     @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
@@ -1120,7 +1049,7 @@ class TestCertificateIssuanceForm:
         """Test building SAN extension from form data."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {}
         mock_builder.build_all_fields.return_value = mock_builder.fields
@@ -1132,21 +1061,18 @@ class TestCertificateIssuanceForm:
             'uris': 'URIs (comma separated)',
         }
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
         form = CertificateIssuanceForm(profile)
         cleaned_data = {
             'dns_names': 'www.example.com, api.example.com',
             'ip_addresses': '192.168.1.1, 10.0.0.1',
-            'cn': 'test.com'  # Should be filtered out
+            'cn': 'test.com',  # Should be filtered out
         }
 
         san = form._build_san_from_form_data(cleaned_data)
 
-        assert san == {
-            'dns_names': ['www.example.com', 'api.example.com'],
-            'ip_addresses': ['192.168.1.1', '10.0.0.1']
-        }
+        assert san == {'dns_names': ['www.example.com', 'api.example.com'], 'ip_addresses': ['192.168.1.1', '10.0.0.1']}
 
     @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
@@ -1154,7 +1080,7 @@ class TestCertificateIssuanceForm:
         """Test building validity period from form data."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {}
         mock_builder.build_all_fields.return_value = mock_builder.fields
@@ -1166,13 +1092,13 @@ class TestCertificateIssuanceForm:
             'seconds': 'Seconds',
         }
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
         form = CertificateIssuanceForm(profile)
         cleaned_data = {
             'days': 365,
             'hours': 0,
-            'cn': 'test.com'  # Should be filtered out
+            'cn': 'test.com',  # Should be filtered out
         }
 
         validity = form._build_validity_from_form_data(cleaned_data)
@@ -1186,7 +1112,7 @@ class TestCertificateIssuanceForm:
         """Test get_certificate_builder method."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {}
         mock_builder.build_all_fields.return_value = mock_builder.fields
@@ -1199,18 +1125,15 @@ class TestCertificateIssuanceForm:
             'days': 'Days',
         }
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {'cn': {'required': True}},
             'ext': {},
-            'validity': {'days': {'required': True}}
+            'validity': {'days': {'required': True}},
         }
         form = CertificateIssuanceForm(profile)
-        form.cleaned_data = {
-            'cn': 'test.example.com',
-            'days': 365
-        }
+        form.cleaned_data = {'cn': 'test.example.com', 'days': 365}
         form.data = form.cleaned_data  # Make the form bound
 
         mock_builder_instance = Mock()
@@ -1227,24 +1150,24 @@ class TestCertificateIssuanceForm:
         """Test form handles allow='*' for subject fields."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'common_name': forms.CharField(required=True, initial='test'),
-            'organization_name': forms.CharField(required=False)
+            'organization_name': forms.CharField(required=False),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {
                 'allow': '*',
                 'common_name': {'required': True, 'value': 'test'},
-                'organization_name': {'required': False}
+                'organization_name': {'required': False},
             },
             'ext': {},
-            'validity': {}
+            'validity': {},
         }
         form = CertificateIssuanceForm(profile)
         form.fields = mock_builder.fields
@@ -1262,17 +1185,17 @@ class TestCertificateIssuanceForm:
         """Test form handles allow='*' for SAN fields."""
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
-        
+
         mock_builder = Mock()
         mock_builder.fields = {
             'dns_names': forms.CharField(required=True),
             'ip_addresses': forms.CharField(required=False),
             'rfc822_names': forms.CharField(),
-            'uris': forms.CharField()
+            'uris': forms.CharField(),
         }
         mock_builder.build_all_fields.return_value = mock_builder.fields
         mock_builder_class.return_value = mock_builder
-        
+
         profile = {
             'type': 'cert_profile',
             'subj': {},
@@ -1280,10 +1203,10 @@ class TestCertificateIssuanceForm:
                 'subject_alternative_name': {
                     'allow': '*',
                     'dns_names': {'required': True},
-                    'ip_addresses': {'required': False}
+                    'ip_addresses': {'required': False},
                 }
             },
-            'validity': {}
+            'validity': {},
         }
         form = CertificateIssuanceForm(profile)
         form.fields = mock_builder.fields

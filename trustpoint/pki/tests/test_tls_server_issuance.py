@@ -4,6 +4,7 @@
 """TLS server credential enrollment via EST and local Issuing CA."""
 
 import datetime as dt
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import pytest
@@ -14,11 +15,16 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from django.core.management import call_command
 
 from crypto.models import CryptoManagedKeyModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
 from pki.services.key_generation import generate_pending_credential
-from pki.services.tls_server_issuance import finalize_tls_server_enrollment, issue_tls_server_local
+from pki.services.tls_server_issuance import (
+    finalize_tls_server_enrollment,
+    issue_tls_server_local,
+    issue_tls_server_remote,
+)
 from pki.forms.truststores import TruststoreAddForm
 from pki.tests.managed_ca_helpers import create_managed_root_ca
 
@@ -76,6 +82,45 @@ def test_issue_tls_server_local_signs_with_local_ca() -> None:
         pending.get_private_key().public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
     )
     assert [c.subject for c in pending.get_certificate_chain()] == [ca_cert.subject]
+
+
+def test_issue_tls_server_remote_uses_external_est_configuration() -> None:
+    """An EST RA management CA forwards the TLS request using its stored enrollment settings."""
+    truststore = TruststoreModel.objects.create(
+        unique_name='remote-est-trust',
+        intended_usage=TruststoreModel.IntendedUsage.TLS,
+    )
+    config = NoOnboardingConfigModel.objects.create(
+        pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+        est_password='secret',
+        trust_store=truststore,
+    )
+    ca = CaModel.objects.create(
+        unique_name='External EST Management CA',
+        ca_type=CaModel.CaTypeChoice.REMOTE_EST_RA,
+        ca_role=CaModel.CaRole.MANAGEMENT,
+        remote_host='ca.example',
+        remote_port=8443,
+        remote_path='/.well-known/est/simpleenroll',
+        est_username='user',
+        no_onboarding_config=config,
+    )
+    profile = CertificateProfileModel.objects.get(unique_name='tls_server')
+    pending = _pending_credential()
+
+    with (
+        patch('pki.services.tls_server_issuance.enroll_est') as enroll,
+        patch('pki.services.tls_server_issuance.finalize_tls_server_enrollment') as finalize,
+    ):
+        enroll.return_value = (Mock(), [])
+        result = issue_tls_server_remote(pending, profile, CONTENT, ca)
+
+    context = enroll.call_args.args[0]
+    assert context.est_server_host == 'ca.example'
+    assert context.est_username == 'user'
+    assert context.est_server_truststore == truststore
+    finalize.assert_called_once()
+    assert result is finalize.return_value
 
 
 def test_finalize_tls_server_enrollment_attaches_certificate() -> None:

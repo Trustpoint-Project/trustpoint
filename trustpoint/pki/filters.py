@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """PKI filters."""
+
 from datetime import timedelta
 
 import django_filters
@@ -22,10 +23,7 @@ class CertificateFilter(django_filters.FilterSet):
     common_name = django_filters.CharFilter(
         label='Certificate',
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Search…')
-        })
+        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Search…')}),
     )
     status = django_filters.ChoiceFilter(
         label=_('Status'),
@@ -36,7 +34,7 @@ class CertificateFilter(django_filters.FilterSet):
             ('not_yet_valid', _('Not Yet Valid')),
         ),
         method='filter_status',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     expiry_window = django_filters.ChoiceFilter(
         label=_('Expires In'),
@@ -49,7 +47,7 @@ class CertificateFilter(django_filters.FilterSet):
             ('after_30_days', _('After 30 Days')),
         ),
         method='filter_expiry_window',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     is_self_signed = django_filters.ChoiceFilter(
         label=_('Self-Signed'),
@@ -58,25 +56,29 @@ class CertificateFilter(django_filters.FilterSet):
             ('false', _('No')),
         ),
         method='filter_is_self_signed',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     created_at_from = django_filters.DateFilter(
         field_name='created_at',
         label=_('Created from'),
         lookup_expr='date__gte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
     created_at_to = django_filters.DateFilter(
         field_name='created_at',
         label=_('Created to'),
         lookup_expr='date__lte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
 
     def filter_status(
@@ -91,8 +93,10 @@ class CertificateFilter(django_filters.FilterSet):
         now = timezone.now()
         conditions = certificate_health_conditions(as_of=now, expiry_days=0)
         condition = {
-            'ok': conditions['valid'], 'expired': conditions['expired'],
-            'revoked': conditions['revoked'], 'not_yet_valid': conditions['not_yet_valid'],
+            'ok': conditions['valid'],
+            'expired': conditions['expired'],
+            'revoked': conditions['revoked'],
+            'not_yet_valid': conditions['not_yet_valid'],
         }.get(value)
         if condition is not None:
             return queryset.filter(condition)
@@ -164,18 +168,16 @@ class TruststoreFilter(django_filters.FilterSet):
       * unique_name: case-insensitive substring match
       * intended_usage: exact match via dropdown
     """
+
     unique_name = django_filters.CharFilter(
         label='Truststore',
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Search…')
-        })
+        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Search…')}),
     )
     intended_usage = django_filters.ChoiceFilter(
         choices=TruststoreModel.IntendedUsage.choices,
         label='Intended Usage',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
 
     class Meta:
@@ -191,33 +193,39 @@ class DomainFilter(django_filters.FilterSet):
     unique_name = django_filters.CharFilter(
         label=_('Domain Name'),
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Search…'),
-        })
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'placeholder': _('Search…'),
+            }
+        ),
     )
     issuing_ca = django_filters.ModelChoiceFilter(
-        queryset=CaModel.objects.all(),
+        queryset=CaModel.objects.filter(ca_role=CaModel.CaRole.ISSUING),
         label=_('Issuing CA'),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     created_at_from = django_filters.DateFilter(
         field_name='created_at',
         label=_('Created from'),
         lookup_expr='date__gte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
     created_at_to = django_filters.DateFilter(
         field_name='created_at',
         label=_('Created to'),
         lookup_expr='date__lte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
 
     class Meta:
@@ -233,10 +241,12 @@ class CaFilter(django_filters.FilterSet):
     unique_name = django_filters.CharFilter(
         label=_('CA Name'),
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Search…'),
-        })
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'placeholder': _('Search…'),
+            }
+        ),
     )
     ca_type_group = django_filters.ChoiceFilter(
         label=_('Type'),
@@ -246,7 +256,7 @@ class CaFilter(django_filters.FilterSet):
             ('keyless', _('Keyless CA')),
         ),
         method='filter_ca_type_group',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     is_active = django_filters.ChoiceFilter(
         label=_('Status'),
@@ -255,7 +265,7 @@ class CaFilter(django_filters.FilterSet):
             ('false', _('Inactive')),
         ),
         method='filter_is_active',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
 
     def filter_ca_type_group(
@@ -267,16 +277,20 @@ class CaFilter(django_filters.FilterSet):
         """Filter CAs by display type group (CA / RA / Keyless)."""
         del name
         if value == 'ca':
-            return queryset.exclude(ca_type__in=[
-                CaModel.CaTypeChoice.KEYLESS,
-                CaModel.CaTypeChoice.REMOTE_EST_RA,
-                CaModel.CaTypeChoice.REMOTE_CMP_RA,
-            ])
+            return queryset.exclude(
+                ca_type__in=[
+                    CaModel.CaTypeChoice.KEYLESS,
+                    CaModel.CaTypeChoice.REMOTE_EST_RA,
+                    CaModel.CaTypeChoice.REMOTE_CMP_RA,
+                ]
+            )
         if value == 'ra':
-            return queryset.filter(ca_type__in=[
-                CaModel.CaTypeChoice.REMOTE_EST_RA,
-                CaModel.CaTypeChoice.REMOTE_CMP_RA,
-            ])
+            return queryset.filter(
+                ca_type__in=[
+                    CaModel.CaTypeChoice.REMOTE_EST_RA,
+                    CaModel.CaTypeChoice.REMOTE_CMP_RA,
+                ]
+            )
         if value == 'keyless':
             return queryset.filter(ca_type=CaModel.CaTypeChoice.KEYLESS)
         return queryset
@@ -308,7 +322,7 @@ class CrlFilter(django_filters.FilterSet):
     ca = django_filters.ModelChoiceFilter(
         queryset=CaModel.objects.all(),
         label=_('CA'),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     is_active = django_filters.ChoiceFilter(
         label=_('Status'),
@@ -317,25 +331,29 @@ class CrlFilter(django_filters.FilterSet):
             ('false', _('Inactive')),
         ),
         method='filter_is_active',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     this_update_from = django_filters.DateFilter(
         field_name='this_update',
         label=_('Updated from'),
         lookup_expr='date__gte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
     this_update_to = django_filters.DateFilter(
         field_name='this_update',
         label=_('Updated to'),
         lookup_expr='date__lte',
-        widget=forms.DateInput(attrs={
-            'class': 'form-control form-control-sm',
-            'type': 'date',
-        })
+        widget=forms.DateInput(
+            attrs={
+                'class': 'form-control form-control-sm',
+                'type': 'date',
+            }
+        ),
     )
 
     def filter_is_active(

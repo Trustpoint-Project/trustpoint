@@ -79,14 +79,18 @@ class AokiServiceMixin:
     @staticmethod
     def _get_matching_owner_credential(reference: IDevIDReferenceModel) -> CredentialModel | None:
         """Use the newest usable certificate that actually contains the matched reference."""
-        issued_credentials = reference.dev_owner_id.dev_owner_id_credentials.filter(
-            credential__certificate__isnull=False
+        references = (
+            IDevIDReferenceModel.objects.filter(idevid_ref=reference.idevid_ref)
+            .select_related('dev_owner_id__credential__certificate')
+            .order_by('-dev_owner_id__created_at')
         )
-        for issued in issued_credentials:
-            credential = issued.credential
+        for ref in references:
+            credential = ref.dev_owner_id.credential
+            if credential.certificate is None:
+                continue
             if not credential.private_key and not credential.managed_private_key_id:
                 continue
-            certificate = credential.certificate_or_error
+            certificate = credential.certificate
             if certificate.certificate_status != CertificateModel.CertificateStatus.OK:
                 continue
             try:

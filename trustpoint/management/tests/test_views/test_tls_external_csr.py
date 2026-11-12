@@ -1,4 +1,3 @@
-
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
@@ -70,12 +69,18 @@ class Wizard:
         response = self.request('tls-external-csr-truststore', credential.pk, 'post', {'truststore': truststore.pk})
         assert response.status_code == 302
         values = {
-            'common_name': 'server.example', 'organization_name': 'Example',
-            'organizational_unit_name': 'Operations', 'country_name': 'DE',
-            'state_or_province_name': 'BW', 'locality_name': 'Stuttgart',
-            'email_address': 'ops@example.com', 'dns_names': 'server.example, second.example',
-            'ip_addresses': '127.0.0.1, ::1', 'rfc822_names': 'ops@example.com',
-            'uris': 'urn:example:server', 'days': 10,
+            'common_name': 'server.example',
+            'organization_name': 'Example',
+            'organizational_unit_name': 'Operations',
+            'country_name': 'DE',
+            'state_or_province_name': 'BW',
+            'locality_name': 'Stuttgart',
+            'email_address': 'ops@example.com',
+            'dns_names': 'server.example, second.example',
+            'ip_addresses': '127.0.0.1, ::1',
+            'rfc822_names': 'ops@example.com',
+            'uris': 'urn:example:server',
+            'days': 10,
         }
         values.update(data or {})
         if profile is not None:
@@ -94,8 +99,11 @@ def ca_certificate(key, subject, issuer_key=None, issuer=None, path_length=None,
     now = datetime.now(UTC)
     signing_key = issuer_key or key
     return (
-        x509.CertificateBuilder().subject_name(subject).issuer_name(issuer or subject)
-        .public_key(key.public_key()).serial_number(x509.random_serial_number())
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer or subject)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=30))
         .not_valid_after(now + timedelta(days=-1 if expired else 365))
         .add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
@@ -122,9 +130,13 @@ def issue(csr, issuer, issuer_key, change=None):
     change = change or {}
     now = datetime.now(UTC)
     builder = (
-        x509.CertificateBuilder().subject_name(change.get('subject', csr.subject)).issuer_name(issuer.subject)
-        .public_key(change.get('key', csr.public_key())).serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(days=30)).not_valid_after(now + timedelta(days=change.get('days', 10)))
+        x509.CertificateBuilder()
+        .subject_name(change.get('subject', csr.subject))
+        .issuer_name(issuer.subject)
+        .public_key(change.get('key', csr.public_key()))
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=30))
+        .not_valid_after(now + timedelta(days=change.get('days', 10)))
         .add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
         .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_key.public_key()), critical=False)
     )
@@ -144,22 +156,32 @@ def issue(csr, issuer, issuer_key, change=None):
 
 
 def upload(wizard, credential, data):
-    return wizard.request('tls-external-csr', credential.pk, 'post', {
-        'certificate': SimpleUploadedFile('issued.cer', data),
-    })
+    return wizard.request(
+        'tls-external-csr',
+        credential.pk,
+        'post',
+        {
+            'certificate': SimpleUploadedFile('issued.cer', data),
+        },
+    )
 
 
 def test_method_selection_cards_share_existing_style():
     page = BeautifulSoup(render_to_string('management/tls/method_select.html'), 'html.parser')
     for route in (
-        'tls-add-file_import-pkcs12', 'tls-add-file_import-separate_files',
-        'tls-generate', 'tls-external-csr-key',
+        'tls-add-file_import-pkcs12',
+        'tls-add-file_import-separate_files',
+        'tls-external-csr-key',
+        'tls-local-key',
     ):
         option = page.select_one(f'a[href="{reverse(f"management:{route}")}"]')
         assert option.select_one('.card.h-100.shadow-sm') is not None
         assert option.select_one('.card-body.d-flex.flex-column') is not None
         assert option.select_one('p.text-muted') is not None
         assert option.select_one('.mt-auto .btn.btn-primary') is not None
+
+    for route in ('tls-generate', 'tls-request-est', 'tls-request-cmp'):
+        assert page.select_one(f'a[href="{reverse(f"management:{route}")}"]') is None
 
 
 def test_key_default_choices_and_capability_filter(wizard):
@@ -177,7 +199,14 @@ def test_key_default_choices_and_capability_filter(wizard):
     field = response.context_data['form'].fields['key_type']
     assert field.initial == 'ECC-SECP256R1'
     assert {value for value, label in field.choices} == {
-        'RSA-2048', 'RSA-3072', 'RSA-4096', 'ECC-SECP256R1', 'ECC-SECP384R1',
+        'RSA-2048',
+        'RSA-3072',
+        'RSA-4096',
+        'ECC-SECP256R1',
+        'ECC-SECP384R1',
+        'MLDSA-44',
+        'MLDSA-65',
+        'MLDSA-87',
     }
     with patch('pki.services.key_generation.get_active_backend_capability_report') as report:
         report.return_value.supports_key_spec.side_effect = lambda spec: getattr(spec, 'key_size', None) == 3072
@@ -204,9 +233,11 @@ def test_pending_key_and_csr_extensions(wizard, pki_chain, key_type):
     )
     for extension in (x509.BasicConstraints, x509.KeyUsage, x509.ExtendedKeyUsage, x509.SubjectAlternativeName):
         csr.extensions.get_extension_for_class(extension)
-    assert csr.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value == x509.ExtendedKeyUsage([
-        x509.ExtendedKeyUsageOID.SERVER_AUTH,
-    ])
+    assert csr.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value == x509.ExtendedKeyUsage(
+        [
+            x509.ExtendedKeyUsageOID.SERVER_AUTH,
+        ]
+    )
     assert csr.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)[0].value == 'Operations'
     state = wizard.session[f'tls_external_csr_{credential.pk}']
     assert json.loads(json.dumps(state)) == state
@@ -235,7 +266,10 @@ def test_certificate_content_matches_issuance_layout(wizard):
     form = page.select_one('#tls-external-csr-configuration-form')
     assert 'crl_distribution_point_uris' not in response.context_data['form'].fields
     assert [heading.get_text(strip=True) for heading in form.select('section h2')] == [
-        'Certificate Profile', 'Subject', 'Subject Alternative Names', 'Validity Period',
+        'Certificate Profile',
+        'Subject',
+        'Subject Alternative Names',
+        'Validity Period',
     ]
     assert len(form.select('section .tp-kvp-list')) == 4
     assert form.select_one('#id_cert_profile_select.form-select') is not None
@@ -253,11 +287,14 @@ def test_application_profiles_only_and_explicit_invalid_rejected(wizard, pki_cha
     default = response.context_data['cert_profile']
     assert default.unique_name == 'tls_server'
     other = CertificateProfileModel.objects.create(
-        unique_name='custom-tls', display_name='Custom TLS', profile_json=default.profile,
+        unique_name='custom-tls',
+        display_name='Custom TLS',
+        profile_json=default.profile,
         credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION,
     )
     domain = CertificateProfileModel.objects.create(
-        unique_name='domain-only', profile_json=default.profile,
+        unique_name='domain-only',
+        profile_json=default.profile,
         credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN,
     )
     response = wizard.request('tls-external-csr-content', credential.pk, query=f'?cert_profile_pk={other.pk}')
@@ -267,8 +304,13 @@ def test_application_profiles_only_and_explicit_invalid_rejected(wizard, pki_cha
     for value in ('invalid', '9999999', str(domain.pk)):
         for method in ('get', 'post'):
             with pytest.raises(Http404):
-                wizard.request('tls-external-csr-content', credential.pk, method, {'cert_profile_pk': value},
-                               query=f'?cert_profile_pk={value}' if method == 'get' else '')
+                wizard.request(
+                    'tls-external-csr-content',
+                    credential.pk,
+                    method,
+                    {'cert_profile_pk': value},
+                    query=f'?cert_profile_pk={value}' if method == 'get' else '',
+                )
     wizard.content(credential, pki_chain[3], profile=other)
     assert wizard.session[f'tls_external_csr_{credential.pk}']['profile_pk'] == other.pk
 
@@ -304,10 +346,25 @@ def test_finalizes_same_key_chain_inactive_and_visible(wizard, pki_chain, encodi
         wizard.request('tls-external-csr', credential.pk)
 
 
-@pytest.mark.parametrize('problem', [
-    'wrong_key', 'ca', 'untrusted', 'subject', 'extra_san', 'missing_san', 'different_san',
-    'bundle', 'malformed', 'expired', 'expired_issuer', 'path_length', 'ca_key_usage', 'critical_san',
-])
+@pytest.mark.parametrize(
+    'problem',
+    [
+        'wrong_key',
+        'ca',
+        'untrusted',
+        'subject',
+        'extra_san',
+        'missing_san',
+        'different_san',
+        'bundle',
+        'malformed',
+        'expired',
+        'expired_issuer',
+        'path_length',
+        'ca_key_usage',
+        'critical_san',
+    ],
+)
 def test_rejects_invalid_issued_leaf(wizard, pki_chain, problem):
     root, issuer, issuer_key, truststore = pki_chain
     credential = wizard.start()
@@ -320,9 +377,12 @@ def test_rejects_invalid_issued_leaf(wizard, pki_chain, problem):
     elif problem == 'subject':
         change['subject'] = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'wrong.example')])
     elif problem == 'extra_san':
-        change['san'] = x509.SubjectAlternativeName([
-            *csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value, x509.DNSName('extra.example'),
-        ])
+        change['san'] = x509.SubjectAlternativeName(
+            [
+                *csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value,
+                x509.DNSName('extra.example'),
+            ]
+        )
     elif problem == 'missing_san':
         change['missing_san'] = True
     elif problem == 'different_san':
@@ -340,14 +400,22 @@ def test_rejects_invalid_issued_leaf(wizard, pki_chain, problem):
         issuer = ca_certificate(issuer_key, issuer.subject, root_key, root.subject, expired=problem == 'expired_issuer')
         if problem == 'ca_key_usage':
             issuer = (
-                x509.CertificateBuilder().subject_name(issuer.subject).issuer_name(root.subject)
-                .public_key(issuer_key.public_key()).serial_number(x509.random_serial_number())
-                .not_valid_before(issuer.not_valid_before_utc).not_valid_after(issuer.not_valid_after_utc)
+                x509.CertificateBuilder()
+                .subject_name(issuer.subject)
+                .issuer_name(root.subject)
+                .public_key(issuer_key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(issuer.not_valid_before_utc)
+                .not_valid_after(issuer.not_valid_after_utc)
                 .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
-                .add_extension(x509.KeyUsage(True, False, False, False, False, False, False, False, False), critical=True)
+                .add_extension(
+                    x509.KeyUsage(True, False, False, False, False, False, False, False, False), critical=True
+                )
                 .sign(root_key, hashes.SHA256())
             )
-        new_store = TruststoreAddForm.save_trust_store('invalid-chain', TruststoreModel.IntendedUsage.TLS, [issuer, root])
+        new_store = TruststoreAddForm.save_trust_store(
+            'invalid-chain', TruststoreModel.IntendedUsage.TLS, [issuer, root]
+        )
         wizard.session[f'tls_external_csr_{credential.pk}']['truststore_pk'] = new_store.pk
     certificate = issue(csr, issuer, issuer_key, change)
     data = certificate.public_bytes(Encoding.PEM)
@@ -367,18 +435,28 @@ def test_rejects_invalid_issued_leaf(wizard, pki_chain, problem):
 def test_truststore_import_uses_existing_form(wizard, pki_chain):
     credential = wizard.start()
     root, issuer, issuer_key, truststore = pki_chain
-    response = wizard.request('tls-external-csr-truststore', credential.pk, 'post', {
-        'import_truststore': '1', 'unique_name': 'imported-tls',
-        'intended_usage': TruststoreModel.IntendedUsage.TLS,
-        'trust_store_file': SimpleUploadedFile('chain.pem', issuer.public_bytes(Encoding.PEM) + root.public_bytes(Encoding.PEM)),
-    })
+    response = wizard.request(
+        'tls-external-csr-truststore',
+        credential.pk,
+        'post',
+        {
+            'import_truststore': '1',
+            'unique_name': 'imported-tls',
+            'intended_usage': TruststoreModel.IntendedUsage.TLS,
+            'trust_store_file': SimpleUploadedFile(
+                'chain.pem', issuer.public_bytes(Encoding.PEM) + root.public_bytes(Encoding.PEM)
+            ),
+        },
+    )
     assert response.status_code == 302
     imported = TruststoreModel.objects.get(unique_name='imported-tls')
     response = wizard.request('tls-external-csr-truststore', credential.pk, query=f'?truststore_id={imported.pk}')
     assert response.context_data['form'].initial['truststore'] == str(imported.pk)
 
 
-@pytest.mark.parametrize('step', ['tls-external-csr-key', 'tls-external-csr-truststore', 'tls-external-csr-content', 'tls-external-csr'])
+@pytest.mark.parametrize(
+    'step', ['tls-external-csr-key', 'tls-external-csr-truststore', 'tls-external-csr-content', 'tls-external-csr']
+)
 @pytest.mark.parametrize('method', ['get', 'post'])
 @pytest.mark.parametrize('anonymous', [False, True])
 def test_all_steps_require_tls_permission(wizard, step, method, anonymous):
@@ -418,9 +496,16 @@ def test_ip_only_identity_is_fully_verified(wizard, pki_chain):
     profile.profile_json = definition
     profile.save()
     credential = wizard.start()
-    csr = wizard.content(credential, pki_chain[3], data={
-        'dns_names': '', 'ip_addresses': '192.0.2.10', 'rfc822_names': '', 'uris': '',
-    })
+    csr = wizard.content(
+        credential,
+        pki_chain[3],
+        data={
+            'dns_names': '',
+            'ip_addresses': '192.0.2.10',
+            'rfc822_names': '',
+            'uris': '',
+        },
+    )
     assert list(csr.extensions.get_extension_for_class(x509.SubjectAlternativeName).value) == [
         x509.IPAddress(ip_address('192.0.2.10')),
     ]

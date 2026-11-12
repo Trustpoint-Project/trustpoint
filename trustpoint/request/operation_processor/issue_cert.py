@@ -304,7 +304,11 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
 
         signature_suite = SignatureSuite.from_certificate(issuer_certificate)
         if not signature_suite.public_key_matches_signature_suite(public_key):
-            err_msg = 'Requested cert public key type does not match the CA signature suite.'
+            ca_key_type = signature_suite.public_key_info.public_key_algorithm_oid.verbose_name
+            err_msg = (
+                'Requested certificate public key type does not match the issuing CA key type. '
+                f'The issuing CA uses {ca_key_type}; choose a matching certificate key type.'
+            )
             raise ValueError(err_msg)
 
         hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm

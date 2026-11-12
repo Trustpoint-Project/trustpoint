@@ -1,0 +1,43 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'Create Self-Signed Management CA' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Generate the management CA key in the active crypto backend and sign its certificate with the default issuing CA profile.' %}
+        </p>
+    </div>
+
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'CA Details' %}</h2>
+                    <p class="mb-0 text-muted">
+                        {% trans 'The certificate subject identifies this CA as a self-signed management CA.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                <form id="self-signed-management-ca-form" method="post" autocomplete="off">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                </form>
+            </section>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-secondary">
+            {% trans 'Back' %}
+        </a>
+        <button type="submit" form="self-signed-management-ca-form" class="btn btn-primary">
+            {% trans 'Create Management CA' %}
+        </button>
+    </div>
+</div>
+{% endblock %}

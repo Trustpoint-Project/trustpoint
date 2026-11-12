@@ -127,10 +127,7 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
 
     def get_queryset(self) -> QuerySet[DomainModel]:
         """Return all domains with the issuing CA relationship prefetched."""
-        base_qs = (
-            DomainModel.objects
-            .select_related('organization', 'issuing_ca__credential__certificate')
-        )
+        base_qs = DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
         qs = self.apply_filters(base_qs)
         return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
 
@@ -139,8 +136,7 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         context = super().get_context_data(**kwargs)
         context['filter'] = getattr(self, 'filterset', None)
         context['filters_active'] = any(
-            self.request.GET.get(k)
-            for k in ('unique_name', 'issuing_ca', 'created_at_from', 'created_at_to')
+            self.request.GET.get(k) for k in ('unique_name', 'issuing_ca', 'created_at_from', 'created_at_to')
         )
         return context
 
@@ -161,7 +157,8 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         """
         form = super().get_form()
         form.fields['issuing_ca'].queryset = CaModel.objects.filter(  # type: ignore[attr-defined]
-            is_active=True
+            is_active=True,
+            ca_role=CaModel.CaRole.ISSUING,
         ).exclude(
             ca_type__in=[
                 CaModel.CaTypeChoice.AUTOGEN_ROOT,
@@ -229,11 +226,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         )
 
         context['profile_data'] = {
-            profile.id: {
-                'unique_name': profile.unique_name,
-                'alias': '',
-                'is_allowed': False
-            }
+            profile.id: {'unique_name': profile.unique_name, 'alias': '', 'is_allowed': False}
             for profile in CertificateProfileModel.objects.all()
         }
 
@@ -242,8 +235,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             context['profile_data'][profile_id]['alias'] = allowed_profile.alias
             context['profile_data'][profile_id]['is_allowed'] = True
 
-        domain_credential_profiles = list(CertificateProfileModel.objects.filter(
-            credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN))
+        domain_credential_profiles = list(
+            CertificateProfileModel.objects.filter(credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN)
+        )
         context['domain_credential_profiles'] = domain_credential_profiles
         context['current_domain_credential_profile_id'] = (
             domain.domain_credential_profile.id if domain.domain_credential_profile else None
@@ -301,11 +295,10 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             for alias_value, profile_name in rejected_aliases:
                 messages.warning(
                     request,
-                    _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
-                    'Please use an unique domain alias for each Certificate Profile.').format(
-                        alias=alias_value,
-                        profile=profile_name
-                    )
+                    _(
+                        'Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                        'Please use an unique domain alias for each Certificate Profile.'
+                    ).format(alias=alias_value, profile=profile_name),
                 )
 
             domain.save()
@@ -350,7 +343,6 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, AuditedBulkDeleteView):
         return super().get(request, *args, **kwargs)
 
 
-
 class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistrationForm]):
     """View to create a new DevID Registration."""
 
@@ -363,7 +355,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
         domain = self.get_domain()
-        context['domain'] =domain
+        context['domain'] = domain
         truststore_id = self.kwargs.get('truststore_id')
         if not truststore_id:
             truststore_id = self.request.GET.get('truststore_id')
@@ -533,6 +525,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         context['domain'] = domain
         return context
 
+
 class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdRegistration]):
     """View to select the protocol for IDevID enrollment."""
 
@@ -547,16 +540,16 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
 
         return context
 
+
 class CanManageDomains(BasePermission):
     """Allow only users permitted to manage domains."""
 
     def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage domains."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.has_perm(AppPermissions.MANAGE_DOMAINS)
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_DOMAINS)
         )
+
 
 @extend_schema(tags=['Domain'])
 @extend_schema_view(
@@ -565,7 +558,7 @@ class CanManageDomains(BasePermission):
     create=extend_schema(description='Create a domain.'),
     update=extend_schema(description='Update an existing domain.'),
     partial_update=extend_schema(description='Partially update an existing domain.'),
-    destroy=extend_schema(description='Delete a domain.')
+    destroy=extend_schema(description='Delete a domain.'),
 )
 class DomainViewSet(AuditedModelViewSet[DomainModel]):
     """ViewSet for managing Domain instances.

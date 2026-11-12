@@ -18,6 +18,7 @@ from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
     from cryptography import x509
+    from trustpoint_core.serializer import CredentialSerializer
 
     from devices.models import DeviceModel
     from pki.models.credential import CredentialModel  # noqa: F401
@@ -28,7 +29,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
     """Model for credentials and certificates issued to a device by the Trustpoint.
 
     Each instance must have a ``device`` FK set.  For credentials owned by a CA or
-    an OwnerCredential, use :class:`RemoteIssuedCredentialModel` instead.
+    a DevOwnerID, use :class:`RemoteIssuedCredentialModel` instead.
     """
 
     class IssuedCredentialType(models.IntegerChoices):
@@ -224,14 +225,6 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         null=True,
         blank=True,
     )
-    owner_credential = models.ForeignKey(
-        'pki.OwnerCredentialModel',
-        verbose_name=_('Owner Credential'),
-        on_delete=models.PROTECT,
-        related_name='remote_issued_credentials',
-        null=True,
-        blank=True,
-    )
     device = models.ForeignKey(
         'devices.DeviceModel',
         verbose_name=_('Device'),
@@ -266,20 +259,23 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         return self.certificate_profile.display_name or self.certificate_profile.unique_name
 
     def clean(self) -> None:
-        """Validate that exactly one owner (ca, owner_credential, or device) is set."""
-        owners = [self.ca_id, self.owner_credential_id, self.device_id]
+        """Validate that a credential has exactly one owner (ca or device) unless it is a DevOwnerID."""
+        if self.issued_credential_type == self.RemoteIssuedCredentialType.DEV_OWNER_ID:
+            if self.device_id is not None:
+                raise ValidationError(_('A DevOwnerID cannot belong to a device.'))
+            # Imported DevOwnerIDs have no issuance profile or management CA; managed ones require a profile.
+            if self.certificate_profile_id is None and self.ca_id is not None:
+                raise ValidationError(
+                    {'certificate_profile': _('A certificate profile is required for enrolled credentials.')}
+                )
+            return
+        owners = [self.ca_id, self.device_id]
         set_count = sum(1 for o in owners if o is not None)
         if set_count == 0:
-            raise ValidationError(_('One of ca, owner_credential, or device must be set.'))
+            raise ValidationError(_('One of ca or device must be set.'))
         if set_count > 1:
-            raise ValidationError(_('Only one of ca, owner_credential, or device may be set.'))
-        owner = self.owner_credential
-        imported = (
-            self.issued_credential_type == self.RemoteIssuedCredentialType.DEV_OWNER_ID
-            and owner is not None
-            and owner.owner_credential_type == owner.OwnerCredentialTypeChoice.LOCAL
-        )
-        if self.certificate_profile_id is None and not imported:
+            raise ValidationError(_('Only one of ca or device may be set.'))
+        if self.certificate_profile_id is None:
             raise ValidationError(
                 {'certificate_profile': _('A certificate profile is required for enrolled credentials.')}
             )
@@ -287,3 +283,64 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
     def pre_delete(self) -> None:
         """Delete the underlying credential (cascades back to this model)."""
         self.credential.delete()
+
+    @classmethod
+    def create_imported_dev_owner_id(
+        cls,
+        common_name: str,
+        credential_serializer: CredentialSerializer,
+    ) -> RemoteIssuedCredentialModel:
+        """Store an imported DevOwnerID and its IDevID SAN references."""
+        from cryptography import x509  # noqa: PLC0415
+
+        from pki.models.credential import CredentialModel, IDevIDReferenceModel  # noqa: PLC0415
+        from util.field import get_certificate_name  # noqa: PLC0415
+
+        # Extract the IDevID references from the SAN of the DevOwnerID certificate
+        # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
+        idevid_refs: set[str] = set()
+        owner_cert = credential_serializer.certificate
+        if not owner_cert:
+            err_msg = _('The provided credential is not a valid DevOwnerID; it does not contain a certificate.')
+            raise ValidationError(err_msg)
+        try:
+            san_extension = owner_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound as e:
+            err_msg = _('The provided certificate is not a valid DevOwnerID; it does not contain a SAN extension.')
+            raise ValidationError(err_msg) from e
+
+        for san in san_extension.value:
+            if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
+                idevid_refs.add(san.value)
+        if not idevid_refs:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid DevOwnerID; '
+                    'it does not contain a valid IDevID reference in the SAN.'
+                )
+            )
+
+        if not common_name:
+            common_name = get_certificate_name(owner_cert) or ''
+
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
+        )
+        dev_owner_id = cls.objects.create(
+            common_name=common_name,
+            issued_credential_type=cls.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            certificate_profile=None,
+            credential=credential_model,
+        )
+
+        # Link each reference to the certificate whose SAN contained it.
+        dev_owner_id_cert_model = credential_model.certificate
+        for idevid_ref in idevid_refs:
+            IDevIDReferenceModel.objects.create(
+                dev_owner_id=dev_owner_id,
+                idevid_ref=idevid_ref,
+                dev_owner_id_certificate=dev_owner_id_cert_model,
+            )
+
+        return dev_owner_id

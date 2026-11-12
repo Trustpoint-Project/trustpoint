@@ -19,10 +19,8 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
 
     common_name = serializers.SerializerMethodField()
     ca_type = serializers.CharField(read_only=True)
-    ca_type_display = serializers.CharField(
-        source='get_ca_type_display',
-        read_only=True
-    )
+    ca_type_display = serializers.CharField(source='get_ca_type_display', read_only=True)
+    ca_role_display = serializers.CharField(source='get_ca_role_display', read_only=True)
     last_crl_issued_at = serializers.SerializerMethodField()
     has_crl = serializers.SerializerMethodField()
 
@@ -36,6 +34,8 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
             'common_name',
             'ca_type',
             'ca_type_display',
+            'ca_role',
+            'ca_role_display',
             'is_active',
             'created_at',
             'updated_at',
@@ -48,6 +48,8 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
             'common_name',
             'ca_type',
             'ca_type_display',
+            'ca_role',
+            'ca_role_display',
             'is_active',
             'created_at',
             'updated_at',

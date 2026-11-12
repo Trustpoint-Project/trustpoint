@@ -18,12 +18,18 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 
 from crypto.domain.errors import CryptoError
-from management.forms import TlsAddRequestCmpForm, TlsAddRequestEstForm, TlsExternalCsrKeyForm, TlsLocalCaSelectForm
+from management.forms import TlsAddRequestCmpForm, TlsAddRequestEstForm, TlsLocalCaSelectForm
 from management.views.tls import TlsSettingsContextMixin
+from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CaModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
-from pki.services.tls_server_issuance import finalize_tls_server_enrollment, issue_tls_server_local
+from pki.services.management_issuance import key_type_for_management_ca
+from pki.services.tls_server_issuance import (
+    finalize_tls_server_enrollment,
+    issue_tls_server_local,
+    issue_tls_server_remote,
+)
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_cert_content_summary
 from pki.views.cmp_request import CmpRequestCertView, CmpRequestView
@@ -35,6 +41,8 @@ from pki.views.est_request import (
     EstRequestCertView,
     EstRequestView,
 )
+from request.clients import EstClientError
+from request.clients.cmp_client import CmpClientError
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -164,70 +172,53 @@ class TlsRequestCertCmpView(TlsSettingsContextMixin, CmpRequestCertView):
         return finalize_tls_server_enrollment(credential, issued_cert, extra_certs, truststore)
 
 
-# ===== Local Issuing CA issuance =============================================
+# ===== Management CA issuance ================================================
 
 
-class TlsLocalCaKeyView(TlsSettingsContextMixin, CertificateRequestWizardView[TlsExternalCsrKeyForm]):
-    """Generate the TLS key pair for the local Issuing CA flow."""
+class TlsLocalCaKeyView(TlsSettingsContextMixin, CertificateRequestWizardView[TlsLocalCaSelectForm]):
+    """Select the management CA and create the keypair for TLS certificate issuance."""
 
     pending_required = False
-    form_class = TlsExternalCsrKeyForm
+    form_class = TlsLocalCaSelectForm
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
     key_extractable = True
     back_url_name = 'management:tls-add-method_select'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the key-step heading and action label."""
+        """Add the CA selection heading."""
         return super().get_context_data(**kwargs) | {
-            'title': _('Generate TLS Key'),
-            'description': _('Generate a new keypair in Trustpoint for the TLS server credential.'),
-            'section_title': _('Key Type'),
-            'section_description': _('Select the cryptographic key type for the new TLS credential.'),
-            'submit_label': _('Generate Key'),
-        }
-
-    def form_valid(self, form: TlsExternalCsrKeyForm) -> HttpResponse:
-        """Create the managed key and proceed to the Issuing CA selection."""
-        try:
-            credential, scope = self._generate_pending_credential(form.cleaned_data['key_type'])
-        except (CryptoError, ValidationError) as exception:
-            form.add_error(None, str(exception))
-            return self.form_invalid(form)
-        self.request.session[f'{TLS_SCOPE}_{credential.pk}'] = {
-            'scope': scope,
-            'key_type': form.cleaned_data['key_type'],
-        }
-        return redirect('management:tls-local-ca', pk=credential.pk)
-
-
-class TlsLocalCaSelectView(TlsSettingsContextMixin, CertificateRequestWizardView[TlsLocalCaSelectForm]):
-    """Select a local Issuing CA hosted in Trustpoint."""
-
-    form_class = TlsLocalCaSelectForm
-    credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
-    session_scope = TLS_SCOPE
-    back_url_name = 'management:tls-add-method_select'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the Issuing CA selection heading and action label."""
-        return super().get_context_data(**kwargs) | {
-            'title': _('Select Issuing CA'),
-            'description': _('Choose the local Issuing CA that will sign the TLS server credential.'),
-            'section_title': _('Issuing CA'),
-            'section_description': _('Only active Issuing CAs hosted in Trustpoint are listed.'),
+            'title': _('Select Management CA'),
+            'description': _('Choose the management CA that will issue the TLS server certificate.'),
+            'section_title': _('Management CA'),
+            'section_description': _(
+                'The TLS key type is bound to the selected management CA. '
+                'Internal CAs sign the certificate in Trustpoint; external CAs forward the request to their PKI.'
+            ),
             'submit_label': _('Continue'),
         }
 
     def form_valid(self, form: TlsLocalCaSelectForm) -> HttpResponse:
-        """Store the selected Issuing CA for this credential's session."""
-        self.state['ca_pk'] = form.cleaned_data['issuing_ca'].pk
-        self.save_state()
-        return redirect('management:tls-local-content', pk=self.credential.pk)
+        """Create the managed key and proceed to certificate content definition."""
+        try:
+            key_type = key_type_for_management_ca(form.cleaned_data['issuing_ca'], TLS_KEY_TYPE_CHOICES)
+            credential, scope = self._generate_pending_credential(key_type)
+        except ValidationError as exception:
+            form.add_error(None, exception)
+            return self.form_invalid(form)
+        except CryptoError as exception:
+            form.add_error(None, str(exception))
+            return self.form_invalid(form)
+        self.request.session[f'{TLS_SCOPE}_{credential.pk}'] = {
+            'scope': scope,
+            'key_type': key_type,
+            'ca_pk': form.cleaned_data['issuing_ca'].pk,
+        }
+        return redirect('management:tls-local-content', pk=credential.pk)
 
 
 class TlsLocalCaContentView(TlsSettingsContextMixin, CertificateDefineCertContentView):
-    """Define the certificate content for the local Issuing CA issuance."""
+    """Define the certificate content for the selected management CA issuance."""
 
     credential_type = CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
     session_scope = TLS_SCOPE
@@ -240,7 +231,7 @@ class TlsLocalCaContentView(TlsSettingsContextMixin, CertificateDefineCertConten
 class TlsLocalCaRequestView(
     TlsSettingsContextMixin, CertificateRequestStateMixin, LoggerMixin, DetailView[CredentialModel]
 ):
-    """Review the local CA request, then issue the TLS certificate."""
+    """Review the request, then issue it locally or request it from the external management CA."""
 
     model = CredentialModel
     context_object_name = 'credential'
@@ -261,31 +252,32 @@ class TlsLocalCaRequestView(
         return super().get_object(queryset)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the selected Issuing CA and content summary to the review page."""
+        """Add the selected management CA and content summary to the review page."""
         content = self.state.get('content')
+        issuing_ca = get_object_or_404(CaModel, pk=self.state['ca_pk']) if self.state.get('ca_pk') else None
         return super().get_context_data(**kwargs) | {
             'has_cert_content': bool(content),
             'cert_content_summary': build_cert_content_summary(content) if content else {},
             'edit_url_name': 'management:tls-local-content',
-            'issuing_ca': (get_object_or_404(CaModel, pk=self.state['ca_pk']) if self.state.get('ca_pk') else None),
+            'issuing_ca': issuing_ca,
+            'remote_issuance': bool(issuing_ca and not issuing_ca.is_issuing_ca),
         }
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Issue the TLS certificate from the selected local Issuing CA."""
+        """Issue locally with an internal CA or request the certificate from an external CA."""
         credential = self.get_object()
         content = self.state.get('content')
         if not content:
             return redirect('management:tls-local-content', pk=credential.pk)
         try:
             profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
-            issue_tls_server_local(
-                credential,
-                profile,
-                content,
-                get_object_or_404(CaModel, pk=self.state['ca_pk']),
-            )
-        except (ValueError, KeyError, ProfileValidationError, CryptoError):
-            self.logger.exception('Failed to issue TLS certificate locally')
+            issuing_ca = get_object_or_404(CaModel, pk=self.state['ca_pk'])
+            if issuing_ca.is_issuing_ca:
+                issue_tls_server_local(credential, profile, content, issuing_ca)
+            else:
+                issue_tls_server_remote(credential, profile, content, issuing_ca)
+        except (ValueError, KeyError, ProfileValidationError, CryptoError, EstClientError, CmpClientError):
+            self.logger.exception('Failed to issue TLS certificate from the management CA')
             return redirect('management:tls-local-content', pk=credential.pk)
         del request.session[self.session_key]
         return redirect('management:tls')

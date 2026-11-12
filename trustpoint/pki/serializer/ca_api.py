@@ -131,6 +131,11 @@ class CaPkcs12Serializer(serializers.Serializer[Any]):
     unique_name = serializers.CharField(required=False, allow_blank=True, default='')
     pkcs12_file = serializers.FileField(write_only=True)
     pkcs12_password = serializers.CharField(required=False, allow_blank=True, write_only=True, default='')
+    ca_role = serializers.ChoiceField(
+        choices=CaModel.CaRole.choices,
+        required=False,
+        default=CaModel.CaRole.ISSUING,
+    )
 
 
 class CaRemoteSerializer(serializers.Serializer[Any]):
@@ -145,6 +150,11 @@ class CaRemoteSerializer(serializers.Serializer[Any]):
     est_password = serializers.CharField(required=False, allow_blank=True, write_only=True, trim_whitespace=False)
     cmp_shared_secret = serializers.CharField(required=False, allow_blank=True, write_only=True, trim_whitespace=False)
     is_ra_mode = serializers.BooleanField(default=False)
+    ca_role = serializers.ChoiceField(
+        choices=CaModel.CaRole.choices,
+        required=False,
+        default=CaModel.CaRole.ISSUING,
+    )
 
 
 class CaExternalCsrSerializer(serializers.Serializer[Any]):
@@ -152,6 +162,11 @@ class CaExternalCsrSerializer(serializers.Serializer[Any]):
 
     unique_name = serializers.CharField(max_length=256)
     key_type = serializers.CharField()
+    ca_role = serializers.ChoiceField(
+        choices=CaModel.CaRole.choices,
+        required=False,
+        default=CaModel.CaRole.ISSUING,
+    )
 
 
 class CaTruststoreSerializer(serializers.Serializer[Any]):

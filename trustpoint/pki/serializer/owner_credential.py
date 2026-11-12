@@ -16,78 +16,41 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from onboarding.enums import NoOnboardingPkiProtocol, OnboardingPkiProtocol, OnboardingProtocol
-from onboarding.models import NoOnboardingConfigModel, OnboardingConfigModel
-from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES
-from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
+from pki.models import RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.services import credential_upload as uploads
 from pki.util.san import SAN_FIELDS, SanValidationError, normalize_san_values
-from util.field import UniqueNameValidator
 
-_KEY_TYPE_CHOICES = [value for value, _label in OWNER_CREDENTIAL_KEY_TYPE_CHOICES]
 
-class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel]):
-    """Read-only serializer for OwnerCredentialModel instances."""
+class OwnerCredentialSerializer(serializers.ModelSerializer[RemoteIssuedCredentialModel]):
+    """Read-only serializer for DevOwnerID credential rows."""
 
-    owner_credential_type_display = serializers.CharField(
-        source='get_owner_credential_type_display',
-        read_only=True,
-    )
-    has_valid_domain_credential = serializers.BooleanField(read_only=True)
-    truststore_id = serializers.SerializerMethodField()
     devownerid_certificate_pem = serializers.SerializerMethodField()
 
     class Meta:
         """Metadata for OwnerCredentialSerializer."""
 
-        model = OwnerCredentialModel
+        model = RemoteIssuedCredentialModel
         fields: ClassVar[list[str]] = [
             'id',
-            'unique_name',
-            'owner_credential_type',
-            'owner_credential_type_display',
-            'remote_host',
-            'remote_port',
-            'remote_path',
-            'remote_path_domain_credential',
-            'est_username',
-            'key_type',
-            'has_valid_domain_credential',
-            'truststore_id',
+            'common_name',
+            'ca',
             'devownerid_certificate_pem',
             'created_at',
         ]
         read_only_fields: ClassVar[list[str]] = fields
 
-    def get_truststore_id(self, obj: OwnerCredentialModel) -> int | None:
-        """Return the associated TLS truststore id, if any."""
-        if obj.no_onboarding_config and obj.no_onboarding_config.trust_store_id:
-            return obj.no_onboarding_config.trust_store_id
-        if obj.onboarding_config and obj.onboarding_config.trust_store_id:
-            return obj.onboarding_config.trust_store_id
-        return None
-
-    def get_devownerid_certificate_pem(self, obj: OwnerCredentialModel) -> str | None:
+    def get_devownerid_certificate_pem(self, obj: RemoteIssuedCredentialModel) -> str | None:
         """Return the PEM-encoded DevOwnerID certificate, or None if not yet issued."""
-        issued = obj.dev_owner_id_credential
-        if issued is None:
-            return None
-        cert = issued.credential.certificate
+        cert = obj.credential.certificate
         if cert is None:
             return None
         return cert.cert_pem
 
-class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
-    """Serializer for creating an OwnerCredential via file import (PEM files)."""
 
-    unique_name = serializers.CharField(
-        max_length=100,
-        required=False,
-        allow_blank=True,
-        validators=[UniqueNameValidator()],
-        help_text='Optional unique name for the DevOwnerID.',
-    )
+class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
+    """Serializer for creating a DevOwnerID via file import (PEM files)."""
+
     certificate = serializers.FileField(
         help_text='DevOwnerID certificate file (.pem / .cer / .der / .p7b / .p7c).',
     )
@@ -109,7 +72,8 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         """Parse bounded private-key input and retain DRF field-level errors."""
         try:
             data = uploads.read_credential_upload(
-                attrs.get('private_key_file'), kind=uploads.CredentialFileKind.PRIVATE_KEY,
+                attrs.get('private_key_file'),
+                kind=uploads.CredentialFileKind.PRIVATE_KEY,
             )
             password = uploads.encode_upload_password(attrs.get('private_key_file_password'))
             return uploads.parse_private_key(data, password)
@@ -147,15 +111,12 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         cert_in_db = CertificateModel.get_cert_by_sha256_fingerprint(fingerprint)
         if not cert_in_db:
             return
-        dup_qs = OwnerCredentialModel.objects.filter(
-            remote_issued_credentials__credential__certificate=cert_in_db,
-            remote_issued_credentials__issued_credential_type=(
-                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
-            ),
-        )
-        existing = dup_qs.first()
+        existing = RemoteIssuedCredentialModel.objects.filter(
+            credential__certificate=cert_in_db,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+        ).first()
         if existing is not None:
-            msg = f'DevOwnerID "{existing.unique_name}" already uses this certificate.'
+            msg = f'DevOwnerID "{existing.common_name}" already uses this certificate.'
             raise serializers.ValidationError({'certificate': msg})
 
     def _parse_chain(self, attrs: dict[str, Any]) -> CertificateCollectionSerializer | None:
@@ -167,27 +128,21 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
             data = uploads.read_credential_upload(upload, kind=uploads.CredentialFileKind.CHAIN)
             return uploads.parse_certificate_chain(data)
         except uploads.CredentialUploadError as exc:
-            msg = 'Certificate chain file is too large, max. 256 kiB.' if (
-                exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE
-            ) else 'Failed to parse the certificate chain.'
+            msg = (
+                'Certificate chain file is too large, max. 256 kiB.'
+                if (exc.code == uploads.CredentialUploadErrorCode.TOO_LARGE)
+                else 'Failed to parse the certificate chain.'
+            )
             raise serializers.ValidationError({'certificate_chain': msg}) from exc
 
-    def _resolve_unique_name(
-        self, attrs: dict[str, Any], certificate_serializer: CertificateSerializer
-    ) -> str:
-        """Derive and validate the unique name for the new DevOwnerID."""
-        unique_name: str = attrs.get('unique_name', '')
-        if not unique_name:
-            from util.field import get_certificate_name  # noqa: PLC0415
-            unique_name = get_certificate_name(certificate_serializer.as_crypto()) or ''
-        if not unique_name:
-            raise serializers.ValidationError(
-                {'unique_name': 'Could not derive a unique name from the certificate.'}
-            )
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            msg = f'An owner credential with name "{unique_name}" already exists.'
-            raise serializers.ValidationError({'unique_name': msg})
-        return unique_name
+    def _resolve_common_name(self, certificate_serializer: CertificateSerializer) -> str:
+        """Derive the DevOwnerID display name from the certificate."""
+        from util.field import get_certificate_name  # noqa: PLC0415
+
+        common_name = get_certificate_name(certificate_serializer.as_crypto()) or ''
+        if not common_name:
+            raise serializers.ValidationError({'certificate': 'Could not derive a common name from the certificate.'})
+        return common_name
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Parse uploaded files and build a CredentialSerializer."""
@@ -195,9 +150,9 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         certificate_serializer = self._parse_certificate(attrs)
         self._check_duplicate_certificate(certificate_serializer)
         chain_serializer = self._parse_chain(attrs)
-        unique_name = self._resolve_unique_name(attrs, certificate_serializer)
+        common_name = self._resolve_common_name(certificate_serializer)
 
-        attrs['_unique_name'] = unique_name
+        attrs['_common_name'] = common_name
         attrs['_credential_serializer'] = CredentialSerializer.from_serializers(
             private_key_serializer=private_key_serializer,
             certificate_serializer=certificate_serializer,
@@ -205,197 +160,17 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         )
         return attrs
 
-    def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
+    def create(self, validated_data: dict[str, Any]) -> RemoteIssuedCredentialModel:
         """Persist the DevOwnerID from file import."""
         try:
-            return OwnerCredentialModel.create_new_owner_credential(
-                unique_name=validated_data['_unique_name'],
+            return RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+                common_name=validated_data['_common_name'],
                 credential_serializer=validated_data['_credential_serializer'],
             )
         except DjangoValidationError as exc:
             errors = exc.message_dict if hasattr(exc, 'message_dict') else exc.messages
             raise serializers.ValidationError(errors) from exc
 
-class OwnerCredentialEstSerializer(serializers.Serializer[Any]):
-    """Validate common owner-credential names and EST truststore references."""
-
-    def validate_unique_name(self, value: str) -> str:
-        """Validate that the unique name is not already in use."""
-        if value and OwnerCredentialModel.objects.filter(unique_name=value).exists():
-            msg = f'An owner credential with name "{value}" already exists.'
-            raise serializers.ValidationError(msg)
-        return value
-
-    def validate_truststore_id(self, value: int | None) -> int | None:
-        """Validate that the truststore exists if provided."""
-        if value is not None:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-            if not TruststoreModel.objects.filter(pk=value).exists():
-                msg = f'Truststore with id {value} does not exist.'
-                raise serializers.ValidationError(msg)
-        return value
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Derive unique_name if not provided."""
-        unique_name = attrs.get('unique_name') or ''
-        if not unique_name:
-            host = attrs['remote_host']
-            candidate = host
-            counter = 1
-            while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-                candidate = f'{host}-{counter}'
-                counter += 1
-            unique_name = candidate
-        attrs['_unique_name'] = unique_name
-        return attrs
-
-
-class OwnerCredentialEstBasicAuthSerializer(OwnerCredentialEstSerializer):
-    """Serializer for creating an OwnerCredential via EST with Basic Auth (username/password)."""
-
-    unique_name = serializers.CharField(
-        max_length=100,
-        required=False,
-        allow_blank=True,
-        validators=[UniqueNameValidator()],
-        help_text='Optional unique name.',
-    )
-    remote_host = serializers.CharField(
-        max_length=253,
-        help_text='Hostname or IP of the remote EST server.',
-    )
-    remote_port = serializers.IntegerField(
-        default=443,
-        min_value=1,
-        max_value=65535,
-        help_text='Port of the remote EST server.',
-    )
-    remote_path = serializers.CharField(
-        max_length=255,
-        default='/.well-known/est/simpleenroll',
-        help_text='EST enrollment path.',
-    )
-    est_username = serializers.CharField(
-        max_length=128,
-        help_text='EST Basic Auth username.',
-    )
-    est_password = serializers.CharField(
-        max_length=128,
-        write_only=True,
-        help_text='EST Basic Auth password.',
-    )
-    key_type = serializers.ChoiceField(
-        choices=_KEY_TYPE_CHOICES,
-        default='ECC-SECP256R1',
-        help_text='Key type for the generated key pair.',
-    )
-    truststore_id = serializers.IntegerField(
-        required=False,
-        allow_null=True,
-        help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
-    )
-
-    def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
-        """Create an OwnerCredentialModel with EST Basic Auth config."""
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-
-        no_onboarding_config = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=validated_data['est_password'],
-        )
-        truststore_id = validated_data.get('truststore_id')
-        if truststore_id:
-            no_onboarding_config.trust_store = TruststoreModel.objects.get(pk=truststore_id)
-        no_onboarding_config.save()
-
-        return OwnerCredentialModel.objects.create(
-            unique_name=validated_data['_unique_name'],
-            no_onboarding_config=no_onboarding_config,
-            remote_host=validated_data['remote_host'],
-            remote_port=validated_data['remote_port'],
-            remote_path=validated_data['remote_path'],
-            est_username=validated_data['est_username'],
-            key_type=validated_data.get('key_type', 'ECC-SECP256R1'),
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST,
-        )
-
-class OwnerCredentialEstMtlsSerializer(OwnerCredentialEstSerializer):
-    """Serializer for creating an OwnerCredential via EST with IDevID-based mTLS onboarding."""
-
-    unique_name = serializers.CharField(
-        max_length=100,
-        required=False,
-        allow_blank=True,
-        validators=[UniqueNameValidator()],
-        help_text='Optional unique name.',
-    )
-    remote_host = serializers.CharField(
-        max_length=253,
-        help_text='Hostname or IP of the remote EST server.',
-    )
-    remote_port = serializers.IntegerField(
-        default=443,
-        min_value=1,
-        max_value=65535,
-        help_text='Port of the remote EST server.',
-    )
-    remote_path = serializers.CharField(
-        max_length=255,
-        default='/.well-known/est/simpleenroll',
-        help_text='EST enrollment path for DevOwnerID.',
-    )
-    remote_path_domain_credential = serializers.CharField(
-        max_length=255,
-        default='/.well-known/est/simpleenroll',
-        help_text='EST enrollment path for Domain Credential.',
-    )
-    est_username = serializers.CharField(
-        max_length=128,
-        help_text='EST username.',
-    )
-    est_password = serializers.CharField(
-        max_length=128,
-        write_only=True,
-        help_text='EST password.',
-    )
-    key_type = serializers.ChoiceField(
-        choices=_KEY_TYPE_CHOICES,
-        default='ECC-SECP256R1',
-        help_text='Key type for the generated key pair.',
-    )
-    truststore_id = serializers.IntegerField(
-        required=False,
-        allow_null=True,
-        help_text='Optional ID of a TLS truststore to verify the EST server certificate.',
-    )
-
-    def create(self, validated_data: dict[str, Any]) -> OwnerCredentialModel:
-        """Create an OwnerCredentialModel with EST onboarding config."""
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-
-        onboarding_config = OnboardingConfigModel(
-            pki_protocols=OnboardingPkiProtocol.EST,
-            onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
-            est_password=validated_data['est_password'],
-        )
-        truststore_id = validated_data.get('truststore_id')
-        if truststore_id:
-            onboarding_config.trust_store = TruststoreModel.objects.get(pk=truststore_id)
-        onboarding_config.save()
-
-        return OwnerCredentialModel.objects.create(
-            unique_name=validated_data['_unique_name'],
-            onboarding_config=onboarding_config,
-            remote_host=validated_data['remote_host'],
-            remote_port=validated_data['remote_port'],
-            remote_path=validated_data['remote_path'],
-            remote_path_domain_credential=validated_data.get(
-                'remote_path_domain_credential', '/.well-known/est/simpleenroll'
-            ),
-            est_username=validated_data['est_username'],
-            key_type=validated_data.get('key_type', 'ECC-SECP256R1'),
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
-        )
 
 class CertificateIssuanceContentSerializer(serializers.Serializer[Any]):
     """Serializer for the certificate subject / SAN / validity fields used in cert request actions."""
@@ -414,18 +189,12 @@ class CertificateIssuanceContentSerializer(serializers.Serializer[Any]):
     locality_name = serializers.CharField(required=False, allow_blank=True)
     email_address = serializers.CharField(required=False, allow_blank=True)
 
-    dns_names = serializers.CharField(
-        required=False, allow_blank=True, help_text='Comma-separated DNS names.'
-    )
-    ip_addresses = serializers.CharField(
-        required=False, allow_blank=True, help_text='Comma-separated IP addresses.'
-    )
+    dns_names = serializers.CharField(required=False, allow_blank=True, help_text='Comma-separated DNS names.')
+    ip_addresses = serializers.CharField(required=False, allow_blank=True, help_text='Comma-separated IP addresses.')
     rfc822_names = serializers.CharField(
         required=False, allow_blank=True, help_text='Comma-separated RFC 822 email addresses.'
     )
-    uris = serializers.CharField(
-        required=False, allow_blank=True, help_text='Comma-separated URIs.'
-    )
+    uris = serializers.CharField(required=False, allow_blank=True, help_text='Comma-separated URIs.')
 
     days = serializers.IntegerField(required=False, allow_null=True, min_value=0)
     hours = serializers.IntegerField(required=False, allow_null=True, min_value=0)

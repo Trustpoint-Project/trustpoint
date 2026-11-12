@@ -13,12 +13,17 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from django.core.management import call_command
 from django.test import RequestFactory
 from django.urls import resolve, reverse
+from trustpoint_core.oid import PublicKeyAlgorithmOid, PublicKeyInfo
 
 from crypto.models import CryptoManagedKeyModel
+from management.forms import TlsLocalCaSelectForm
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.forms.truststores import TruststoreAddForm
 from pki.models import CaModel, CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services.management_issuance import key_type_for_management_ca
 from pki.tests.managed_ca_helpers import create_managed_root_ca
+from pki.util.x509 import CertificateGenerator
 
 pytestmark = pytest.mark.django_db
 
@@ -59,10 +64,49 @@ def _local_ca(unique_name: str) -> CaModel:
         credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
         managed_key=CryptoManagedKeyModel.objects.get(pk=ca_key.managed_key_ref.id),
     )
-    ca = CaModel(unique_name=unique_name, credential=credential, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT)
+    ca = CaModel(
+        unique_name=unique_name,
+        credential=credential,
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
+        ca_role=CaModel.CaRole.MANAGEMENT,
+    )
     ca.save()
     ca.chain_truststore = CaModel._create_chain_truststore(ca)  # noqa: SLF001
     ca.save(update_fields=['chain_truststore'])
+    return ca
+
+
+def _issuing_ca(unique_name: str) -> CaModel:
+    ca_cert, ca_key = create_managed_root_ca(unique_name)
+    return CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=ca_cert,
+        private_key=ca_key,
+        chain=[],
+        unique_name=unique_name,
+    )
+
+
+def _remote_ra_ca(unique_name: str, truststore: TruststoreModel) -> CaModel:
+    config = NoOnboardingConfigModel(
+        pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+        est_password='secret',
+        trust_store=truststore,
+    )
+    config.save()
+    ca = CaModel(
+        unique_name=unique_name,
+        ca_type=CaModel.CaTypeChoice.REMOTE_EST_RA,
+        ca_role=CaModel.CaRole.MANAGEMENT,
+        remote_host='ca.example',
+        remote_port=8443,
+        remote_path='/.well-known/est/simpleenroll',
+        est_username='user',
+        no_onboarding_config=config,
+    )
+    ca.save()
+    ca.certificate = truststore.truststoreordermodel_set.order_by('order').first().certificate
+    ca.chain_truststore = truststore
+    ca.save(update_fields=['certificate', 'chain_truststore'])
     return ca
 
 
@@ -104,15 +148,14 @@ EST_REQUEST = {
 
 
 def test_local_ca_flow_issues_tls_credential() -> None:
-    """Key -> CA select -> content -> request issues a TLS credential signed by the local CA."""
+    """CA select -> content -> request issues a TLS credential signed by the management CA."""
     ca = _local_ca('Test Root CA')
     client = Client()
 
-    pk = client.post_key('tls-local-key')
-
-    response = client.request('tls-local-ca', pk=pk, method='post', data={'issuing_ca': ca.pk})
+    response = client.request('tls-local-key', method='post', data={'issuing_ca': ca.pk})
     assert response.status_code == 302
     assert resolve(response.url).view_name == 'management:tls-local-content'
+    pk = resolve(response.url).kwargs['pk']
 
     response = client.request('tls-local-content', pk=pk)
     response.render()
@@ -128,6 +171,43 @@ def test_local_ca_flow_issues_tls_credential() -> None:
     credential = CredentialModel.objects.get(pk=pk)
     assert credential.certificate is not None
     assert credential.get_certificate().issuer == ca.get_certificate().subject
+
+
+def test_ca_selection_lists_only_management_cas() -> None:
+    """Endpoint issuing CAs are not selectable for TLS server certificates."""
+    management_ca = _local_ca('TLS Management CA')
+    _issuing_ca('TLS Endpoint CA')
+
+    form = TlsLocalCaSelectForm()
+
+    assert list(form.fields['issuing_ca'].queryset) == [management_ca]
+    assert 'key_type' not in form.fields
+
+
+def test_key_type_is_bound_to_an_mldsa_management_ca() -> None:
+    """ML-DSA management CAs get a matching ML-DSA TLS key type."""
+    ca = Mock()
+    ca.public_key_info = PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_65)
+
+    assert key_type_for_management_ca(ca) == 'MLDSA-65'
+
+
+def test_remote_management_ca_requests_certificate_from_external_pki() -> None:
+    """An RA-type management CA forwards the TLS request instead of signing locally."""
+    truststore = _truststore('ra-est-tls')
+    ca = _remote_ra_ca('External TLS Management CA', truststore)
+    client = Client()
+
+    response = client.request('tls-local-key', method='post', data={'issuing_ca': ca.pk})
+    pk = resolve(response.url).kwargs['pk']
+    client.request('tls-local-content', pk=pk, method='post', data=CONTENT)
+
+    with patch('management.views.tls_issuance.issue_tls_server_remote') as remote_issue:
+        response = client.request('tls-local-request', pk=pk, method='post')
+
+    assert response.status_code == 302
+    remote_issue.assert_called_once()
+    assert remote_issue.call_args.args[3] == ca
 
 
 def test_est_flow_enrolls_via_service() -> None:
@@ -176,13 +256,16 @@ def test_est_request_page_renders_without_content() -> None:
 
 
 def test_method_select_lists_new_methods() -> None:
-    """The add-method page exposes the EST and local CA entry points."""
+    """The add-method page exposes CSR and management CA entry points, not legacy enrollment."""
     client = Client()
     response = client.request('tls-add-method_select')
     response.render()
     content = response.content.decode()
-    assert reverse('management:tls-request-est') in content
+    assert reverse('management:tls-external-csr-key') in content
     assert reverse('management:tls-local-key') in content
+    assert reverse('management:tls-request-est') not in content
+    assert reverse('management:tls-request-cmp') not in content
+    assert reverse('management:tls-generate') not in content
 
 
 def test_request_est_page_renders_help_texts() -> None:

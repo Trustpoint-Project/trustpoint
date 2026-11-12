@@ -364,7 +364,8 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
         serializer.is_valid(raise_exception=True)
         values = dict(serializer.validated_data)
         file = values.pop('pkcs12_file')
-        form = validated_form(ApiPkcs12Form(values, MultiValueDict({'pkcs12_file': [file]})))
+        ca_role = values.pop('ca_role', CaModel.CaRole.ISSUING)
+        form = validated_form(ApiPkcs12Form(values, MultiValueDict({'pkcs12_file': [file]}), ca_role=ca_role))
         return self._created(form.created_ca)
 
     def _configure_remote(self, request: Request, protocol: str) -> Response:
@@ -373,11 +374,12 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
         serializer.is_valid(raise_exception=True)
         values = dict(serializer.validated_data)
         is_ra_mode = values.pop('is_ra_mode')
+        ca_role = values.pop('ca_role', CaModel.CaRole.ISSUING)
         form_class = IssuingCaAddRequestEstForm if protocol == 'est' else IssuingCaAddRequestCmpForm
         values['ca_type'] = (
             CaModel.CaTypeChoice.REMOTE_ISSUING_EST if protocol == 'est' else CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         )
-        form = validated_form(form_class(values))
+        form = validated_form(form_class(values, ca_role=ca_role))
         return self._created(form.save(is_ra_mode=is_ra_mode))
 
     @extend_schema(request=CaRemoteSerializer, responses={201: CaSerializer})
@@ -401,8 +403,10 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
         """Create a managed key for an externally signed issuing CA."""
         serializer = CaExternalCsrSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        values = {**serializer.validated_data, 'ca_type': CaModel.CaTypeChoice.REMOTE_ISSUING_CSR}
-        form = validated_form(IssuingCaAddRequestExternalCsrForm(values))
+        values = dict(serializer.validated_data)
+        ca_role = values.pop('ca_role', CaModel.CaRole.ISSUING)
+        values['ca_type'] = CaModel.CaTypeChoice.REMOTE_ISSUING_CSR
+        form = validated_form(IssuingCaAddRequestExternalCsrForm(values, ca_role=ca_role))
         return self._created(form.save())
 
     @extend_schema(request=CaCrlSettingsSerializer, responses=CaSerializer)

@@ -175,7 +175,9 @@ class TestCsrBuilderBuildExtensions:
 class TestCsrBuilderProcessOperation:
     """Tests for CsrBuilder.process_operation and get_csr."""
 
-    def _make_context(self, profile: bool = True, data: dict | None = None, with_key: bool = True) -> EstCertificateRequestContext:
+    def _make_context(
+        self, profile: bool = True, data: dict | None = None, with_key: bool = True
+    ) -> EstCertificateRequestContext:
         ctx = EstCertificateRequestContext()
         ctx.certificate_profile_model = Mock() if profile else None
         ctx.validated_request_data = data if data is not None else {'subject': {'common_name': 'dev'}}
@@ -192,6 +194,7 @@ class TestCsrBuilderProcessOperation:
     def test_wrong_context_type_raises_type_error(self) -> None:
         """Non-BaseCertificateRequestContext raises TypeError."""
         from request.request_context import BaseRequestContext
+
         ctx = Mock(spec=BaseRequestContext)
         with pytest.raises(TypeError, match='CSR building requires'):
             CsrBuilder().process_operation(ctx)
@@ -222,6 +225,20 @@ class TestCsrBuilderProcessOperation:
         builder.process_operation(ctx)
         csr = builder.get_csr()
         assert isinstance(csr, x509.CertificateSigningRequest)
+
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_valid_context_builds_mldsa_csr(self) -> None:
+        """ML-DSA CSR signing uses algorithm=None instead of an explicit hash."""
+        assert mldsa is not None
+        ctx = self._make_context()
+        cred = Mock()
+        cred.get_private_key.return_value = mldsa.MLDSA44PrivateKey.generate()
+        ctx.owner_credential = cred
+
+        builder = CsrBuilder()
+        builder.process_operation(ctx)
+
+        assert isinstance(builder.get_csr(), x509.CertificateSigningRequest)
 
     def test_get_csr_before_build_raises_value_error(self) -> None:
         """Calling get_csr() before process_operation() raises ValueError."""
@@ -416,9 +433,11 @@ class TestCertificateRevocationProcessor:
         ca = ctx.domain.get_issuing_ca_or_value_error.return_value
         ca.get_credential.return_value = Mock()
 
-        with patch('request.operation_processor.revoke_cert.resolve_revocation_ca', return_value=ca), \
-            patch('request.operation_processor.revoke_cert.revoke_certificates') as revoke, \
-            patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit:
+        with (
+            patch('request.operation_processor.revoke_cert.resolve_revocation_ca', return_value=ca),
+            patch('request.operation_processor.revoke_cert.revoke_certificates') as revoke,
+            patch('request.operation_processor.revoke_cert.AuditLog.create_entry') as audit,
+        ):
             CertificateRevocationProcessor().process_operation(ctx)
 
         assert ctx.issuer_credential is ca.get_credential.return_value
@@ -432,7 +451,8 @@ class TestCertificateRevocationProcessor:
 
     def test_local_ca_revocation_rejects_already_revoked_certificate(self) -> None:
         ctx = CmpRevocationRequestContext(
-            domain=Mock(issuing_ca=Mock()), device=Mock(common_name='device'),
+            domain=Mock(issuing_ca=Mock()),
+            device=Mock(common_name='device'),
             credential_to_revoke=Mock(),
         )
         ctx.domain.get_issuing_ca_or_value_error.return_value.get_credential.return_value = Mock()

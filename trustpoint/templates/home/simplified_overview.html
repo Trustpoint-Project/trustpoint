@@ -126,7 +126,7 @@
                                     <div class="alert alert-warning mb-3">
                                         {% trans "No Issuing CA configured for this domain." %}
                                     </div>
-                                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary w-100">
+                                    <a href="{% url 'pki:issuing_cas-add-role_select' %}" class="btn btn-primary w-100">
                                         <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
                                     </a>
                                     {% endif %}
@@ -202,7 +202,7 @@
                                     {% endif %}
                                     {% else %}
                                     <p class="text-muted mb-2">{% trans "Create an Issuing CA to access management actions." %}</p>
-                                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary w-100">
+                                    <a href="{% url 'pki:issuing_cas-add-role_select' %}" class="btn btn-primary w-100">
                                         <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
                                     </a>
                                     {% endif %}
@@ -501,7 +501,7 @@
                         {% else %}
                             <p class="text-muted">{% trans "Before creating a domain, you need to create an Issuing CA first" %}</p>
                             <div class="d-flex gap-3 justify-content-center mt-3">
-                                <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-primary">
+                                <a href="{% url 'pki:issuing_cas-add-role_select' %}" class="btn btn-primary">
                                     <i class="bi bi-plus-circle me-2"></i>{% trans "Create Issuing CA" %}
                                 </a>
                             </div>

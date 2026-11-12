@@ -5,28 +5,32 @@
 
 from __future__ import annotations
 
-import contextlib
-import datetime as dt
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any
 
-from cryptography import x509
 from django.db import transaction
-from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
-from trustpoint_core.oid import SignatureSuite
 
 from pki.models import CaModel, CredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
+from pki.services.cmp_enrollment import enroll_cmp
+from pki.services.est_enrollment import enroll_est
 from pki.services.external_csr import build_external_csr, certificate_matches_credential
-from pki.util.cert_req_converter import JSONCertRequestConverter
+from pki.services.management_issuance import (
+    external_ca_cmp_context_kwargs,
+    external_ca_est_context_kwargs,
+    sign_certificate_request,
+)
 from pki.util.certificate_path import validate_issued_certificate_path
-from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signing_private_key
+from pki.util.certificate_request import build_request_data
+from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 
 if TYPE_CHECKING:
+    from cryptography import x509
+
     from pki.models.cert_profile import CertificateProfileModel
     from pki.models.truststore import TruststoreModel
 
-__all__ = ['finalize_tls_server_enrollment', 'issue_tls_server_local']
+__all__ = ['finalize_tls_server_enrollment', 'issue_tls_server_local', 'issue_tls_server_remote']
 
 
 @transaction.atomic
@@ -83,44 +87,43 @@ def issue_tls_server_local(
     content: dict[str, Any],
     issuing_ca: CaModel,
 ) -> CredentialModel:
-    """Issue a TLS server credential from a local Issuing CA hosted in Trustpoint."""
-    if issuing_ca.credential is None:
-        msg = 'Issuing CA has no credential.'
-        raise ValueError(msg)
-    ca_credential = issuing_ca.credential
-    ca_cert = ca_credential.get_certificate()
-
+    """Issue a TLS server credential from a local management CA hosted in Trustpoint."""
     csr = build_external_csr(credential, cert_profile, content, allow_ca=False)
-
-    builder = x509.CertificateBuilder().subject_name(csr.subject).public_key(csr.public_key())
-    for ext in csr.extensions:
-        builder = builder.add_extension(ext.value, ext.critical)
-
-    builder = builder.issuer_name(ca_cert.subject)
-    builder = builder.serial_number(x509.random_serial_number())
-    builder = builder.not_valid_before(dt.datetime.now(dt.UTC) - dt.timedelta(hours=1))
-    builder = builder.not_valid_after(
-        dt.datetime.now(dt.UTC)
-        + JSONCertRequestConverter.validity_period_from_json(cert_profile.profile.get('validity', {}))
-    )
-
-    with contextlib.suppress(ValueError):  # extension already present in CSR
-        builder = builder.add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()),  # type: ignore[arg-type]
-            critical=False,
-        )
-    with contextlib.suppress(ValueError):  # extension already present in CSR
-        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
-
-    issuer_key = _unwrap_mldsa_managed_key(ca_credential.get_private_key())
-    issuer_key = validate_certificate_signing_private_key(issuer_key)
-    signature_suite = SignatureSuite.from_certificate(ca_cert)
-    hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
-    hash_algorithm = None if hash_algorithm_enum is None else hash_algorithm_enum.hash_algorithm()
-    if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-        msg = f'Unsupported CA signature hash algorithm: {type(hash_algorithm)}'
-        raise TypeError(msg)
-    leaf = builder.sign(private_key=issuer_key, algorithm=hash_algorithm)
-
-    _attach_certificate(credential, leaf, [ca_cert, *ca_credential.get_certificate_chain()])
+    leaf, issuer_chain = sign_certificate_request(csr, cert_profile, issuing_ca)
+    _attach_certificate(credential, leaf, issuer_chain)
     return credential
+
+
+def issue_tls_server_remote(
+    credential: CredentialModel,
+    cert_profile: CertificateProfileModel,
+    content: dict[str, Any],
+    ca: CaModel,
+) -> CredentialModel:
+    """Request a TLS server certificate from an external management CA acting as RA."""
+    config = ca.no_onboarding_config
+    if config is None or config.trust_store is None:
+        msg = 'The external management CA has no enrollment truststore.'
+        raise ValueError(msg)
+    anchors = ca.chain_truststore or config.trust_store
+    request_data = build_request_data(content, keep_empty_sans=True)
+
+    if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+        est_context = EstCertificateRequestContext(
+            **external_ca_est_context_kwargs(ca, cert_profile, allow_ca_certificate_request=False)
+        )
+        est_context.request_data = request_data
+        est_context.owner_credential = credential
+        issued_cert, extra_certs = enroll_est(est_context)
+    elif ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+        cmp_context = CmpCertificateRequestContext(
+            **external_ca_cmp_context_kwargs(ca, cert_profile, allow_ca_certificate_request=False)
+        )
+        cmp_context.request_data = request_data
+        cmp_context.owner_credential = credential
+        issued_cert, extra_certs = enroll_cmp(cmp_context, sender_kid=ca.cmp_sender_kid)
+    else:
+        msg = f'Management CA type {ca.get_ca_type_display()} cannot issue TLS certificates.'
+        raise ValueError(msg)
+
+    return finalize_tls_server_enrollment(credential, issued_cert, list(extra_certs), anchors)

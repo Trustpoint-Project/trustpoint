@@ -1,22 +1,31 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Tests for newly added OwnerCredentialModel and IDevIDReferenceModel code."""
+"""Tests for DevOwnerID credential rows and IDevIDReferenceModel."""
 
 from __future__ import annotations
 
-
 import pytest
+from django.core.exceptions import ValidationError
+from django.db.models.deletion import ProtectedError
 
-from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-from pki.models import OwnerCredentialModel
-from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models import RemoteIssuedCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
+from pki.models.credential import CredentialModel, IDevIDReferenceModel
 
 
 @pytest.fixture(autouse=True)
 def _enable_db(db: None) -> None:
     """Enable database access for all tests in this module."""
+
+
+def _make_dev_owner_id(common_name: str = 'test-oc') -> RemoteIssuedCredentialModel:
+    credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+    return RemoteIssuedCredentialModel.objects.create(
+        common_name=common_name,
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+        credential=credential,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -27,162 +36,50 @@ def _enable_db(db: None) -> None:
 class TestIDevIDReferenceModelProperties:
     """Tests for the IDevIDReferenceModel parsed properties."""
 
-    @pytest.fixture()
-    def owner_credential(self) -> OwnerCredentialModel:
-        """Create a minimal OwnerCredentialModel."""
-        return OwnerCredentialModel.objects.create(unique_name='test-oc')
+    @pytest.fixture
+    def dev_owner_id(self) -> RemoteIssuedCredentialModel:
+        """Create a minimal DevOwnerID credential row."""
+        return _make_dev_owner_id()
 
-    def _make_ref(self, owner: OwnerCredentialModel, ref: str) -> IDevIDReferenceModel:
+    def _make_ref(self, owner: RemoteIssuedCredentialModel, ref: str) -> IDevIDReferenceModel:
         return IDevIDReferenceModel.objects.create(dev_owner_id=owner, idevid_ref=ref)
 
-    def test_subject_serial_number(self, owner_credential: OwnerCredentialModel) -> None:
+    def test_subject_serial_number(self, dev_owner_id: RemoteIssuedCredentialModel) -> None:
         """idevid_subject_serial_number returns the first dot-segment after stripping the prefix."""
-        ref = self._make_ref(owner_credential, 'dev-owner:cert:SUBJ-SN_SHA256FP')
+        ref = self._make_ref(dev_owner_id, 'dev-owner:cert:SUBJ-SN_SHA256FP')
         assert ref.idevid_subject_serial_number == 'SUBJ-SN'
 
-    def test_sha256_fingerprint(self, owner_credential: OwnerCredentialModel) -> None:
+    def test_sha256_fingerprint(self, dev_owner_id: RemoteIssuedCredentialModel) -> None:
         """idevid_sha256_fingerprint returns the third dot-segment after stripping the prefix."""
-        ref = self._make_ref(owner_credential, 'dev-owner:cert:SUBJ-SN_SHA256FP')
+        ref = self._make_ref(dev_owner_id, 'dev-owner:cert:SUBJ-SN_SHA256FP')
         assert ref.idevid_sha256_fingerprint == 'SHA256FP'
 
-    def test_missing_segments_return_empty(self, owner_credential: OwnerCredentialModel) -> None:
+    def test_missing_segments_return_empty(self, dev_owner_id: RemoteIssuedCredentialModel) -> None:
         """Properties that reference a missing segment return an empty string."""
-        ref = self._make_ref(owner_credential, 'dev-owner:cert:ONLY')
+        ref = self._make_ref(dev_owner_id, 'dev-owner:cert:ONLY')
         assert ref.idevid_subject_serial_number == 'ONLY'
         assert ref.idevid_sha256_fingerprint == ''
 
-    def test_without_prefix(self, owner_credential: OwnerCredentialModel) -> None:
+    def test_without_prefix(self, dev_owner_id: RemoteIssuedCredentialModel) -> None:
         """If the ref does not start with 'dev-owner:cert:' the values are empty."""
-        ref = self._make_ref(owner_credential, 'A_B')
+        ref = self._make_ref(dev_owner_id, 'A_B')
         assert ref.idevid_subject_serial_number == ''
         assert ref.idevid_sha256_fingerprint == ''
 
-    def test_str(self, owner_credential: OwnerCredentialModel) -> None:
-        """__str__ includes the owner name and the raw idevid_ref value."""
-        ref = self._make_ref(owner_credential, 'dev-owner:A_B')
+    def test_str(self, dev_owner_id: RemoteIssuedCredentialModel) -> None:
+        """__str__ includes the common name and the raw idevid_ref value."""
+        ref = self._make_ref(dev_owner_id, 'dev-owner:A_B')
         assert str(ref) == 'test-oc - dev-owner:A_B'
 
 
-# ---------------------------------------------------------------------------
-# OwnerCredentialModel basic model behaviour
-# ---------------------------------------------------------------------------
-
-
-class TestOwnerCredentialModel:
-    """Tests for OwnerCredentialModel fields and properties."""
-
-    def test_str_returns_unique_name(self) -> None:
-        """__str__ returns the unique_name."""
-        oc = OwnerCredentialModel.objects.create(unique_name='my-owner')
-        assert str(oc) == 'my-owner'
-
-    def test_repr(self) -> None:
-        """__repr__ includes the unique_name."""
-        oc = OwnerCredentialModel.objects.create(unique_name='my-owner')
-        assert 'my-owner' in repr(oc)
-
-    def test_default_type_is_local(self) -> None:
-        """The default owner_credential_type is LOCAL."""
-        oc = OwnerCredentialModel.objects.create(unique_name='local-oc')
-        assert oc.owner_credential_type == OwnerCredentialModel.OwnerCredentialTypeChoice.LOCAL
-
-    def test_remote_est_type(self) -> None:
-        """REMOTE_EST type can be set and persisted."""
-        no_onboarding = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password='pw',
-        )
-        no_onboarding.save()
-        oc = OwnerCredentialModel.objects.create(
-            unique_name='remote-oc',
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST,
-            no_onboarding_config=no_onboarding,
-            remote_host='est.example.com',
-            remote_port=443,
-            remote_path='/.well-known/est/simpleenroll',
-            est_username='user',
-            key_type='RSA-2048',
-        )
-        oc.refresh_from_db()
-        assert oc.owner_credential_type == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
-        assert oc.remote_host == 'est.example.com'
-        assert oc.remote_port == 443
-        assert oc.est_username == 'user'
-        assert oc.key_type == 'RSA-2048'
-
-    def test_dev_owner_id_credential_returns_none_when_empty(self) -> None:
-        """dev_owner_id_credential returns None when no issued credentials exist."""
-        oc = OwnerCredentialModel.objects.create(unique_name='empty-oc')
-        assert oc.dev_owner_id_credential is None
-
-    def test_dev_owner_id_credentials_returns_queryset(self) -> None:
-        """dev_owner_id_credentials returns a queryset of DEV_OWNER_ID remote issued credentials."""
-        oc = OwnerCredentialModel.objects.create(unique_name='oc-with-cred')
-        cred = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
-        issued = RemoteIssuedCredentialModel.objects.create(
-            common_name='test-cn',
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential=cred,
-            owner_credential=oc,
-        )
-        result = list(oc.dev_owner_id_credentials)
-        assert len(result) == 1
-        assert result[0].pk == issued.pk
-
-    def test_dev_owner_id_credential_returns_latest(self) -> None:
-        """dev_owner_id_credential returns the most recently created credential."""
-        oc = OwnerCredentialModel.objects.create(unique_name='oc-multi')
-        cred1 = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
-        RemoteIssuedCredentialModel.objects.create(
-            common_name='first',
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential=cred1,
-            owner_credential=oc,
-        )
-        cred2 = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
-        issued2 = RemoteIssuedCredentialModel.objects.create(
-            common_name='second',
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential=cred2,
-            owner_credential=oc,
-        )
-        assert oc.dev_owner_id_credential is not None
-        assert oc.dev_owner_id_credential.pk == issued2.pk
-
-    def test_delete_removes_issued_credentials(self) -> None:
-        """Deleting an owner removes its protected issued credentials first."""
-        oc = OwnerCredentialModel.objects.create(unique_name='oc-delete')
-        cred = CredentialModel.objects.create(
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
-        RemoteIssuedCredentialModel.objects.create(
-            common_name='to-delete',
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential=cred,
-            owner_credential=oc,
-        )
-        oc.delete()
-        assert not CredentialModel.objects.filter(pk=cred.pk).exists()
-
-
-def test_remote_profile_reference_drives_label_and_protects_profile():
-    from django.db.models.deletion import ProtectedError
-    from pki.models.cert_profile import CertificateProfileModel
-
-    owner = OwnerCredentialModel.objects.create(unique_name='profile-owner')
+def test_remote_profile_reference_drives_label_and_protects_profile() -> None:
+    """The profile label follows display_name and protects the profile from deletion."""
     profile = CertificateProfileModel.objects.create(
         unique_name='remote_profile', display_name='Original', profile_json={}
     )
     credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
     record = RemoteIssuedCredentialModel.objects.create(
         common_name='remote-owner',
-        owner_credential=owner,
         credential=credential,
         issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
         certificate_profile=profile,
@@ -197,31 +94,19 @@ def test_remote_profile_reference_drives_label_and_protects_profile():
     profile.save(update_fields=['display_name'])
     record.refresh_from_db()
     assert record.issued_using_cert_profile == 'remote_profile'
-    assert 'issued_using_cert_profile' not in {field.name for field in record._meta.fields}
+    assert 'issued_using_cert_profile' not in {field.name for field in record._meta.fields}  # noqa: SLF001
 
 
-@pytest.mark.parametrize('remote', [False, True])
-def test_only_imported_owner_credentials_may_omit_profile(remote):
-    from django.core.exceptions import ValidationError
+def test_imported_owner_credentials_may_omit_profile() -> None:
+    """Imported DevOwnerIDs need no certificate profile."""
+    record = _make_dev_owner_id()
+    record.clean()
+    assert record.issued_using_cert_profile == ''
 
-    owner = OwnerCredentialModel.objects.create(
-        unique_name='owner-without-profile',
-        owner_credential_type=(
-            OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
-            if remote
-            else OwnerCredentialModel.OwnerCredentialTypeChoice.LOCAL
-        ),
-    )
-    credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
-    record = RemoteIssuedCredentialModel(
-        common_name='no-profile',
-        owner_credential=owner,
-        credential=credential,
-        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-    )
-    if remote:
-        with pytest.raises(ValidationError, match='profile is required'):
-            record.clean()
-    else:
+
+def test_managed_owner_credentials_require_profile() -> None:
+    """Managed DevOwnerIDs require a certificate profile."""
+    record = _make_dev_owner_id()
+    record.ca_id = 1
+    with pytest.raises(ValidationError, match='profile is required'):
         record.clean()
-        assert record.issued_using_cert_profile == ''

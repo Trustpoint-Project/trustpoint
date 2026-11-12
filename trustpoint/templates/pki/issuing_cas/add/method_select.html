@@ -5,9 +5,15 @@
 <div class="card">
 
     <div class="card-header">
-        <h1 class="mb-1">{% trans 'Add new Issuing CA' %}</h1>
+        <h1 class="mb-1">
+            {% if management_ca %}
+                {% trans 'Add new Management CA' %}
+            {% else %}
+                {% trans 'Add new Issuing CA' %}
+            {% endif %}
+        </h1>
         <p class="mb-0 text-muted">
-            {% trans 'Choose how the new Issuing CA should be created or connected.' %}
+            {% trans 'Choose how the new CA should be created or connected.' %}
         </p>
     </div>
 
@@ -288,20 +294,65 @@
             </div>
         </section>
 
+        {% if management_ca %}
+        <section class="mt-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">
+                    {% trans 'Self-signed Management CA' %}
+                </h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Generate a management CA key in Trustpoint and self-sign its certificate using the default issuing CA profile.' %}
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <a
+                        href="{% url 'pki:issuing_cas-add-self_signed_management_ca' %}"
+                        class="text-decoration-none text-reset"
+                    >
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <h3 class="h5 mb-2">
+                                        {% trans 'Generate Self-Signed Management CA' %}
+                                    </h3>
+
+                                    <span class="badge text-bg-primary">
+                                        {% trans 'Self-signed' %}
+                                    </span>
+                                </div>
+
+                                <p class="text-muted mb-3">
+                                    {% trans 'Choose the unique name and key algorithm. The certificate subject identifies the CA as self-signed.' %}
+                                </p>
+
+                                <span class="btn btn-primary">
+                                    {% trans 'Create Self-Signed CA' %}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+
     </div>
 
 
     <div class="card-footer">
         <a
-            href="{% url 'pki:issuing_cas' %}"
+            href="{% url 'pki:issuing_cas-add-role_select' %}"
             class="btn btn-secondary"
         >
-            {% trans 'Cancel' %}
+            {% trans 'Back' %}
         </a>
     </div>
 
 </div>
 
+{% if not management_ca %}
 <div class="card mt-4">
     <div class="card-header">
         <h2 class="h4 mb-1">{% trans 'Auto-generated PKI' %}</h2>
@@ -340,4 +391,5 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock content %}

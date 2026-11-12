@@ -21,13 +21,19 @@ from django.utils import timezone
 from pki.management.commands.create_user_client_certificate import create_user_client_certificate
 from users.models import TrustpointUser
 
+try:
+    from cryptography.hazmat.primitives.asymmetric import mldsa
+except ImportError:
+    mldsa = None  # type: ignore[assignment]
+
 
 class UserClientCertificateCreationTest(SimpleTestCase):
     """Verify the identity binding and TLS-client constraints of generated certificates."""
 
     @staticmethod
     def create_issuer(
-        *, valid_for: timedelta = timedelta(days=30),
+        *,
+        valid_for: timedelta = timedelta(days=30),
     ) -> tuple[x509.Certificate, ec.EllipticCurvePrivateKey]:
         key = ec.generate_private_key(ec.SECP256R1())
         now = timezone.now()
@@ -61,6 +67,41 @@ class UserClientCertificateCreationTest(SimpleTestCase):
         return certificate, key
 
     @staticmethod
+    def create_mldsa_issuer() -> tuple[x509.Certificate, object]:
+        """Return an ML-DSA issuer certificate and key."""
+        assert mldsa is not None
+        key = mldsa.MLDSA65PrivateKey.generate()
+        now = timezone.now()
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'ML-DSA Management CA')])
+        certificate = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(minutes=5))
+            .not_valid_after(now + timedelta(days=30))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), critical=False)
+            .sign(key, None)
+        )
+        return certificate, key
+
+    @staticmethod
     def patch_dependencies(
         issuer_certificate: x509.Certificate,
         issuer_key: ec.EllipticCurvePrivateKey,
@@ -89,10 +130,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, private_key = create_user_client_certificate(user.pk, 'laptop')
 
         common_name = certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
@@ -102,6 +143,25 @@ class UserClientCertificateCreationTest(SimpleTestCase):
         assert certificate.subject.get_attributes_for_oid(NameOID.UNSTRUCTURED_NAME)[0].value == 'laptop'
         assert certificate.public_key().public_numbers() == private_key.public_key().public_numbers()
         certificate.verify_directly_issued_by(issuer_certificate)
+
+    @pytest.mark.skipif(mldsa is None, reason='cryptography ML-DSA classes unavailable')
+    def test_generated_certificate_supports_mldsa_management_ca(self) -> None:
+        """ML-DSA management CAs sign client certificates without an explicit hash algorithm."""
+        issuer_certificate, issuer_key = self.create_mldsa_issuer()
+        user, issuing_ca = self.patch_dependencies(issuer_certificate, issuer_key)
+
+        with patch(
+            'pki.management.commands.create_user_client_certificate.TrustpointUser.objects.get',
+            return_value=user,
+        ):
+            certificate, _private_key = create_user_client_certificate(
+                user.pk,
+                'mldsa-client',
+                issuing_ca=issuing_ca,
+            )
+
+        certificate.verify_directly_issued_by(issuer_certificate)
+        assert certificate.signature_hash_algorithm is None
 
     def test_generated_certificate_has_required_client_auth_extensions(self) -> None:
         issuer_certificate, issuer_key = self.create_issuer()
@@ -113,10 +173,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, _private_key = create_user_client_certificate(user.pk, 'workstation')
 
         basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
@@ -137,10 +197,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             certificate, _private_key = create_user_client_certificate(user.pk, 'short-lived', validity_days=365)
 
         assert certificate.not_valid_after_utc == issuer_certificate.not_valid_after_utc
@@ -179,11 +239,11 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=None,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = None
-            with pytest.raises(CommandError, match='Management Issuing CA is missing'):
+            with pytest.raises(CommandError, match='No management CA is configured'):
                 create_user_client_certificate(user.pk, 'device')
 
     def test_issuing_ca_missing_required_extensions_is_rejected(self) -> None:
@@ -207,10 +267,10 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             with pytest.raises(CommandError, match='missing required CA extensions'):
                 create_user_client_certificate(user.pk, 'device')
 
@@ -249,9 +309,9 @@ class UserClientCertificateCreationTest(SimpleTestCase):
                 return_value=user,
             ),
             patch(
-                'pki.management.commands.create_user_client_certificate.CaModel.objects.select_related',
-            ) as select_related,
+                'pki.services.management_ca.ManagementCAService.get_issuing_ca',
+                return_value=issuing_ca,
+            ),
         ):
-            select_related.return_value.filter.return_value.first.return_value = issuing_ca
             with pytest.raises(CommandError, match='does not permit certificate signing'):
                 create_user_client_certificate(user.pk, 'device')

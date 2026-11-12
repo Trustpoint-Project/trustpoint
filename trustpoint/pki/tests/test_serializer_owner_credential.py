@@ -13,14 +13,10 @@ from cryptography.hazmat.primitives import serialization
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import serializers
 
-from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-from pki.models import OwnerCredentialModel
+from pki.models import RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.truststore import TruststoreModel
 from pki.serializer.owner_credential import (
     CertificateIssuanceContentSerializer,
-    OwnerCredentialEstBasicAuthSerializer,
-    OwnerCredentialEstMtlsSerializer,
     OwnerCredentialFileImportSerializer,
     OwnerCredentialSerializer,
 )
@@ -59,28 +55,18 @@ def _upload(name: str, data: bytes) -> SimpleUploadedFile:
 
 
 class TestOwnerCredentialSerializer:
-    """Read-only representation of a DevOwnerID."""
-
-    def test_truststore_id_prefers_no_onboarding_config(self) -> None:
-        """The TLS truststore is read from the no-onboarding config when present."""
-        truststore = TruststoreModel.objects.create(
-            unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
-        config = NoOnboardingConfigModel(pki_protocols=NoOnboardingPkiProtocol.MANUAL, trust_store=truststore)
-        config.save()
-        owner = OwnerCredentialModel.objects.create(unique_name='oc-1', no_onboarding_config=config)
-
-        assert OwnerCredentialSerializer(owner).data['truststore_id'] == truststore.pk
-
-    def test_truststore_id_is_none_without_config(self) -> None:
-        """A DevOwnerID without any truststore reports no truststore id."""
-        owner = OwnerCredentialModel.objects.create(unique_name='oc-2')
-
-        assert OwnerCredentialSerializer(owner).data['truststore_id'] is None
+    """Read-only representation of a DevOwnerID credential row."""
 
     def test_certificate_pem_is_none_before_issuance(self) -> None:
         """No DevOwnerID certificate is exposed before one is issued."""
-        owner = OwnerCredentialModel.objects.create(unique_name='oc-3')
+        from pki.models.credential import CredentialModel
+
+        credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+        owner = RemoteIssuedCredentialModel.objects.create(
+            common_name='oc-3',
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            credential=credential,
+        )
 
         assert OwnerCredentialSerializer(owner).data['devownerid_certificate_pem'] is None
 
@@ -89,26 +75,25 @@ class TestOwnerCredentialSerializer:
         certificate, private_key, _root = _dev_owner_id_material()
         from trustpoint_core.serializer import CredentialSerializer
 
-        owner = OwnerCredentialModel.create_new_owner_credential(
-            unique_name='oc-issued',
+        owner = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+            common_name='oc-issued',
             credential_serializer=CredentialSerializer(
                 private_key=private_key, certificate=certificate, additional_certificates=[]
             ),
         )
 
-        assert owner.dev_owner_id_credential.certificate_profile_id is None
-        assert owner.dev_owner_id_credential.issued_using_cert_profile == ''
+        assert owner.certificate_profile_id is None
+        assert owner.issued_using_cert_profile == ''
         data = OwnerCredentialSerializer(owner).data
         assert data['devownerid_certificate_pem'].startswith('-----BEGIN CERTIFICATE-----')
-        assert data['has_valid_domain_credential'] is False
 
     def test_private_key_material_is_never_serialized(self) -> None:
         """Serialized DevOwnerIDs never expose private keys or passwords."""
         certificate, private_key, _root = _dev_owner_id_material()
         from trustpoint_core.serializer import CredentialSerializer
 
-        owner = OwnerCredentialModel.create_new_owner_credential(
-            unique_name='oc-secret',
+        owner = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+            common_name='oc-secret',
             credential_serializer=CredentialSerializer(
                 private_key=private_key, certificate=certificate, additional_certificates=[]
             ),
@@ -138,8 +123,8 @@ class TestOwnerCredentialFileImportSerializer:
 
         assert serializer.is_valid(), serializer.errors
         owner = serializer.save()
-        assert isinstance(owner, OwnerCredentialModel)
-        assert owner.dev_owner_id_credential is not None
+        assert isinstance(owner, RemoteIssuedCredentialModel)
+        assert owner.common_name == 'DevOwnerID'
 
     def test_encrypted_key_requires_correct_password(self) -> None:
         """An encrypted private key is rejected when the password is wrong."""
@@ -167,7 +152,7 @@ class TestOwnerCredentialFileImportSerializer:
         )
 
         assert serializer.is_valid(), serializer.errors
-        assert serializer.save().dev_owner_id_credential is not None
+        assert serializer.save().common_name == 'DevOwnerID'
 
     def test_corrupt_certificate_is_rejected(self) -> None:
         """Unparsable certificate bytes produce a certificate field error."""
@@ -200,20 +185,11 @@ class TestOwnerCredentialFileImportSerializer:
             data={
                 'certificate': _upload('cert.pem', certificate_bytes.read()),
                 'private_key_file': _upload('key.pem', _key_bytes(_dev_owner_id_material()[1])),
-                'unique_name': 'another-name',
             }
         )
 
         assert not second.is_valid()
         assert 'already uses this certificate' in str(second.errors['certificate'])
-
-    def test_duplicate_unique_name_is_rejected(self) -> None:
-        """An explicit name that already exists is rejected."""
-        OwnerCredentialModel.objects.create(unique_name='existing-oc')
-        serializer = OwnerCredentialFileImportSerializer(data=self._files(unique_name='existing-oc'))
-
-        assert not serializer.is_valid()
-        assert 'unique_name' in serializer.errors
 
     def test_create_surfaces_model_validation_errors(self) -> None:
         """Certificates without an IDevID SAN reference are rejected on save."""
@@ -230,121 +206,7 @@ class TestOwnerCredentialFileImportSerializer:
         with pytest.raises(serializers.ValidationError):
             serializer.save()
 
-        assert not OwnerCredentialModel.objects.exists()
-
-
-class TestOwnerCredentialEstSerializers:
-    """EST-based DevOwnerID configuration serializers."""
-
-    @pytest.fixture
-    def basic_payload(self) -> dict[str, Any]:
-        """Return a minimal valid EST basic-auth payload."""
-        return {
-            'remote_host': 'est.example.com',
-            'est_username': 'operator',
-            'est_password': TEST_KEY_PASSWORD,
-        }
-
-    def test_basic_auth_derives_name_from_host(self, basic_payload: dict[str, Any]) -> None:
-        """The remote host becomes the DevOwnerID name when none is given."""
-        serializer = OwnerCredentialEstBasicAuthSerializer(data=basic_payload)
-
-        assert serializer.is_valid(), serializer.errors
-        owner = serializer.save()
-        assert owner.unique_name == 'est.example.com'
-        assert owner.owner_credential_type == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST
-        assert owner.no_onboarding_config is not None
-
-    def test_basic_auth_name_collision_gets_suffix(self, basic_payload: dict[str, Any]) -> None:
-        """A derived name that already exists is disambiguated."""
-        OwnerCredentialModel.objects.create(unique_name='est.example.com')
-        serializer = OwnerCredentialEstBasicAuthSerializer(data=basic_payload)
-
-        assert serializer.is_valid(), serializer.errors
-        assert serializer.save().unique_name == 'est.example.com-1'
-
-    def test_basic_auth_rejects_existing_name(self, basic_payload: dict[str, Any]) -> None:
-        """An explicitly supplied duplicate name is rejected."""
-        OwnerCredentialModel.objects.create(unique_name='taken-oc')
-        serializer = OwnerCredentialEstBasicAuthSerializer(data={**basic_payload, 'unique_name': 'taken-oc'})
-
-        assert not serializer.is_valid()
-        assert 'unique_name' in serializer.errors
-
-    def test_basic_auth_rejects_unknown_truststore(self, basic_payload: dict[str, Any]) -> None:
-        """A truststore id that does not exist is rejected."""
-        serializer = OwnerCredentialEstBasicAuthSerializer(data={**basic_payload, 'truststore_id': 987654})
-
-        assert not serializer.is_valid()
-        assert 'truststore_id' in serializer.errors
-
-    def test_basic_auth_links_existing_truststore(self, basic_payload: dict[str, Any]) -> None:
-        """A valid truststore id is attached to the created configuration."""
-        truststore = TruststoreModel.objects.create(
-            unique_name='est-tls', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
-        serializer = OwnerCredentialEstBasicAuthSerializer(data={**basic_payload, 'truststore_id': truststore.pk})
-
-        assert serializer.is_valid(), serializer.errors
-        assert serializer.save().no_onboarding_config.trust_store == truststore
-
-    def test_est_password_is_write_only(self, basic_payload: dict[str, Any]) -> None:
-        """The EST password is never echoed back in serialized output."""
-        serializer = OwnerCredentialEstBasicAuthSerializer(data=basic_payload)
-        assert serializer.is_valid(), serializer.errors
-        serializer.save()
-
-        assert TEST_KEY_PASSWORD not in str(serializer.data)
-
-    def test_mtls_serializer_creates_onboarding_config(self) -> None:
-        """The mTLS variant creates an onboarding configuration instead."""
-        serializer = OwnerCredentialEstMtlsSerializer(
-            data={
-                'remote_host': 'onboard.example.com',
-                'est_username': 'operator',
-                'est_password': TEST_KEY_PASSWORD,
-            }
-        )
-
-        assert serializer.is_valid(), serializer.errors
-        owner = serializer.save()
-        assert owner.onboarding_config is not None
-        assert owner.owner_credential_type == (OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING)
-        assert owner.remote_path_domain_credential == '/.well-known/est/simpleenroll'
-
-    def test_mtls_rejects_unknown_truststore_and_duplicate_name(self) -> None:
-        """The mTLS variant applies the same name and truststore validation."""
-        OwnerCredentialModel.objects.create(unique_name='mtls-oc')
-        payload = {
-            'remote_host': 'onboard.example.com',
-            'est_username': 'operator',
-            'est_password': TEST_KEY_PASSWORD,
-        }
-
-        duplicate = OwnerCredentialEstMtlsSerializer(data={**payload, 'unique_name': 'mtls-oc'})
-        assert not duplicate.is_valid()
-        assert 'unique_name' in duplicate.errors
-
-        unknown = OwnerCredentialEstMtlsSerializer(data={**payload, 'truststore_id': 424242})
-        assert not unknown.is_valid()
-        assert 'truststore_id' in unknown.errors
-
-    def test_mtls_links_existing_truststore(self) -> None:
-        """A valid truststore id is attached to the onboarding configuration."""
-        truststore = TruststoreModel.objects.create(
-            unique_name='mtls-tls', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
-        serializer = OwnerCredentialEstMtlsSerializer(
-            data={
-                'remote_host': 'onboard.example.com',
-                'est_username': 'operator',
-                'est_password': TEST_KEY_PASSWORD,
-                'truststore_id': truststore.pk,
-            }
-        )
-
-        assert serializer.is_valid(), serializer.errors
-        assert serializer.save().onboarding_config.trust_store == truststore
+        assert not RemoteIssuedCredentialModel.objects.exists()
 
 
 class TestCertificateIssuanceContentSerializer:

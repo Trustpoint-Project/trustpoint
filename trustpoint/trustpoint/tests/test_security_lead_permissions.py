@@ -44,16 +44,16 @@ from workflows2.views.runs import (
         OpcUaGdsPushCertRenewalSettingsView,
         IssuingCaCrlGenerationView,
         owners.OwnerCredentialFileImportView,
-        owners.OwnerCredentialAddRequestEstNoOnboardingView,
-        owners.OwnerCredentialAddRequestEstOnboardingView,
-        owners.OwnerCredentialTruststoreAssociationView,
+        owners.OwnerCredentialPkcs12ImportView,
+        owners.OwnerCredentialAddManagementCaView,
+        owners.OwnerCredentialExternalCsrKeyView,
+        owners.OwnerCredentialExternalCsrContentView,
+        owners.OwnerCredentialExternalCsrView,
         owners.OwnerCredentialOnboardingSetupView,
         owners.OwnerCredentialBulkDeleteConfirmView,
         owners.IssuedCredentialDeleteView,
-        owners.OwnerCredentialDefineCertContentEstView,
-        owners.OwnerCredentialRequestCertEstView,
-        owners.OwnerCredentialDefineCertContentDomainCredentialEstView,
-        owners.OwnerCredentialRequestDomainCredentialEstView,
+        owners.OwnerCredentialDefineCertContentManagementCaView,
+        owners.OwnerCredentialRequestCertManagementCaView,
         Workflow2RunCancelView,
         Workflow2RunReleaseIdempotencyView,
         Workflow2RunRunInlineView,
@@ -83,7 +83,6 @@ def test_unprivileged_browser_requests_never_reach_handlers(view_class, method):
         OpcUaGdsPushTruststoreAssociationView,
         OpcUaGdsPushCertRenewalSettingsView,
         AgentProfileDefinitionConfigView,
-        owners.OwnerCredentialTruststoreAssociationView,
         Workflow2RunCancelView,
         Workflow2InstanceStopView,
         IssuingCaCrlGenerationView,
@@ -112,9 +111,7 @@ def test_rest_management_issuance_checks_permission_before_parsing(permitted):
     assert serializer.called is permitted
 
 
-@pytest.mark.parametrize(
-    'view_class', [OpcUaGdsPushTruststoreAssociationView, owners.OwnerCredentialTruststoreAssociationView]
-)
+@pytest.mark.parametrize('view_class', [OpcUaGdsPushTruststoreAssociationView])
 def test_truststore_upload_requires_its_own_management_permission(view_class):
     request = RequestFactory().post('/import/')
     request.user = Mock(has_perm=Mock(return_value=False))

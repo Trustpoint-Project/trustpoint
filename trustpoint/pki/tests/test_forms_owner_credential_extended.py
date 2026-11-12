@@ -10,18 +10,16 @@ from typing import Any
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
-from django.core.exceptions import ValidationError
+from cryptography.hazmat.primitives.serialization import pkcs12
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.forms.owner_credential import (
-    OwnerCredentialAddRequestEstNoOnboardingForm,
-    OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialFileImportForm,
     OwnerCredentialOnboardingSetupForm,
-    OwnerCredentialTruststoreAssociationForm,
+    OwnerCredentialPkcs12ImportForm,
 )
-from pki.models import OwnerCredentialModel
+from pki.models import RemoteIssuedCredentialModel
+from pki.models.credential import CredentialModel
 from pki.models.devid_registration import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -48,9 +46,7 @@ def _key_pem(private_key: Any, password: str | None = None) -> bytes:
     encryption: serialization.KeySerializationEncryption = serialization.NoEncryption()
     if password:
         encryption = serialization.BestAvailableEncryption(password.encode())
-    return private_key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, encryption
-    )
+    return private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, encryption)
 
 
 def _import_files(**overrides: Any) -> dict[str, Any]:
@@ -65,6 +61,23 @@ def _import_files(**overrides: Any) -> dict[str, Any]:
     return files
 
 
+class TestOwnerCredentialPkcs12ImportForm:
+    """Validation of the PKCS#12 DevOwnerID import."""
+
+    def test_pkcs12_import_creates_owner_credential(self) -> None:
+        """A certificate and key in one container create the DevOwnerID."""
+        certificate, private_key, root = _dev_owner_id_material()
+        container = pkcs12.serialize_key_and_certificates(
+            b'devowner', private_key, certificate, [root], serialization.NoEncryption()
+        )
+        form = OwnerCredentialPkcs12ImportForm(
+            files={'pkcs12_file': SimpleUploadedFile('owner.p12', container)},
+        )
+
+        assert form.is_valid(), form.errors
+        assert form.cleaned_data['_dev_owner_id_credential'].common_name == 'FormDevOwnerID'
+
+
 class TestOwnerCredentialFileImportForm:
     """Validation of the DevOwnerID file import form."""
 
@@ -73,22 +86,20 @@ class TestOwnerCredentialFileImportForm:
         form = OwnerCredentialFileImportForm(data={}, files=_import_files())
 
         assert form.is_valid(), form.errors
-        owner = form.cleaned_data['_owner_credential']
-        assert isinstance(owner, OwnerCredentialModel)
-        assert owner.dev_owner_id_credential is not None
+        owner = form.cleaned_data['_dev_owner_id_credential']
+        assert isinstance(owner, RemoteIssuedCredentialModel)
+        assert owner.common_name == 'FormDevOwnerID'
 
     def test_name_is_derived_from_certificate(self) -> None:
         """Without an explicit name the certificate subject is used."""
         form = OwnerCredentialFileImportForm(data={}, files=_import_files())
 
         assert form.is_valid(), form.errors
-        assert form.cleaned_data['unique_name']
+        assert form.cleaned_data['common_name']
 
     def test_oversized_private_key_is_rejected(self) -> None:
         """Private key uploads above the size limit are rejected."""
-        files = _import_files(
-            private_key_file=SimpleUploadedFile('key.pem', b'x' * (MAX_UPLOAD_BYTES + 1))
-        )
+        files = _import_files(private_key_file=SimpleUploadedFile('key.pem', b'x' * (MAX_UPLOAD_BYTES + 1)))
         form = OwnerCredentialFileImportForm(data={}, files=files)
 
         assert not form.is_valid()
@@ -108,9 +119,7 @@ class TestOwnerCredentialFileImportForm:
         form = OwnerCredentialFileImportForm(
             data={'private_key_file_password': 'wrong-password'},
             files={
-                'certificate': SimpleUploadedFile(
-                    'cert.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'certificate': SimpleUploadedFile('cert.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(private_key, TEST_KEY_PASSWORD)),
             },
         )
@@ -125,9 +134,7 @@ class TestOwnerCredentialFileImportForm:
         form = OwnerCredentialFileImportForm(
             data={'private_key_file_password': TEST_KEY_PASSWORD},
             files={
-                'certificate': SimpleUploadedFile(
-                    'cert.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'certificate': SimpleUploadedFile('cert.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(private_key, TEST_KEY_PASSWORD)),
             },
         )
@@ -166,7 +173,7 @@ class TestOwnerCredentialFileImportForm:
         assert first.is_valid(), first.errors
 
         second = OwnerCredentialFileImportForm(
-            data={'unique_name': 'second-owner'},
+            data={},
             files={
                 'certificate': SimpleUploadedFile('cert.pem', certificate_pem),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(private_key)),
@@ -176,14 +183,6 @@ class TestOwnerCredentialFileImportForm:
         assert not second.is_valid()
         assert 'already configured' in str(second.errors['certificate'])
 
-    def test_duplicate_unique_name_is_rejected(self) -> None:
-        """A DevOwnerID name that is already taken is rejected."""
-        OwnerCredentialModel.objects.create(unique_name='existing-owner')
-        form = OwnerCredentialFileImportForm(data={'unique_name': 'existing-owner'}, files=_import_files())
-
-        assert not form.is_valid()
-        assert 'already exists' in str(form.errors)
-
     def test_certificate_without_idevid_reference_is_rejected(self) -> None:
         """A certificate lacking an IDevID SAN reference cannot become a DevOwnerID."""
         root, root_key = CertificateGenerator.create_root_ca('No Ref Root')
@@ -191,24 +190,27 @@ class TestOwnerCredentialFileImportForm:
         form = OwnerCredentialFileImportForm(
             data={},
             files={
-                'certificate': SimpleUploadedFile(
-                    'cert.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'certificate': SimpleUploadedFile('cert.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(private_key)),
             },
         )
 
         assert not form.is_valid()
-        assert not OwnerCredentialModel.objects.exists()
+        assert not RemoteIssuedCredentialModel.objects.exists()
 
 
 class TestOwnerCredentialOnboardingSetupForm:
     """AOKI onboarding setup performed after a DevOwnerID import."""
 
     @pytest.fixture
-    def owner(self) -> OwnerCredentialModel:
+    def owner(self) -> RemoteIssuedCredentialModel:
         """Return a stored DevOwnerID to attach the onboarding setup to."""
-        return OwnerCredentialModel.objects.create(unique_name='aoki-owner')
+        credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+        return RemoteIssuedCredentialModel.objects.create(
+            common_name='aoki-owner',
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            credential=credential,
+        )
 
     @pytest.fixture
     def domain(self, issuing_ca_instance: dict[str, Any]) -> DomainModel:
@@ -222,7 +224,7 @@ class TestOwnerCredentialOnboardingSetupForm:
         return {'trust_store_file': SimpleUploadedFile('ts.pem', root.public_bytes(serialization.Encoding.PEM))}
 
     def test_setup_creates_truststore_and_registration(
-        self, owner: OwnerCredentialModel, domain: DomainModel
+        self, owner: RemoteIssuedCredentialModel, domain: DomainModel
     ) -> None:
         """A valid setup creates an IDevID truststore and a DevID registration."""
         form = OwnerCredentialOnboardingSetupForm(
@@ -239,7 +241,7 @@ class TestOwnerCredentialOnboardingSetupForm:
         assert registration.serial_number_pattern == '^SN-[0-9]+$'
 
     def test_truststore_name_collision_is_resolved(
-        self, owner: OwnerCredentialModel, domain: DomainModel
+        self, owner: RemoteIssuedCredentialModel, domain: DomainModel
     ) -> None:
         """Repeated setups produce uniquely suffixed truststore names."""
         first = OwnerCredentialOnboardingSetupForm(
@@ -260,7 +262,7 @@ class TestOwnerCredentialOnboardingSetupForm:
         assert second.cleaned_data['_dev_id_registration'].unique_name == 'reg-anchor-1'
 
     def test_malformed_truststore_file_is_rejected(
-        self, owner: OwnerCredentialModel, domain: DomainModel
+        self, owner: RemoteIssuedCredentialModel, domain: DomainModel
     ) -> None:
         """A corrupt trust anchor file is rejected before anything is stored."""
         form = OwnerCredentialOnboardingSetupForm(
@@ -271,12 +273,10 @@ class TestOwnerCredentialOnboardingSetupForm:
 
         assert not form.is_valid()
         assert 'malformed' in str(form.errors).lower()
-        assert not TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
-        ).exists()
+        assert not TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID).exists()
         assert not DevIdRegistration.objects.exists()
 
-    def test_missing_required_fields_short_circuit(self, owner: OwnerCredentialModel) -> None:
+    def test_missing_required_fields_short_circuit(self, owner: RemoteIssuedCredentialModel) -> None:
         """Missing domain or pattern stops processing without side effects."""
         form = OwnerCredentialOnboardingSetupForm(
             data={'serial_number_pattern': '^A$'}, files=self._files(), owner_credential=owner
@@ -284,149 +284,4 @@ class TestOwnerCredentialOnboardingSetupForm:
 
         assert not form.is_valid()
         assert 'domain' in form.errors
-        assert not TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
-        ).exists()
-
-
-class TestOwnerCredentialTruststoreAssociationForm:
-    """TLS truststore association for remote DevOwnerIDs."""
-
-    @pytest.fixture
-    def truststore(self) -> TruststoreModel:
-        """Return a TLS truststore selectable by the form."""
-        return TruststoreModel.objects.create(
-            unique_name='tls-anchor', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
-
-    def test_queryset_is_limited_to_tls_truststores(self, truststore: TruststoreModel) -> None:
-        """Only TLS truststores can be associated."""
-        TruststoreModel.objects.create(
-            unique_name='idevid-anchor', intended_usage=TruststoreModel.IntendedUsage.IDEVID
-        )
-        owner = OwnerCredentialModel.objects.create(unique_name='assoc-owner')
-
-        form = OwnerCredentialTruststoreAssociationForm(instance=owner)
-
-        assert list(form.fields['trust_store'].queryset) == [truststore]
-
-    def test_initial_reflects_configured_truststore(self, truststore: TruststoreModel) -> None:
-        """An already configured truststore is pre-selected."""
-        config = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.MANUAL, trust_store=truststore
-        )
-        config.save()
-        owner = OwnerCredentialModel.objects.create(unique_name='assoc-initial', no_onboarding_config=config)
-
-        form = OwnerCredentialTruststoreAssociationForm(instance=owner)
-
-        assert form.fields['trust_store'].initial == truststore
-
-    def test_save_persists_truststore_on_no_onboarding_config(self, truststore: TruststoreModel) -> None:
-        """Saving attaches the truststore to the no-onboarding configuration."""
-        config = NoOnboardingConfigModel(pki_protocols=NoOnboardingPkiProtocol.MANUAL)
-        config.save()
-        owner = OwnerCredentialModel.objects.create(unique_name='assoc-save', no_onboarding_config=config)
-        form = OwnerCredentialTruststoreAssociationForm(
-            data={'trust_store': truststore.pk}, instance=owner
-        )
-        assert form.is_valid(), form.errors
-
-        form.save()
-
-        config.refresh_from_db()
-        assert config.trust_store == truststore
-
-    def test_save_without_any_config_raises(self, truststore: TruststoreModel) -> None:
-        """A DevOwnerID without any config cannot store a truststore."""
-        owner = OwnerCredentialModel.objects.create(unique_name='assoc-noconfig')
-        owner.no_onboarding_config = None
-        form = OwnerCredentialTruststoreAssociationForm(
-            data={'trust_store': truststore.pk}, instance=owner
-        )
-        assert form.is_valid(), form.errors
-
-        with pytest.raises(ValidationError):
-            form.save()
-
-
-class TestOwnerCredentialEstForms:
-    """EST-based DevOwnerID request forms."""
-
-    def _payload(self, **overrides: Any) -> dict[str, Any]:
-        payload = {
-            'remote_host': 'est.example.com',
-            'remote_port': 443,
-            'remote_path': '/.well-known/est/simpleenroll',
-            'key_type': 'ECC-SECP256R1',
-            'est_username': 'operator',
-            'est_password': TEST_KEY_PASSWORD,
-        }
-        payload.update(overrides)
-        return payload
-
-    def test_basic_auth_form_prepares_config_and_key(self) -> None:
-        """A valid basic-auth request generates a key and no-onboarding config."""
-        form = OwnerCredentialAddRequestEstNoOnboardingForm(data=self._payload())
-
-        assert form.is_valid(), form.errors
-        assert form.cleaned_data['unique_name'] == 'est.example.com'
-        assert form.cleaned_data['_private_key'] is not None
-        assert form.cleaned_data['_no_onboarding_config'].pk is not None
-        assert form.cleaned_data['_est_username'] == 'operator'
-
-    @pytest.mark.parametrize('key_type', ['RSA-2048', 'ECC-SECP384R1'])
-    def test_key_type_choice_controls_generated_key(self, key_type: str) -> None:
-        """The selected key type determines the generated key algorithm."""
-        form = OwnerCredentialAddRequestEstNoOnboardingForm(data=self._payload(key_type=key_type))
-
-        assert form.is_valid(), form.errors
-        private_key = form.cleaned_data['_private_key']
-        if key_type.startswith('RSA-'):
-            assert private_key.key_size == int(key_type.split('-')[1])
-        else:
-            assert private_key.curve.name == 'secp384r1'
-
-    def test_name_collision_is_resolved_from_host(self) -> None:
-        """A host-derived name that already exists gains a numeric suffix."""
-        OwnerCredentialModel.objects.create(unique_name='est.example.com')
-        form = OwnerCredentialAddRequestEstNoOnboardingForm(data=self._payload())
-
-        assert form.is_valid(), form.errors
-        assert form.cleaned_data['unique_name'] == 'est.example.com-1'
-
-    def test_explicit_duplicate_name_is_rejected(self) -> None:
-        """An explicitly supplied duplicate name is rejected."""
-        OwnerCredentialModel.objects.create(unique_name='explicit-oc')
-        form = OwnerCredentialAddRequestEstNoOnboardingForm(data=self._payload(unique_name='explicit-oc'))
-
-        assert not form.is_valid()
-        assert 'already exists' in str(form.errors)
-
-    def test_missing_credentials_short_circuit(self) -> None:
-        """Without EST credentials the form does not create any config."""
-        form = OwnerCredentialAddRequestEstNoOnboardingForm(data=self._payload(est_username='', est_password=''))
-
-        assert not form.is_valid()
-        assert not NoOnboardingConfigModel.objects.exists()
-
-    def test_onboarding_form_prepares_onboarding_config(self) -> None:
-        """The mTLS variant prepares an onboarding config and both EST paths."""
-        form = OwnerCredentialAddRequestEstOnboardingForm(
-            data=self._payload(remote_path_domain_credential='/.well-known/est/dc')
-        )
-
-        assert form.is_valid(), form.errors
-        assert form.cleaned_data['_onboarding_config'].pk is not None
-        assert form.cleaned_data['_remote_path_domain_credential'] == '/.well-known/est/dc'
-        assert form.cleaned_data['_private_key'] is not None
-
-    def test_onboarding_form_rejects_duplicate_name(self) -> None:
-        """The mTLS variant also rejects an existing DevOwnerID name."""
-        OwnerCredentialModel.objects.create(unique_name='mtls-existing')
-        form = OwnerCredentialAddRequestEstOnboardingForm(
-            data=self._payload(unique_name='mtls-existing', remote_path_domain_credential='/dc')
-        )
-
-        assert not form.is_valid()
-        assert 'already exists' in str(form.errors)
+        assert not TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.IDEVID).exists()

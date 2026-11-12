@@ -560,13 +560,21 @@ if TRUSTPOINT_IS_BOOTSTRAP:
         if context_processor not in BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS
     ]
 
+TEMPLATE_LOADERS: list[Any] = [
+    'django.template.loaders.filesystem.Loader',
+    'django.template.loaders.app_directories.Loader',
+]
+if not DEBUG:
+    TEMPLATE_LOADERS = [('django.template.loaders.cached.Loader', TEMPLATE_LOADERS)]
+
 TEMPLATES: list[dict[str, Any]] = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / Path('templates')],
-        'APP_DIRS': True,
+        'APP_DIRS': False,
         'OPTIONS': {
             'context_processors': TEMPLATE_CONTEXT_PROCESSORS,
+            'loaders': TEMPLATE_LOADERS,
         },
     },
 ]

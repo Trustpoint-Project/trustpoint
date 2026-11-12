@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import mldsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -24,17 +23,16 @@ from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPriva
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CertificateModel
-from pki.models.issued_credential import RemoteIssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
-from util.field import UniqueNameValidator
 
 EVIDENCE_SIGNING_NO_PEM = 'Traceability Credentials cannot store a private-key PEM.'
 EVIDENCE_SIGNING_NO_KEY = 'Traceability Credentials require a managed private key.'
 EVIDENCE_SIGNING_NO_CERTIFICATE = 'Traceability Credentials require a certificate.'
 
 if TYPE_CHECKING:
+    from cryptography import x509
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
@@ -44,7 +42,6 @@ __all__ = [
     'CredentialAlreadyExistsError',
     'CredentialModel',
     'IDevIDReferenceModel',
-    'OwnerCredentialModel',
     'PrimaryCredentialCertificate',
 ]
 
@@ -798,7 +795,9 @@ class IDevIDReferenceModel(models.Model):
     display the DevOwnerID certificate information without a fragile fingerprint-string lookup.
     """
 
-    dev_owner_id = models.ForeignKey('OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE)
+    dev_owner_id = models.ForeignKey(
+        'RemoteIssuedCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
+    )
     idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
     dev_owner_id_certificate = models.ForeignKey(
         CertificateModel,
@@ -812,7 +811,7 @@ class IDevIDReferenceModel(models.Model):
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
-        return f'{self.dev_owner_id.unique_name} - {self.idevid_ref}'
+        return f'{self.dev_owner_id.common_name} - {self.idevid_ref}'
 
     @property
     def idevid_subject_serial_number(self) -> str:
@@ -879,274 +878,3 @@ class IDevIDReferenceModel(models.Model):
         if domain_fp := self.domain_ca_sha256_fingerprint:
             return f'Pinned CA: {domain_fp}'
         return ''
-
-
-class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
-    """Device owner credential model.
-
-    This model is a wrapper to manage a DevOwnerID for use by devices to trust the Trustpoint.
-
-    The actual DevOwnerID certificate is stored as an ``IssuedCredentialModel`` with
-    ``issued_credential_type=DEV_OWNER_ID`` pointing back to this model.
-
-    Supports two acquisition modes:
-    - File upload / Manual: a ``NoOnboardingConfigModel`` with ``MANUAL`` protocol is created.
-    - Remote CA enrollment: ``no_onboarding_config`` (EST username/password) or
-      ``onboarding_config`` (EST IDevID) is set together with the remote_* fields.
-    """
-
-    class OwnerCredentialTypeChoice(models.IntegerChoices):
-        """How the DevOwnerID certificate is acquired.
-
-        - ``LOCAL``: uploaded as a file or generated locally (no remote CA).
-        - ``REMOTE_EST``: enrolled from a remote CA via EST (RFC 7030) with username/password.
-        - ``REMOTE_CMP``: enrolled from a remote CA via CMP (RFC 4210 / 9483).
-        - ``REMOTE_EST_ONBOARDING``: enrolled from a remote CA via EST using IDevID onboarding.
-        """
-
-        LOCAL = 0, _('Local')
-        REMOTE_EST = 1, _('Remote EST')
-        REMOTE_CMP = 2, _('Remote CMP')
-        REMOTE_EST_ONBOARDING = 3, _('Remote EST (Onboarding)')
-
-    unique_name = models.CharField(
-        verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
-    )
-
-    owner_credential_type = models.IntegerField(
-        verbose_name=_('Credential Type'),
-        choices=OwnerCredentialTypeChoice,
-        default=OwnerCredentialTypeChoice.LOCAL,
-        help_text=_('How the DevOwnerID certificate is acquired.'),
-    )
-
-    remote_host = models.CharField(
-        verbose_name=_('Remote Host'),
-        max_length=253,
-        blank=True,
-        default='',
-        help_text=_('The hostname or IP address of the remote CA used to enroll this DevOwnerID.'),
-    )
-
-    remote_port = models.PositiveIntegerField(
-        verbose_name=_('Remote Port'), blank=True, null=True, help_text=_('The port number of the remote CA.')
-    )
-
-    remote_path = models.CharField(
-        verbose_name=_('Remote Path'),
-        max_length=255,
-        blank=True,
-        default='',
-        help_text=_('The path on the remote CA endpoint (DevOwnerID enrollment).'),
-    )
-
-    remote_path_domain_credential = models.CharField(
-        verbose_name=_('Remote Path (Domain Credential)'),
-        max_length=255,
-        blank=True,
-        default='',
-        help_text=_(
-            'The EST path used to obtain the domain credential during onboarding '
-            '(e.g. /.well-known/est/simpleenroll). Only relevant for EST onboarding.'
-        ),
-    )
-
-    est_username = models.CharField(
-        verbose_name=_('EST Username'),
-        max_length=128,
-        blank=True,
-        default='',
-        help_text=_('Username for EST authentication when enrolling from a remote CA.'),
-    )
-
-    key_type = models.CharField(
-        verbose_name=_('Key Type'),
-        max_length=32,
-        blank=True,
-        default='ECC-SECP256R1',
-        help_text=_('Cryptographic key type used for all DevOwnerID key pairs (e.g. RSA-2048, ECC-SECP256R1).'),
-    )
-
-    onboarding_config = models.ForeignKey(
-        'onboarding.OnboardingConfigModel',
-        related_name='owner_credentials',
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        verbose_name=_('Onboarding Config'),
-        help_text=_('Onboarding configuration used for remote CA enrollment.'),
-    )
-
-    no_onboarding_config = models.ForeignKey(
-        'onboarding.NoOnboardingConfigModel',
-        related_name='owner_credentials',
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        verbose_name=_('No Onboarding Config'),
-        help_text=_('No-onboarding configuration (manual or EST username/password).'),
-    )
-
-    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-
-    def __str__(self) -> str:
-        """Returns a human-readable string that represents this OwnerCredentialModel entry."""
-        return self.unique_name
-
-    def __repr__(self) -> str:
-        """Returns a string representation of the OwnerCredentialModel instance."""
-        return f'OwnerCredentialModel(unique_name={self.unique_name})'
-
-    @property
-    def dev_owner_id_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
-        """Returns all DevOwnerID RemoteIssuedCredentialModel instances for this owner credential, newest first.
-
-        An OwnerCredentialModel may accumulate multiple DevOwnerID credentials over time,
-        e.g. after re-enrollment or renewal rounds.
-        """
-        return (
-            self.remote_issued_credentials.filter(
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
-            )
-            .select_related('credential__certificate', 'certificate_profile')
-            .order_by('-created_at')
-        )
-
-    @property
-    def dev_owner_id_credential(self) -> RemoteIssuedCredentialModel | None:
-        """Returns the most recently created DevOwnerID RemoteIssuedCredentialModel, or ``None``.
-
-        Use :attr:`dev_owner_id_credentials` when you need the full set of credentials.
-        """
-        return self.dev_owner_id_credentials.first()
-
-    @property
-    def domain_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
-        """Returns all Domain Credential RemoteIssuedCredentialModel instances for this owner credential, newest first.
-
-        Domain credentials are obtained during onboarding before the DevOwnerID is enrolled.
-        """
-        return (
-            self.remote_issued_credentials.filter(
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL
-            )
-            .select_related('credential__certificate', 'certificate_profile')
-            .order_by('-created_at')
-        )
-
-    @property
-    def domain_credential(self) -> RemoteIssuedCredentialModel | None:
-        """Returns the most recently created Domain Credential RemoteIssuedCredentialModel, or ``None``."""
-        return self.domain_credentials.first()
-
-    @property
-    def has_valid_domain_credential(self) -> bool:
-        """Returns True if there is at least one valid domain credential."""
-        latest = self.domain_credential
-        if latest is None:
-            return False
-        cert = latest.credential.certificate
-        if cert is None:
-            return False
-        from pki.models.certificate import CertificateModel as CertModel  # noqa: PLC0415
-
-        return cert.certificate_status == CertModel.CertificateStatus.OK
-
-    @classmethod
-    def create_new_owner_credential(
-        cls,
-        unique_name: str,
-        credential_serializer: CredentialSerializer,
-        no_onboarding_config: Any | None = None,
-    ) -> OwnerCredentialModel:
-        """Creates a new OwnerCredentialModel with the DevOwnerID stored as RemoteIssuedCredentialModel.
-
-        The DevOwnerID certificate (with optional chain and private key) is stored in a
-        ``CredentialModel`` and wrapped in a ``RemoteIssuedCredentialModel`` of type ``DEV_OWNER_ID``.
-        If no ``no_onboarding_config`` is provided a new ``NoOnboardingConfigModel`` with
-        protocol ``MANUAL`` is created automatically.
-
-        Args:
-            unique_name: Unique human-readable name for this owner credential.
-            credential_serializer: The DevOwnerID credential (cert + optional key + chain).
-            no_onboarding_config: Optional pre-created ``NoOnboardingConfigModel`` to attach.
-
-        Returns:
-            OwnerCredentialModel: The newly created instance.
-        """
-        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol  # noqa: PLC0415
-
-        # Extract the IDevID references from the SAN of the DevOwnerID certificate
-        # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
-        idevid_refs: set[str] = set()
-        owner_cert = credential_serializer.certificate
-        if not owner_cert:
-            err_msg = _('The provided credential is not a valid DevOwnerID; it does not contain a certificate.')
-            raise ValidationError(err_msg)
-        try:
-            san_extension = owner_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
-        except x509.ExtensionNotFound as e:
-            err_msg = _('The provided certificate is not a valid DevOwnerID; it does not contain a SAN extension.')
-            raise ValidationError(err_msg) from e
-
-        for san in san_extension.value:
-            if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
-                idevid_refs.add(san.value)
-        if not idevid_refs:
-            raise ValidationError(
-                _(
-                    'The provided certificate is not a valid DevOwnerID; '
-                    'it does not contain a valid IDevID reference in the SAN.'
-                )
-            )
-
-        # Derive common_name from the certificate subject CN (or fall back to unique_name)
-        from util.field import get_certificate_name  # noqa: PLC0415
-
-        common_name = get_certificate_name(owner_cert) or unique_name
-
-        # Create a MANUAL NoOnboardingConfig if none is given
-        if no_onboarding_config is None:
-            no_onboarding_config = NoOnboardingConfigModel(
-                pki_protocols=NoOnboardingPkiProtocol.MANUAL,
-            )
-            no_onboarding_config.save()
-
-        owner_credential = cls(
-            unique_name=unique_name,
-            no_onboarding_config=no_onboarding_config,
-            owner_credential_type=cls.OwnerCredentialTypeChoice.LOCAL,
-        )
-        owner_credential.save()
-
-        # Store the DevOwnerID as a RemoteIssuedCredentialModel
-        credential_model = CredentialModel.save_credential_serializer(
-            credential_serializer=credential_serializer,
-            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
-        RemoteIssuedCredentialModel.objects.create(
-            common_name=common_name,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            certificate_profile=None,
-            credential=credential_model,
-            owner_credential=owner_credential,
-        )
-
-        # credential_model.certificate is the DevOwnerID CertificateModel; link it on each
-        # IDevIDReferenceModel so the details view can show certificate info without a
-        # fragile fingerprint-based lookup.
-        dev_owner_id_cert_model = credential_model.certificate
-        for idevid_ref in idevid_refs:
-            IDevIDReferenceModel.objects.create(
-                dev_owner_id=owner_credential,
-                idevid_ref=idevid_ref,
-                dev_owner_id_certificate=dev_owner_id_cert_model,
-            )
-
-        return owner_credential
-
-    def pre_delete(self) -> None:
-        """Delete owned credentials before their protected owner relationship is removed."""
-        self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
-        for issued in self.remote_issued_credentials.all():
-            issued.credential.delete()

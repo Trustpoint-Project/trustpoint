@@ -11,86 +11,35 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django_q.models import Schedule
-from rest_framework.test import APIRequestFactory, force_authenticate
 
 from management.models import SecurityConfig
 from onboarding.models import NoOnboardingConfigModel
-from pki.models import CaModel, CredentialModel, OwnerCredentialModel, RemoteIssuedCredentialModel
+from pki.models import CaModel, CredentialModel, RemoteIssuedCredentialModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.domain import DomainModel
 from pki.models.certificate import CertificateModel
+from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.rollover.import_ca import ImportCaRolloverStrategy
 from pki.services.ca_enrollment import CmpCaEnrollmentService, EstCaEnrollmentService
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 from pki.tasks import generate_crl_for_ca
 from pki.util.x509 import CertificateGenerator, CertificateVerifier
-from pki.views.owner_credentials_api import DevOwnerIdViewSet
 
 
-def test_owner_creation_requires_management_permission():
-    user = get_user_model().objects.create_user(username='reader')
-    payload = {
-        'method': 'est_basic_auth',
-        'unique_name': 'owner',
-        'remote_host': 'ca.example',
-        'est_username': 'enroll',
-        'est_password': 'test',
-    }
-    view = DevOwnerIdViewSet.as_view({'post': 'create'})
-    request = APIRequestFactory().post('/api/devownerid/', payload, format='json')
-    force_authenticate(request, user=user)
-    assert view(request).status_code == 403
-    assert not OwnerCredentialModel.objects.exists()
-
-    user.user_permissions.add(Permission.objects.get(content_type__app_label='users', codename='manage_devices'))
-    user = get_user_model().objects.get(pk=user.pk)
-    request = APIRequestFactory().post('/api/devownerid/', payload, format='json')
-    force_authenticate(request, user=user)
-    assert view(request).status_code == 201
-
-
-@pytest.mark.parametrize('action', ['request_domain_credential', 'request_devownerid'])
-def test_owner_enrollment_requires_issuance_permission(action):
-    user = get_user_model().objects.create_user(username='manager')
-    user.user_permissions.add(Permission.objects.get(content_type__app_label='users', codename='manage_devices'))
-    owner = OwnerCredentialModel.objects.create(unique_name='owner')
-    view = DevOwnerIdViewSet.as_view({'post': action})
-    request = APIRequestFactory().post('/api/devownerid/request/', {}, format='json')
-    force_authenticate(request, user=user)
-    assert view(request, pk=owner.pk).status_code == 403
-
-    user.user_permissions.add(Permission.objects.get(content_type__app_label='users', codename='issue_certificates'))
-    user = get_user_model().objects.get(pk=user.pk)
-    request = APIRequestFactory().post('/api/devownerid/request/', {}, format='json')
-    force_authenticate(request, user=user)
-    # The local owner fails enrollment validation after passing authorization.
-    assert view(request, pk=owner.pk).status_code == 400
-
-
-@pytest.mark.parametrize('with_credential', [False, True])
-def test_owner_deletion_cleans_up_protected_credentials(with_credential):
-    owner = OwnerCredentialModel.objects.create(unique_name='owner')
-    owner_pk = owner.pk
-    if with_credential:
-        credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
-        RemoteIssuedCredentialModel.objects.create(
-            common_name='owner',
-            owner_credential=owner,
-            credential=credential,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-        )
-    owner.delete()
-    assert not OwnerCredentialModel.objects.filter(pk=owner_pk).exists()
-    assert not RemoteIssuedCredentialModel.objects.exists()
-    if with_credential:
-        assert not CredentialModel.objects.filter(pk=credential.pk).exists()
+def test_dev_owner_id_deletion_cleans_up_its_credential():
+    credential = CredentialModel.objects.create(credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID)
+    record = RemoteIssuedCredentialModel.objects.create(
+        common_name='owner',
+        credential=credential,
+        issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+    )
+    record.delete()
+    assert not RemoteIssuedCredentialModel.objects.filter(pk=record.pk).exists()
+    assert not CredentialModel.objects.filter(pk=credential.pk).exists()
 
 
 def test_generated_rollover_clears_remote_fields(issuing_ca_model, second_issuing_ca_model):
