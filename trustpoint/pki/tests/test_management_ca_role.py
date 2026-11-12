@@ -93,6 +93,16 @@ def test_service_selects_management_ca_for_user_authentication() -> None:
     ManagementCAService.select_issuing_ca(second.pk)
 
     assert ManagementCAService.get_issuing_ca() == second
-    assert CertificateAuthenticationConfig.objects.get(issuing_ca=first).enabled is False
+    assert not CertificateAuthenticationConfig.objects.filter(issuing_ca=first).exists()
     assert CertificateAuthenticationConfig.objects.get(issuing_ca=second).enabled is False
     assert {ca.pk for ca in ManagementCAService.get_available_issuing_cas()} == {first.pk, second.pk}
+
+    ManagementCAService.select_issuing_ca(first.pk)
+
+    assert ManagementCAService.get_issuing_ca() == first
+    assert CertificateAuthenticationConfig.objects.get(issuing_ca=first).enabled is False
+    assert not CertificateAuthenticationConfig.objects.filter(issuing_ca=second).exists()
+
+    CertificateAuthenticationConfig.objects.filter(issuing_ca=first).update(enabled=True)
+    ManagementCAService.select_issuing_ca(first.pk)
+    assert CertificateAuthenticationConfig.objects.get(issuing_ca=first).enabled is True

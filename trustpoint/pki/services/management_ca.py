@@ -83,7 +83,7 @@ class ManagementCAService:
             raise ValidationError(_('Select an active management CA.'))
         if ca.ca_certificate_model is None or ca.credential is None:
             raise ValidationError(_('The selected management CA has no usable certificate.'))
-        CertificateAuthenticationConfig.objects.exclude(issuing_ca=ca).update(enabled=False)
+        CertificateAuthenticationConfig.objects.exclude(issuing_ca=ca).delete()
         CertificateAuthenticationConfig.objects.get_or_create(issuing_ca=ca)
         return ca
 
