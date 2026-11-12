@@ -14,6 +14,7 @@ from django.apps import apps as django_apps
 from django.core.management.sql import emit_post_migrate_signal
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from django.db.migrations.recorder import MigrationRecorder
 
 from aoki.views import AokiServiceMixin
 from pki.models import CertificateModel
@@ -23,7 +24,24 @@ from pki.models.credential import IDevIDReferenceModel
 pytestmark = pytest.mark.django_db(
     transaction=True, available_apps=[config.name for config in django_apps.get_app_configs()]
 )
-OLD = [('pki', '0004_tp_v1_0_1_dev0')]
+OLD = [('pki', '0004_add_traceability_credential_type')]
+
+
+def test_renamed_migration_accepts_existing_history():
+    recorder = MigrationRecorder(connection)
+    legacy = ('pki', '0004_tp_v1_0_1_dev0')
+    recorder.record_unapplied(*OLD[0])
+    recorder.record_unapplied(*legacy)
+    recorder.record_applied(*legacy)
+    try:
+        executor = MigrationExecutor(connection)
+        executor.loader.check_consistent_history(connection)
+        assert OLD[0] in executor.loader.applied_migrations
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        assert OLD[0] in recorder.applied_migrations()
+    finally:
+        recorder.record_unapplied(*OLD[0])
+        recorder.record_applied(*OLD[0])
 
 
 @pytest.fixture(scope='module', autouse=True)

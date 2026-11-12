@@ -78,7 +78,7 @@ class Migration(migrations.Migration):
 
     dependencies: ClassVar[list[Any]] = [
         ('onboarding', '0003_encrypt_no_onboarding_credentials'),
-        ('pki', '0004_tp_v1_0_1_dev0'),
+        ('pki', '0004_add_traceability_credential_type'),
     ]
 
     operations: ClassVar[list[Any]] = [

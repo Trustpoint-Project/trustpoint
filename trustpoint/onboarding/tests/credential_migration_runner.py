@@ -39,7 +39,8 @@ def main():
         return executor.loader.project_state(targets).apps
 
     latest = MigrationExecutor(connection).loader.graph.leaf_nodes()
-    previous = [(app, '0002_initial' if app == 'onboarding' else name) for app, name in latest]
+    # Let migrations depending on onboarding roll back with it.
+    previous = [('onboarding', '0002_initial'), ('appsecrets', '0001_initial')]
     old_apps = migrate(previous)
     migrate(latest)
     assert not AppSecretBackendModel.objects.exists()

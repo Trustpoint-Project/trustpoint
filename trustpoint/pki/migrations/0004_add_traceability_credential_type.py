@@ -5,6 +5,8 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
+    replaces = [('pki', '0004_tp_v1_0_1_dev0')]
+
     dependencies = [
         ('pki', '0003_issued_credential_certificate_profile'),
     ]

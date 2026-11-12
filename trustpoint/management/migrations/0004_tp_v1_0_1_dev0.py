@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         ('management', '0003_tp_v1_0_1dev'),
-        ('pki', '0004_tp_v1_0_1_dev0'),
+        ('pki', '0004_add_traceability_credential_type'),
     ]
 
     operations = [
