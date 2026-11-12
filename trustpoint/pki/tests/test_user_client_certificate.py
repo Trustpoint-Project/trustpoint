@@ -155,7 +155,9 @@ class UserClientCertificateCreationTest(SimpleTestCase):
             return_value=user,
         ):
             certificate, _private_key = create_user_client_certificate(
-                user.pk, 'mldsa-client', issuing_ca=issuing_ca,
+                user.pk,
+                'mldsa-client',
+                issuing_ca=issuing_ca,
             )
 
         certificate.verify_directly_issued_by(issuer_certificate)

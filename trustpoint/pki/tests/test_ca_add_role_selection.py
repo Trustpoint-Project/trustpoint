@@ -26,7 +26,8 @@ from pki.models import CaModel
 def manage_cas_client() -> Client:
     """Return an authenticated client allowed to manage CAs."""
     user = get_user_model().objects.create_user(
-        username='ca-role-admin', password='test-password',  # noqa: S106
+        username='ca-role-admin',
+        password='test-password',  # noqa: S106
     )
     user.role.permissions.add(Permission.objects.get(codename='manage_cas'))
     client = Client()

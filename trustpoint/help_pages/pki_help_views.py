@@ -33,7 +33,7 @@ from help_pages.commands import (
 )
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
-from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel, OwnerCredentialModel
+from pki.models import CaModel, DevIdRegistration, DomainModel, IssuedCredentialModel
 from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
@@ -475,7 +475,7 @@ class DomainHelpView(DomainDetailView):
         )
 
 
-class CredentialDetailView[CredentialT: (IssuedCredentialModel, OwnerCredentialModel)](DetailView[CredentialT]):
+class CredentialDetailView[CredentialT: IssuedCredentialModel](DetailView[CredentialT]):
     """Build device, domain, and help-section context for either credential type."""
 
     page_name = PKI_PAGE_DOMAIN_SUBCATEGORY
@@ -556,22 +556,6 @@ class IssuedCredentialHelpView(IssuedCredentialDetailView):
 
     template_name = 'help/help_page.html'
     keygen_file_name = 'app_cert'
-
-
-class OwnerCredentialDetailView(CredentialDetailView[OwnerCredentialModel]):
-    """View to display details of an OwnerCredential."""
-
-    model = OwnerCredentialModel
-    template_name = 'help/owner_credential_detail.html'
-    credential_context_name = context_object_name = 'owner_credential'
-    missing_device_message = _('Failed to get device from OwnerCredential.')
-
-
-class OwnerCredentialHelpView(OwnerCredentialDetailView):
-    """View to display help pages for OwnerCredential."""
-
-    template_name = 'help/help_page.html'
-    keygen_file_name = 'owner_cert'
 
 
 class CaDetailView(DetailView[CaModel]):

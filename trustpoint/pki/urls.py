@@ -381,24 +381,9 @@ urlpatterns = [
         name='owner_credentials-add-file_import',
     ),
     path(
-        'owner-credentials/add/est/',
-        owner_credentials.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
-        name='owner_credentials-add-est',
-    ),
-    path(
-        'owner-credentials/add/est/no-onboarding/',
-        owner_credentials.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
-        name='owner_credentials-add-est-no-onboarding',
-    ),
-    path(
-        'owner-credentials/add/est/onboarding/',
-        owner_credentials.OwnerCredentialAddRequestEstOnboardingView.as_view(),
-        name='owner_credentials-add-est-onboarding',
-    ),
-    path(
-        'owner-credentials/truststore-association/<int:pk>/',
-        owner_credentials.OwnerCredentialTruststoreAssociationView.as_view(),
-        name='owner_credentials-truststore-association',
+        'owner-credentials/add/management-ca/',
+        owner_credentials.OwnerCredentialAddManagementCaView.as_view(),
+        name='owner_credentials-add-management-ca',
     ),
     path(
         'owner-credentials/clm/<int:pk>/',
@@ -406,29 +391,19 @@ urlpatterns = [
         name='owner_credentials-clm',
     ),
     path(
-        'owner-credentials/define-cert-content-est/<int:pk>/',
-        owner_credentials.OwnerCredentialDefineCertContentEstView.as_view(),
-        name='owner_credentials-define-cert-content-est',
+        'owner-credentials/define-cert-content-management-ca/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentManagementCaView.as_view(),
+        name='owner_credentials-define-cert-content-management-ca',
     ),
     path(
-        'owner-credentials/request-cert-est/<int:pk>/',
-        owner_credentials.OwnerCredentialRequestCertEstView.as_view(),
-        name='owner_credentials-request-cert-est',
+        'owner-credentials/request-cert-management-ca/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestCertManagementCaView.as_view(),
+        name='owner_credentials-request-cert-management-ca',
     ),
     path(
-        'owner-credentials/define-cert-content-domain-credential-est/<int:pk>/',
-        owner_credentials.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
-        name='owner_credentials-define-cert-content-domain-credential-est',
-    ),
-    path(
-        'owner-credentials/request-domain-credential-est/<int:pk>/',
-        owner_credentials.OwnerCredentialRequestDomainCredentialEstView.as_view(),
-        name='owner_credentials-request-domain-credential-est',
-    ),
-    path(
-        'owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        'owner-credentials/<int:pk>/delete/',
         owner_credentials.IssuedCredentialDeleteView.as_view(),
-        name='owner_credentials-issued-credential-delete',
+        name='owner_credentials-delete',
     ),
     re_path(
         r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',

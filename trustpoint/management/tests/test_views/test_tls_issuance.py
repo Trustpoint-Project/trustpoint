@@ -17,11 +17,11 @@ from trustpoint_core.oid import PublicKeyAlgorithmOid, PublicKeyInfo
 
 from crypto.models import CryptoManagedKeyModel
 from management.forms import TlsLocalCaSelectForm
-from management.views.tls_issuance import _key_type_for_management_ca
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.forms.truststores import TruststoreAddForm
 from pki.models import CaModel, CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.services.management_issuance import key_type_for_management_ca
 from pki.tests.managed_ca_helpers import create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
 
@@ -189,7 +189,7 @@ def test_key_type_is_bound_to_an_mldsa_management_ca() -> None:
     ca = Mock()
     ca.public_key_info = PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ML_DSA_65)
 
-    assert _key_type_for_management_ca(ca) == 'MLDSA-65'
+    assert key_type_for_management_ca(ca) == 'MLDSA-65'
 
 
 def test_remote_management_ca_requests_certificate_from_external_pki() -> None:

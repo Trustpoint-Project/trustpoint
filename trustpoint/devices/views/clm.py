@@ -41,7 +41,6 @@ from onboarding.models import (
 from pki.models import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel
-from pki.models.credential import OwnerCredentialModel
 from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
@@ -90,50 +89,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         if not device.domain or not device.domain.issuing_ca:
             return False
         return device.domain.issuing_ca.ca_type in self._RA_CA_TYPES
-
-    def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
-        """Find the OwnerCredentialModel associated with this device."""
-        device_domain_cred = (
-            IssuedCredentialModel.objects.filter(
-                device=self.object,
-                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            )
-            .select_related('credential__certificate')
-            .first()
-        )
-
-        if device_domain_cred is None or device_domain_cred.credential.certificate is None:
-            return None
-
-        fingerprint = device_domain_cred.credential.certificate.sha256_fingerprint
-        owner_ic = (
-            RemoteIssuedCredentialModel.objects.filter(
-                credential__certificates__sha256_fingerprint=fingerprint,
-                owner_credential__isnull=False,
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            )
-            .select_related('owner_credential')
-            .first()
-        )
-
-        if owner_ic is None:
-            return None
-        return owner_ic.owner_credential
-
-    def _get_dev_owner_id_credentials_qs(
-        self,
-        owner_credential: OwnerCredentialModel,
-    ) -> QuerySet[RemoteIssuedCredentialModel]:
-        """Return enrolled DevOwnerID credentials for the given owner credential."""
-        return (
-            RemoteIssuedCredentialModel.objects.filter(
-                owner_credential=owner_credential,
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-                credential__certificate__isnull=False,
-            )
-            .select_related('credential__certificate', 'certificate_profile')
-            .order_by('-created_at')
-        )
 
     def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
         """Gets a sorted queryset of all IssuedCredentialModels.
@@ -228,31 +183,6 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('dt.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
-
-        self._add_dev_owner_id_context(context)
-
-    def _add_dev_owner_id_context(self, context: dict[str, Any]) -> None:
-        """Add DevOwnerID credentials linked via the owner credential to the context."""
-        owner_credential = self._get_owner_credential_for_device()
-        context['owner_credential'] = owner_credential
-
-        if owner_credential is None:
-            context['dev_owner_id_credentials'] = []
-            context['is_paginated_d'] = False
-            return
-
-        dev_owner_id_qs = self._get_dev_owner_id_credentials_qs(owner_credential)
-        paginator_doid = Paginator(dev_owner_id_qs, UIConfig.paginate_by)
-        page_number_doid = self.request.GET.get('page-d', 1)
-        context['dev_owner_id_credentials'] = paginator_doid.get_page(page_number_doid)
-        context['is_paginated_d'] = paginator_doid.num_pages > 1
-
-        for cred in context['dev_owner_id_credentials']:
-            cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast(
-                'dt.datetime',
-                cred.credential.certificate_or_error.not_valid_after,
-            )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the paginator and credential details to the context."""

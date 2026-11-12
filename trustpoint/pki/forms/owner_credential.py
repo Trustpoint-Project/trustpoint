@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import KeyPairGenerator
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -19,20 +18,19 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from onboarding.models import (
-    NoOnboardingConfigModel,
-    NoOnboardingPkiProtocol,
-    OnboardingConfigModel,
-    OnboardingPkiProtocol,
-    OnboardingProtocol,
+from pki.forms.credentials import (
+    encode_credential_password,
+    parse_certificate_chain_upload,
+    parse_certificate_upload,
+    parse_private_key_upload,
+    read_pkcs12_upload,
 )
-from pki.forms.cmp_request import CmpRequestFormMixin
-from pki.forms.credentials import parse_certificate_chain_upload, parse_certificate_upload, parse_private_key_upload
-from pki.forms.est_request import EstRequestFormMixin
-from pki.key_types import OWNER_CREDENTIAL_KEY_TYPE_CHOICES, public_key_info_from_key_type
-from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
+from pki.key_types import KEY_TYPE_CHOICES
+from pki.models import CaModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from pki.models.domain import DomainModel
+from pki.services.credential_upload import parse_pkcs12
+from pki.services.key_generation import supported_key_type_choices
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 
@@ -41,28 +39,19 @@ if TYPE_CHECKING:
 
 
 class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
-    """Form for importing an DevOwnerID using separate files.
+    """Form for importing a DevOwnerID using separate files.
 
-    This form allows the user to upload a private key file, its password (optional),
-    an DevOwnerID certificate file, and an optional certificate chain. The form
-    validates the uploaded files, ensuring they are correctly formatted and within
-    size limits.
+    The user uploads a private key file, its password (optional), a DevOwnerID
+    certificate file, and an optional certificate chain. The certificate common
+    name identifies the DevOwnerID in Trustpoint.
 
     Attributes:
-        unique_name (CharField): A unique name for the Owner Credential.
         private_key_file (FileField): The private key file (.key, .pem).
         private_key_file_password (CharField): An optional password for the private key.
-        owner_certificate (FileField): The DevOwnerID certificate file (.cer, .der, .pem, .p7b, .p7c).
-        owner_certificate_chain (FileField): An optional certificate chain file.
+        certificate (FileField): The DevOwnerID certificate file (.cer, .der, .pem, .p7b, .p7c).
+        certificate_chain (FileField): An optional certificate chain file.
     """
 
-    unique_name = forms.CharField(
-        max_length=256,
-        label=_('[Optional] Unique Name'),
-        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=False,
-        validators=[UniqueNameValidator()],
-    )
     certificate = forms.FileField(label=_('DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)'), required=True)
     certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain (.pem, .p7b, .p7c).'), required=False)
     private_key_file = forms.FileField(label=_('Private Key File (.key, .pem)'), required=True)
@@ -105,17 +94,16 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
         if certificate_in_db:
-            credential_qs = OwnerCredentialModel.objects.filter(
-                remote_issued_credentials__credential__certificate=certificate_in_db,
-                remote_issued_credentials__issued_credential_type=(
-                    RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
-                ),
-            )
-            if credential_qs.exists():
-                credential_in_db = credential_qs[0]
-                err_msg = (
-                    f'Owner Credential {credential_in_db.unique_name} is already configured with the same DevOwnerID.'
+            credential_in_db = (
+                RemoteIssuedCredentialModel.objects.filter(
+                    credential__certificate=certificate_in_db,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
                 )
+                .select_related('credential__certificate')
+                .first()
+            )
+            if credential_in_db is not None:
+                err_msg = f'DevOwnerID {credential_in_db.common_name} is already configured with the same certificate.'
                 raise ValidationError(err_msg)
 
         return certificate_serializer
@@ -139,21 +127,11 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         raise ValidationError(message)
 
     def clean(self) -> None:
-        """Cleans and validates the form data.
-
-        This method performs additional validation on the provided data,
-        such as ensuring the unique name, private key file, and certificates
-        are valid. It also initializes and saves the OwnerCredential configuration
-        if all checks pass.
-
-        Raises:
-            ValidationError: If the form data is invalid or there is an error during processing.
-        """
+        """Parse the uploaded files and store the DevOwnerID."""
         try:
             cleaned_data = super().clean()
             if not cleaned_data:
                 return
-            unique_name = cleaned_data.get('unique_name')
             private_key_serializer = cleaned_data.get('private_key_file')
             certificate_serializer = cleaned_data.get('certificate')
             certificate_chain_serializer = cleaned_data.get('certificate_chain') or None
@@ -161,17 +139,11 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             if not private_key_serializer or not certificate_serializer:
                 return
 
-            if not unique_name:
-                name_from_cert = get_certificate_name(certificate_serializer.as_crypto())
-                if not name_from_cert:
-                    return
-                unique_name = name_from_cert
+            common_name = get_certificate_name(certificate_serializer.as_crypto()) or ''
+            if not common_name:
+                self._raise_validation_error('Could not derive a common name from the certificate.')
 
-            if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-                error_message = 'Owner Credential with the provided name already exists.'
-                self._raise_validation_error(error_message)
-
-            cleaned_data['unique_name'] = unique_name
+            cleaned_data['common_name'] = common_name
             self.cleaned_data = cleaned_data
 
             credential_serializer = CredentialSerializer.from_serializers(
@@ -180,17 +152,125 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
                 certificate_collection_serializer=certificate_chain_serializer,
             )
 
-            owner_credential = OwnerCredentialModel.create_new_owner_credential(
-                unique_name=unique_name,
+            cleaned_data['_dev_owner_id_credential'] = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+                common_name=common_name,
                 credential_serializer=credential_serializer,
             )
-            cleaned_data['_owner_credential'] = owner_credential
             self.cleaned_data = cleaned_data
         except ValidationError:
             raise
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+
+class OwnerCredentialPkcs12ImportForm(forms.Form):
+    """Import a DevOwnerID from a PKCS#12 file."""
+
+    pkcs12_file = forms.FileField(label=_('PKCS#12 File (.p12, .pfx)'), required=True)
+    pkcs12_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        label=_('[Optional] PKCS#12 password'),
+        required=False,
+    )
+
+    def clean(self) -> dict[str, Any]:
+        """Parse the PKCS#12 container and store the DevOwnerID."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        if not cleaned_data:
+            return cleaned_data
+        try:
+            credential_serializer = parse_pkcs12(
+                read_pkcs12_upload(cleaned_data.get('pkcs12_file')),
+                encode_credential_password(cleaned_data.get('pkcs12_password'), pkcs12=True),
+            )
+            certificate = credential_serializer.certificate
+            if certificate is None:
+                raise ValidationError(_('The PKCS#12 file does not contain a certificate.'))  # noqa: TRY301
+            common_name = get_certificate_name(certificate) or ''
+            if not common_name:
+                raise ValidationError(_('Could not derive a common name from the certificate.'))  # noqa: TRY301
+            cleaned_data['common_name'] = common_name
+            cleaned_data['_dev_owner_id_credential'] = RemoteIssuedCredentialModel.create_imported_dev_owner_id(
+                common_name=common_name,
+                credential_serializer=credential_serializer,
+            )
+        except ValidationError:
+            raise
+        except Exception as exception:
+            raise ValidationError(str(exception)) from exception
+        self.cleaned_data = cleaned_data
+        return cleaned_data
+
+
+class OwnerCredentialAddManagementCaForm(forms.Form):
+    """Select a management CA that issues or forwards the DevOwnerID."""
+
+    management_ca = forms.ModelChoiceField(
+        queryset=CaModel.objects.none(),
+        label=_('Management CA'),
+        empty_label=None,
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Limit the CA choices to management CAs that can issue this certificate."""
+        super().__init__(*args, **kwargs)
+        from pki.services.management_issuance import available_management_cas  # noqa: PLC0415
+
+        cast('forms.ModelChoiceField[Any]', self.fields['management_ca']).queryset = available_management_cas()
+
+
+class OwnerCredentialExternalCsrKeyForm(forms.Form):
+    """Key type for a DevOwnerID CSR signed by an external PKI."""
+
+    key_type = forms.ChoiceField(label=_('Key Type'))
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Offer only backend-supported key types."""
+        super().__init__(*args, **kwargs)
+        choices = supported_key_type_choices(KEY_TYPE_CHOICES)
+        field = cast('forms.ChoiceField', self.fields['key_type'])
+        field.choices = choices or [('', _('No supported backend algorithms available'))]
+
+
+class OwnerCredentialExternalCsrCertificateForm(forms.Form):
+    """Upload the certificate issued for a pending DevOwnerID CSR."""
+
+    certificate = forms.FileField(label=_('Issued DevOwnerID Certificate (.pem, .der, .cer)'))
+    certificate_chain = forms.FileField(label=_('[Optional] Certificate Chain'), required=False)
+
+    def __init__(self, *args: Any, credential: Any, csr: Any, **kwargs: Any) -> None:
+        """Bind validation to the pending key and CSR."""
+        super().__init__(*args, **kwargs)
+        self.credential = credential
+        self.csr = csr
+        self.chain: list[Any] = []
+
+    def clean_certificate(self) -> CertificateSerializer:
+        """Parse the certificate and verify it matches the pending CSR key and identity."""
+        from pki.services.external_csr import certificate_matches_credential  # noqa: PLC0415
+
+        serializer = parse_certificate_upload(
+            self.cleaned_data.get('certificate'),
+            missing_message=_('No certificate file was uploaded.'),
+            too_large_message=_('Certificate file is too large, max. 64 kiB.'),
+            parse_message=_('Failed to parse the DevOwnerID certificate.'),
+        )
+        certificate = serializer.as_crypto()
+        if not certificate_matches_credential(certificate, self.credential):
+            raise ValidationError(_('The uploaded certificate does not match the generated CSR key.'))
+        if certificate.subject != self.csr.subject:
+            raise ValidationError(_('The certificate subject does not match the generated CSR.'))
+        return serializer
+
+    def clean_certificate_chain(self) -> CertificateCollectionSerializer | None:
+        """Parse an optional certificate chain."""
+        chain = parse_certificate_chain_upload(
+            self.cleaned_data.get('certificate_chain'),
+            parse_message=_('Failed to parse the certificate chain.'),
+        )
+        self.chain = list(chain.as_crypto()) if chain else []
+        return chain
 
 
 class OwnerCredentialOnboardingSetupForm(forms.Form):
@@ -247,7 +327,7 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialise the form, accepting the owner_credential instance."""
-        self.owner_credential: OwnerCredentialModel = kwargs.pop('owner_credential')
+        self.owner_credential: RemoteIssuedCredentialModel = kwargs.pop('owner_credential')
         super().__init__(*args, **kwargs)
 
     def clean(self) -> dict[str, Any] | None:
@@ -288,7 +368,7 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
 
         # Derive truststore name
         if not unique_name:
-            unique_name = get_certificate_name(certs[0]) or self.owner_credential.unique_name
+            unique_name = get_certificate_name(certs[0]) or self.owner_credential.common_name
 
         ts_name = f'idevid-ts-{unique_name}'
         counter = 1
@@ -329,259 +409,4 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
 
         cleaned_data['_truststore'] = trust_store_model
         cleaned_data['_dev_id_registration'] = dev_id_registration
-        return cleaned_data
-
-
-class OwnerCredentialTruststoreAssociationForm(forms.Form):
-    """Form for associating a TLS truststore with a DevOwnerID's NoOnboardingConfig."""
-
-    trust_store: forms.ModelChoiceField[Any] = forms.ModelChoiceField(
-        queryset=None,
-        empty_label='----------',
-        required=True,
-        label=_('TLS Trust Store'),
-        help_text=_('Select a TLS trust store to verify the remote EST server certificate'),
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialise the form with the OwnerCredentialModel instance."""
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-
-        self.instance: OwnerCredentialModel = kwargs.pop('instance')
-        super().__init__(*args, **kwargs)
-
-        trust_store_field = cast('forms.ModelChoiceField[Any]', self.fields['trust_store'])
-        trust_store_field.queryset = TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS)
-
-        if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
-            trust_store_field.initial = self.instance.no_onboarding_config.trust_store
-        elif self.instance.onboarding_config and self.instance.onboarding_config.trust_store:
-            trust_store_field.initial = self.instance.onboarding_config.trust_store
-
-    def save(self) -> None:
-        """Save the selected truststore to the owner credential's config."""
-        if self.instance.no_onboarding_config:
-            self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
-            self.instance.no_onboarding_config.full_clean()
-            self.instance.no_onboarding_config.save()
-        elif self.instance.onboarding_config:
-            self.instance.onboarding_config.trust_store = self.cleaned_data['trust_store']
-            self.instance.onboarding_config.full_clean()
-            self.instance.onboarding_config.save()
-        else:
-            raise forms.ValidationError(
-                _('Expected OwnerCredentialModel with a no_onboarding_config or onboarding_config.')
-            )
-
-
-class _OwnerCredentialEstBaseMixin(EstRequestFormMixin, LoggerMixin):
-    """Shared fields and key-generation logic for EST-based DevOwnerID enrollment forms."""
-
-    key_type_choices = OWNER_CREDENTIAL_KEY_TYPE_CHOICES
-    key_type_initial = 'RSA-2048'
-    remote_port_initial = 443
-    est_authentication_required = True
-
-    unique_name = forms.CharField(
-        max_length=100,
-        label=_('[Optional] Unique Name'),
-        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=False,
-        validators=[UniqueNameValidator()],
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply the DevOwnerID defaults to the shared EST request fields."""
-        super().__init__(*args, **kwargs)
-        self._apply_est_request_defaults()
-
-    def _generate_private_key(self, key_type: str) -> Any:
-        """Generate the selected key using the shared catalog conversion."""
-        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info_from_key_type(key_type))
-
-    def _resolve_unique_name(self, unique_name: str | None, host: str) -> str:
-        """Return the given unique_name, or derive one from the remote host."""
-        if unique_name:
-            return unique_name
-        # Fall back to host-based name; ensure uniqueness
-        base = host
-        candidate = base
-        counter = 1
-        while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-            candidate = f'{base}-{counter}'
-            counter += 1
-        return candidate
-
-
-class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with HTTP Basic Auth (username/password)."""
-
-    def clean(self) -> dict[str, Any]:
-        """Validate and save the owner credential via EST with HTTP Basic Auth."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-
-        unique_name = cleaned_data.get('unique_name')
-        remote_host = cleaned_data.get('remote_host')
-        est_username = cleaned_data.get('est_username')
-        est_password = cleaned_data.get('est_password')
-        key_type = cleaned_data.get('key_type', 'RSA-2048')
-        remote_port = cleaned_data.get('remote_port', 443)
-        remote_path = cleaned_data.get('remote_path', '/.well-known/est/simpleenroll')
-
-        if not remote_host or not est_username or not est_password:
-            return cleaned_data
-
-        unique_name = self._resolve_unique_name(unique_name, remote_host)
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            raise ValidationError(_('An owner credential with this name already exists.'))
-
-        cleaned_data['unique_name'] = unique_name
-
-        private_key = self._generate_private_key(key_type)
-
-        no_onboarding_config = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
-            est_password=est_password,
-        )
-        no_onboarding_config.save()
-
-        cleaned_data['_private_key'] = private_key
-        cleaned_data['_no_onboarding_config'] = no_onboarding_config
-        cleaned_data['_remote_host'] = remote_host
-        cleaned_data['_remote_port'] = remote_port
-        cleaned_data['_remote_path'] = remote_path
-        cleaned_data['_est_username'] = est_username
-
-        return cleaned_data
-
-
-class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with mTLS Client Auth (two-step enrollment)."""
-
-    remote_path_domain_credential = forms.CharField(
-        max_length=255,
-        label=_('EST Server Path (Domain Credential)'),
-        initial='/.well-known/est/simpleenroll',
-        help_text=_('Path component of the EST enrollment endpoint used to obtain the domain credential'),
-    )
-
-    def clean(self) -> dict[str, Any]:
-        """Validate and prepare the owner credential via EST with mTLS Client Auth (two-step enrollment)."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-
-        unique_name = cleaned_data.get('unique_name')
-        remote_host = cleaned_data.get('remote_host')
-        est_username = cleaned_data.get('est_username')
-        est_password = cleaned_data.get('est_password')
-        key_type = cleaned_data.get('key_type', 'RSA-2048')
-        remote_port = cleaned_data.get('remote_port', 443)
-        remote_path = cleaned_data.get('remote_path', '/.well-known/est/simpleenroll')
-        remote_path_domain_credential = cleaned_data.get(
-            'remote_path_domain_credential', '/.well-known/est/simpleenroll'
-        )
-
-        if not remote_host or not est_username or not est_password:
-            return cleaned_data
-
-        unique_name = self._resolve_unique_name(unique_name, remote_host)
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            raise ValidationError(_('An owner credential with this name already exists.'))
-
-        cleaned_data['unique_name'] = unique_name
-
-        private_key = self._generate_private_key(key_type)
-
-        onboarding_config = OnboardingConfigModel(
-            pki_protocols=OnboardingPkiProtocol.EST,
-            onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
-            est_password=est_password,
-        )
-        onboarding_config.save()
-
-        cleaned_data['_private_key'] = private_key
-        cleaned_data['_onboarding_config'] = onboarding_config
-        cleaned_data['_remote_host'] = remote_host
-        cleaned_data['_remote_port'] = remote_port
-        cleaned_data['_remote_path'] = remote_path
-        cleaned_data['_remote_path_domain_credential'] = remote_path_domain_credential
-        cleaned_data['_est_username'] = est_username
-
-        return cleaned_data
-
-
-class _OwnerCredentialCmpBaseMixin(CmpRequestFormMixin, LoggerMixin):
-    """Shared fields and key-generation logic for CMP-based DevOwnerID enrollment forms."""
-
-    key_type_choices = OWNER_CREDENTIAL_KEY_TYPE_CHOICES
-    key_type_initial = 'RSA-2048'
-    remote_port_initial = 443
-
-    unique_name = forms.CharField(
-        max_length=100,
-        label=_('[Optional] Unique Name'),
-        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
-        required=False,
-        validators=[UniqueNameValidator()],
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Apply the DevOwnerID defaults to the shared CMP request fields."""
-        super().__init__(*args, **kwargs)
-        self._apply_cmp_request_defaults()
-
-    def _generate_private_key(self, key_type: str) -> Any:
-        """Generate the selected key using the shared catalog conversion."""
-        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info_from_key_type(key_type))
-
-    def _resolve_unique_name(self, unique_name: str | None, host: str) -> str:
-        """Return the given unique_name, or derive one from the remote host."""
-        if unique_name:
-            return unique_name
-        # Fall back to host-based name; ensure uniqueness
-        base = host
-        candidate = base
-        counter = 1
-        while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
-            candidate = f'{base}-{counter}'
-            counter += 1
-        return candidate
-
-
-class OwnerCredentialAddRequestCmpForm(_OwnerCredentialCmpBaseMixin):
-    """Form for requesting a DevOwnerID certificate via CMP with shared-secret authentication."""
-
-    def clean(self) -> dict[str, Any]:
-        """Validate and save the owner credential via CMP with shared-secret auth."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-
-        unique_name = cleaned_data.get('unique_name')
-        remote_host = cleaned_data.get('remote_host')
-        cmp_shared_secret = cleaned_data.get('cmp_shared_secret')
-        key_type = cleaned_data.get('key_type', 'RSA-2048')
-        remote_port = cleaned_data.get('remote_port', 443)
-        remote_path = cleaned_data.get('remote_path', '/.well-known/cmp/p/certification')
-
-        if not remote_host or not cmp_shared_secret:
-            return cleaned_data
-
-        unique_name = self._resolve_unique_name(unique_name, remote_host)
-        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
-            raise ValidationError(_('An owner credential with this name already exists.'))
-
-        cleaned_data['unique_name'] = unique_name
-
-        private_key = self._generate_private_key(key_type)
-
-        no_onboarding_config = NoOnboardingConfigModel(
-            pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-            cmp_shared_secret=cmp_shared_secret,
-        )
-        no_onboarding_config.save()
-
-        cleaned_data['_private_key'] = private_key
-        cleaned_data['_no_onboarding_config'] = no_onboarding_config
-        cleaned_data['_remote_host'] = remote_host
-        cleaned_data['_remote_port'] = remote_port
-        cleaned_data['_remote_path'] = remote_path
-
         return cleaned_data

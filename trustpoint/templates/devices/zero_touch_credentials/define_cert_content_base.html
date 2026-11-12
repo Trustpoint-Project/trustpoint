@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <h1>{% block certificate_heading %}{% endblock %} "{{ owner_credential.unique_name }}"</h1>
+        <h1>{% block certificate_heading %}{% endblock %} {% if owner_credential.common_name %}"{{ owner_credential.common_name }}"{% else %}{% trans "New DevOwnerID" %}{% endif %}</h1>
         <p class="text-muted">{% trans 'Using profile:' %} {{ cert_profile.display_name|default:cert_profile.unique_name }}</p>
     </div>
     <form method="post">

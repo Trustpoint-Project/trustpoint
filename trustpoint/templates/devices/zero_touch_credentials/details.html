@@ -13,17 +13,19 @@
         <div class="tp-card-centered-content">
             <div class="tp-kvp-list">
                 <div>
-                    <div>{% trans 'Unique Name' %}</div>
-                    <div>{{ owner_credential.unique_name }}</div>
+                    <div>{% trans 'Common Name' %}</div>
+                    <div>{{ owner_credential.common_name|default:"—" }}</div>
                 </div>
+                {% if owner_credential.ca %}
                 <div>
-                    <div>{% trans 'Type' %}</div>
-                    <div>{{ owner_credential.get_owner_credential_type_display }}</div>
+                    <div>{% trans 'Management CA' %}</div>
+                    <div>
+                        <a href="{% url 'pki:issuing_cas-config' pk=owner_credential.ca.pk %}">
+                            {{ owner_credential.ca.unique_name }}
+                        </a>
+                    </div>
                 </div>
-                <div>
-                    <div>{% trans 'Key Type' %}</div>
-                    <div>{{ owner_credential.key_type|default:"—" }}</div>
-                </div>
+                {% endif %}
                 <div>
                     <div>{% trans 'Associated IDevIDs' %}</div>
                     <div>{{ owner_credential.idevid_ref_set.count }}</div>

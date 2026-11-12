@@ -4,11 +4,15 @@
 {% block content %}
 <div class="card tp-card-centered">
     <div class="card-header">
-        <h2>{% trans 'Request Zero-Touch Credential Certificate via EST' %}</h2>
+        <h2>
+            {% blocktrans with protocol=protocol_name|default:"EST" %}
+                Request Zero-Touch Credential Certificate via {{ protocol }}
+            {% endblocktrans %}
+        </h2>
     </div>
 
     <div class="card-body">
-        {% include 'devices/zero_touch_credentials/includes/request_details.html' with owner_credential=owner_credential domain_credential=False trust_store=trust_store est_password_set=est_password_set only %}
+        {% include 'devices/zero_touch_credentials/includes/request_details.html' with owner_credential=owner_credential only %}
 
         {% if has_cert_content %}
         {% include 'shared/partials/certificate_content_summary.html' with summary=cert_content_summary only %}
@@ -23,7 +27,7 @@
     <div class="card-footer d-flex justify-content-between">
         <div class="tp-card-btn-footer m-1">
             <a href="{% url 'devices:zero_touch_credentials-clm' pk=owner_credential.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-            <a href="{% url 'devices:zero_touch_credentials-define-cert-content-est' pk=owner_credential.pk %}" class="btn btn-outline-secondary">
+            <a href="{% url 'devices:zero_touch_credentials-define-cert-content-management-ca' pk=owner_credential.pk %}" class="btn btn-outline-secondary">
                 {% trans 'Edit Certificate Content' %}
             </a>
         </div>

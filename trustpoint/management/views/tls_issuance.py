@@ -16,7 +16,6 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
-from trustpoint_core.oid import PublicKeyAlgorithmOid
 
 from crypto.domain.errors import CryptoError
 from management.forms import TlsAddRequestCmpForm, TlsAddRequestEstForm, TlsLocalCaSelectForm
@@ -25,7 +24,7 @@ from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CaModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import TruststoreModel
-from pki.services.key_generation import supported_key_type_choices
+from pki.services.management_issuance import key_type_for_management_ca
 from pki.services.tls_server_issuance import (
     finalize_tls_server_enrollment,
     issue_tls_server_local,
@@ -173,30 +172,7 @@ class TlsRequestCertCmpView(TlsSettingsContextMixin, CmpRequestCertView):
         return finalize_tls_server_enrollment(credential, issued_cert, extra_certs, truststore)
 
 
-# ===== Local Issuing CA issuance =============================================
-
-
-def _key_type_for_management_ca(ca: CaModel) -> str:
-    """Bind the TLS key type to the selected management CA's public key."""
-    public_key_info = ca.public_key_info
-    if public_key_info is None:
-        raise ValidationError(_('The selected management CA has no public key information.'))
-    algorithm = public_key_info.public_key_algorithm_oid
-    if algorithm == PublicKeyAlgorithmOid.RSA:
-        key_type = f'RSA-{public_key_info.key_size}'
-    elif algorithm == PublicKeyAlgorithmOid.ECC and public_key_info.named_curve is not None:
-        key_type = f'ECC-{public_key_info.named_curve.name}'
-    elif algorithm == PublicKeyAlgorithmOid.ML_DSA_44:
-        key_type = 'MLDSA-44'
-    elif algorithm == PublicKeyAlgorithmOid.ML_DSA_65:
-        key_type = 'MLDSA-65'
-    elif algorithm == PublicKeyAlgorithmOid.ML_DSA_87:
-        key_type = 'MLDSA-87'
-    else:
-        raise ValidationError(_('The selected management CA key type cannot be used for TLS server certificates.'))
-    if key_type not in {value for value, _label in supported_key_type_choices(TLS_KEY_TYPE_CHOICES)}:
-        raise ValidationError(_('The selected management CA key type cannot be used for TLS server certificates.'))
-    return key_type
+# ===== Management CA issuance ================================================
 
 
 class TlsLocalCaKeyView(TlsSettingsContextMixin, CertificateRequestWizardView[TlsLocalCaSelectForm]):
@@ -225,10 +201,13 @@ class TlsLocalCaKeyView(TlsSettingsContextMixin, CertificateRequestWizardView[Tl
     def form_valid(self, form: TlsLocalCaSelectForm) -> HttpResponse:
         """Create the managed key and proceed to certificate content definition."""
         try:
-            key_type = _key_type_for_management_ca(form.cleaned_data['issuing_ca'])
+            key_type = key_type_for_management_ca(form.cleaned_data['issuing_ca'], TLS_KEY_TYPE_CHOICES)
             credential, scope = self._generate_pending_credential(key_type)
-        except (CryptoError, ValidationError) as exception:
+        except ValidationError as exception:
             form.add_error(None, exception)
+            return self.form_invalid(form)
+        except CryptoError as exception:
+            form.add_error(None, str(exception))
             return self.form_invalid(form)
         self.request.session[f'{TLS_SCOPE}_{credential.pk}'] = {
             'scope': scope,

@@ -22,7 +22,8 @@ pytestmark = pytest.mark.django_db
 def superuser_client() -> Client:
     """Return a logged-in superuser."""
     user = get_user_model().objects.create_superuser(
-        username='ca-config-admin', password='test-password',  # noqa: S106
+        username='ca-config-admin',
+        password='test-password',  # noqa: S106
     )
     client = Client()
     client.force_login(user)

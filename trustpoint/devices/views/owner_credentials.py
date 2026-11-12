@@ -1,12 +1,14 @@
 # Copyright (c) 2025 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Views for Owner Credential (DevOwnerID) management."""
+"""Views for DevOwnerID (Zero-Touch Credential) management."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
+from uuid import uuid4
 
+from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import ProtectedError
@@ -18,33 +20,33 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from devices.presentation import credential_expiry_display
 from pki.forms import (
     CertificateIssuanceForm,
-    OwnerCredentialAddRequestCmpForm,
-    OwnerCredentialAddRequestEstNoOnboardingForm,
-    OwnerCredentialAddRequestEstOnboardingForm,
+    OwnerCredentialAddManagementCaForm,
+    OwnerCredentialExternalCsrCertificateForm,
+    OwnerCredentialExternalCsrKeyForm,
     OwnerCredentialFileImportForm,
     OwnerCredentialOnboardingSetupForm,
-    OwnerCredentialTruststoreAssociationForm,
+    OwnerCredentialPkcs12ImportForm,
 )
-from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
+from pki.models import RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel
+from pki.services.csr import parse_csr
+from pki.services.external_csr import build_external_csr, csr_download_response
+from pki.services.key_generation import generate_pending_credential
 from pki.services.owner_credential import (
-    build_domain_credential_est_context_kwargs,
-    build_owner_credential_cmp_context_kwargs,
-    build_owner_credential_est_context_kwargs,
-    create_pending_owner_credential,
-    enroll_owner_credential_cmp,
-    enroll_owner_credential_est,
+    create_pending_dev_owner_id,
+    issue_owner_credential_from_management_ca,
+    persist_owner_credential_certificate,
 )
 from pki.util.cert_profile import ProfileValidationError
-from pki.util.certificate_request import build_cert_content_summary, build_request_data, public_key_info_from_key_type
+from pki.util.certificate_request import build_cert_content_summary
 from pki.views.mixins import CertificateProfileSelectionMixin
 from request.clients import EstClientError
 from request.clients.cmp_client import CmpClientError
-from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 from shared.views import FormErrorMessageMixin
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
@@ -59,11 +61,18 @@ from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-    from django.forms import ChoiceField, Form
+    from django.forms import Form
+
+DEV_OWNER_ID = RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
+
+
+def _dev_owner_id_credentials() -> QuerySet[RemoteIssuedCredentialModel]:
+    """Return DevOwnerID credential rows."""
+    return RemoteIssuedCredentialModel.objects.filter(issued_credential_type=DEV_OWNER_ID)
 
 
 class OwnerCredentialContextMixin(ContextDataMixin):
-    """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
+    """Mixin which adds context_data for the PKI -> DevOwnerID pages."""
 
     context_page_category = 'pki'
     context_page_name = 'owner_credentials'
@@ -77,38 +86,38 @@ class ZeroTouchContextMixin(ContextDataMixin):
 
 
 class OwnerCredentialTableView(
-    ZeroTouchContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]
+    ZeroTouchContextMixin, SortableTableMixin[RemoteIssuedCredentialModel], ListView[RemoteIssuedCredentialModel]
 ):
-    """Owner Credential Table View (displayed in Devices → Zero-Touch Credentials)."""
+    """DevOwnerID table view (Devices -> Zero-Touch Credentials)."""
 
-    model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/zero_touch_credentials.html'
-    context_object_name = 'owner_credential'
-    paginate_by = UIConfig.paginate_by  # Number of items per page
-    default_sort_param = 'unique_name'
+    model = RemoteIssuedCredentialModel
+    context_object_name = 'owner_credentials'
+    paginate_by = UIConfig.paginate_by
+    default_sort_param = 'common_name'
+
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Return DevOwnerID credential rows with their certificate information."""
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return _dev_owner_id_credentials().select_related('credential__certificate', 'ca').order_by(sort_param)
 
 
-class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
-    """View to display the details of an Owner Credential (Devices section)."""
+class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]):
+    """View to display the details of a DevOwnerID (Devices section)."""
 
     http_method_names = ('get',)
 
-    model = OwnerCredentialModel
     success_url = reverse_lazy('devices:zero_touch_credentials')
     ignore_url = reverse_lazy('devices:zero_touch_credentials')
     template_name = 'devices/zero_touch_credentials/details.html'
     context_object_name = 'owner_credential'
 
-    # add idevid refs to the context
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the IDevID reference list to the context.
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Limit detail access to DevOwnerID rows."""
+        return _dev_owner_id_credentials().select_related('credential__certificate', 'ca')
 
-        Each entry in ``idevid_refs`` is an :class:`~pki.models.credential.IDevIDReferenceModel`
-        instance.  The ``dev_owner_id_certificate`` FK on each ref points directly to the
-        :class:`~pki.models.certificate.CertificateModel` of the DevOwnerID certificate whose
-        SAN contained this reference (or ``None`` for locally uploaded credentials where the
-        certificate was not stored separately), so no extra DB lookup is needed here.
-        """
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the IDevID reference list to the context."""
         context = super().get_context_data(**kwargs)
         owner_credential = self.get_object()
         context['idevid_refs'] = list(owner_credential.idevid_ref_set.select_related('dev_owner_id_certificate').all())
@@ -116,7 +125,7 @@ class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[O
 
 
 class OwnerCredentialAddMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
-    """View to select the method for adding a new Zero-Touch Credential."""
+    """View to select the method for adding a new DevOwnerID."""
 
     template_name = 'devices/zero_touch_credentials/add/method_select.html'
     # Use the file-import form as a lightweight stand-in so FormView machinery is satisfied.
@@ -138,7 +147,7 @@ class OwnerCredentialAddMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCr
 class OwnerCredentialFileImportView(
     UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]
 ):
-    """View to import a Zero-Touch Credential from separate PEM files."""
+    """View to import a DevOwnerID from separate PEM files."""
 
     template_name = 'devices/zero_touch_credentials/add/file_import.html'
     form_class = OwnerCredentialFileImportForm
@@ -147,313 +156,234 @@ class OwnerCredentialFileImportView(
 
     def form_valid(self, form: OwnerCredentialFileImportForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        credential = form.cleaned_data['_dev_owner_id_credential']
         messages.success(
             self.request,
-            _('Successfully added Zero-Touch Credential {name}.').format(name=form.cleaned_data['unique_name']),
+            _('Successfully added Zero-Touch Credential {name}.').format(name=credential.common_name),
         )
         action = self.request.POST.get('action', 'add_only')
         if action == 'add_with_truststore':
-            owner_credential = form.cleaned_data.get('_owner_credential')
-            if owner_credential:
-                return HttpResponseRedirect(
-                    reverse(
-                        'devices:zero_touch_credentials-onboarding-setup',
-                        kwargs={'pk': owner_credential.pk},
-                    )
+            return HttpResponseRedirect(
+                reverse(
+                    'devices:zero_touch_credentials-onboarding-setup',
+                    kwargs={'pk': credential.pk},
                 )
-            return HttpResponseRedirect(reverse('pki:truststores-add'))
+            )
         return super().form_valid(form)
+
+
+class OwnerCredentialPkcs12ImportView(OwnerCredentialFileImportView):
+    """Import a DevOwnerID from a PKCS#12 file."""
+
+    form_class = OwnerCredentialPkcs12ImportForm  # type: ignore[assignment]
 
 
 # Keep old name as alias so any external references continue to work
 OwnerCredentialAddView = OwnerCredentialFileImportView
 
 
-class OwnerCredentialAddRequestEstMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
-    """View to select between EST authentication methods: Basic Auth or mTLS Client Auth."""
-
-    template_name = 'devices/zero_touch_credentials/add/est_method_select.html'
-    form_class = OwnerCredentialFileImportForm
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Render the EST method selection page."""
-        del request, args, kwargs
-        return self.render_to_response(self.get_context_data())
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Redirect based on the selected EST authentication method (Basic Auth or mTLS Client Auth)."""
-        method = request.POST.get('method_select')
-        if method == 'no_onboarding':
-            return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est-no-onboarding'))
-        if method == 'onboarding':
-            return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est-onboarding'))
-        return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est'))
-
-
-class OwnerCredentialAddRequestEstNoOnboardingView(
-    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
+class OwnerCredentialAddManagementCaView(
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddManagementCaForm]
 ):
-    """View to request a Zero-Touch Credential via EST using HTTP Basic Auth (username/password)."""
+    """Create a pending DevOwnerID issued or forwarded by a selected management CA."""
 
     template_name = 'devices/zero_touch_credentials/add/est_request.html'
-    form_class = OwnerCredentialAddRequestEstNoOnboardingForm
+    form_class = OwnerCredentialAddManagementCaForm
     permission_required = AppPermissions.MANAGE_DEVICES
     success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add heading context."""
-        context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request Zero-Touch Credential via EST — Basic Auth (Username / Password)')
-        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add-est')
-        return context
+        """Add heading and navigation context."""
+        return super().get_context_data(**kwargs) | {
+            'form_title': _('Issue DevOwnerID from Management CA'),
+            'back_url': reverse_lazy('devices:zero_touch_credentials-add'),
+        }
 
-    def form_valid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
-        """Save the OwnerCredentialModel with its EST configuration.
-
-        The key pair and IssuedCredentialModel are created later when the user
-        triggers an actual Zero-Touch Credential issuance via the CLM page.
-        """
-        owner_credential = OwnerCredentialModel.objects.create(
-            unique_name=form.cleaned_data['unique_name'],
-            no_onboarding_config=form.cleaned_data['_no_onboarding_config'],
-            remote_host=form.cleaned_data['_remote_host'],
-            remote_port=form.cleaned_data['_remote_port'],
-            remote_path=form.cleaned_data['_remote_path'],
-            est_username=form.cleaned_data['_est_username'],
-            key_type=form.cleaned_data.get('key_type', 'ECC-SECP256R1'),
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST,
-        )
-
+    def form_valid(self, form: OwnerCredentialAddManagementCaForm) -> HttpResponse:
+        """Create the pending DevOwnerID and continue to certificate content."""
+        ca = form.cleaned_data['management_ca']
+        try:
+            pending = create_pending_dev_owner_id(ca)
+        except (ValidationError, ValueError) as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
         messages.success(
             self.request,
-            _(
-                'Zero-Touch Credential configuration "{name}" saved. '
-                'Now associate the TLS server certificate trust store.'
-            ).format(name=owner_credential.unique_name),
+            _('Define the certificate content for the new DevOwnerID.'),
         )
-        return HttpResponseRedirect(
-            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
-        )
-
-    def form_invalid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
-        """Show form-level errors as Django messages."""
-        for error in form.non_field_errors():
-            messages.error(self.request, str(error))
-        return super().form_invalid(form)
+        return redirect('devices:zero_touch_credentials-define-cert-content-management-ca', pk=pending.pk)
 
 
-class OwnerCredentialAddRequestEstOnboardingView(
-    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
+class OwnerCredentialExternalCsrKeyView(
+    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialExternalCsrKeyForm]
 ):
-    """View to request a Zero-Touch Credential via EST using mTLS Client Auth.
-
-    Enables two-step enrollment with domain credential support.
-    """
+    """Generate a DevOwnerID key and prepare an external CSR."""
 
     template_name = 'devices/zero_touch_credentials/add/est_request.html'
-    form_class = OwnerCredentialAddRequestEstOnboardingForm
+    form_class = OwnerCredentialExternalCsrKeyForm
     permission_required = AppPermissions.MANAGE_DEVICES
-    success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add heading context."""
-        context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request Zero-Touch Credential via EST — mTLS Client Auth')
-        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add-est')
-        return context
+        """Add heading and navigation context."""
+        return super().get_context_data(**kwargs) | {
+            'form_title': _('Generate DevOwnerID CSR'),
+            'back_url': reverse_lazy('devices:zero_touch_credentials-add'),
+        }
 
-    def form_valid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
-        """Save the OwnerCredentialModel with its EST mTLS Client Auth configuration.
-
-        Creates the ``OwnerCredentialModel`` with all remote-endpoint fields and redirects
-        to the truststore-association step.
-        """
-        owner_credential = OwnerCredentialModel.objects.create(
-            unique_name=form.cleaned_data['unique_name'],
-            onboarding_config=form.cleaned_data['_onboarding_config'],
-            remote_host=form.cleaned_data['_remote_host'],
-            remote_port=form.cleaned_data['_remote_port'],
-            remote_path=form.cleaned_data['_remote_path'],
-            remote_path_domain_credential=form.cleaned_data['_remote_path_domain_credential'],
-            est_username=form.cleaned_data['_est_username'],
-            key_type=form.cleaned_data.get('key_type', 'ECC-SECP256R1'),
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
-        )
-
-        messages.success(
-            self.request,
-            _(
-                'Zero-Touch Credential onboarding configuration "{name}" saved. '
-                'Now associate the TLS server certificate trust store.'
-            ).format(name=owner_credential.unique_name),
-        )
-        return HttpResponseRedirect(
-            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
-        )
-
-    def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
-        """Show form-level errors as Django messages."""
-        for error in form.non_field_errors():
-            messages.error(self.request, str(error))
-        return super().form_invalid(form)
+    def form_valid(self, form: OwnerCredentialExternalCsrKeyForm) -> HttpResponse:
+        """Create the pending DevOwnerID key and CSR workflow state."""
+        try:
+            credential = generate_pending_credential(
+                alias=f'dev-owner-csr/{uuid4().hex}',
+                key_type=form.cleaned_data['key_type'],
+                credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
+                policy=KeyPolicy.managed_signing_key(
+                    signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+                ),
+            )
+            pending = RemoteIssuedCredentialModel.objects.create(
+                common_name='',
+                issued_credential_type=DEV_OWNER_ID,
+                certificate_profile=None,
+                credential=credential,
+            )
+        except (ValidationError, ValueError, RuntimeError) as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        self.request.session[f'dev_owner_id_external_csr_{pending.pk}'] = {
+            'credential_pk': credential.pk,
+        }
+        return redirect('devices:zero_touch_credentials-external-csr-content', pk=pending.pk)
 
 
-class OwnerCredentialAddRequestCmpView(
-    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestCmpForm]
+class OwnerCredentialExternalCsrContentView(
+    UserPermissionRequiredMixin,
+    FormErrorMessageMixin,
+    CertificateProfileSelectionMixin,
+    LoggerMixin,
+    ZeroTouchContextMixin,
+    FormView[CertificateIssuanceForm],
 ):
-    """View to request a Zero-Touch Credential via CMP using shared-secret authentication."""
+    """Define the DevOwnerID certificate content and build its CSR."""
 
-    template_name = 'devices/zero_touch_credentials/add/est_request.html'
-    form_class = OwnerCredentialAddRequestCmpForm
-    permission_required = AppPermissions.MANAGE_DEVICES
-    success_url = reverse_lazy('devices:zero_touch_credentials')
+    default_profile_name = 'dev_owner_id'
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
+    form_class = CertificateIssuanceForm
+    template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
+    available_profiles: list[CertificateProfileModel]
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add heading context."""
-        context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request Zero-Touch Credential via CMP — Shared Secret')
-        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add')
-        return context
-
-    def form_valid(self, form: OwnerCredentialAddRequestCmpForm) -> HttpResponse:
-        """Save the OwnerCredentialModel with its CMP shared-secret configuration."""
-        owner_credential = OwnerCredentialModel.objects.create(
-            unique_name=form.cleaned_data['unique_name'],
-            no_onboarding_config=form.cleaned_data['_no_onboarding_config'],
-            remote_host=form.cleaned_data['_remote_host'],
-            remote_port=form.cleaned_data['_remote_port'],
-            remote_path=form.cleaned_data['_remote_path'],
-            key_type=form.cleaned_data.get('key_type', 'ECC-SECP256R1'),
-            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_CMP,
-        )
-
-        messages.success(
-            self.request,
-            _(
-                'Zero-Touch Credential configuration "{name}" saved. '
-                'Now associate the TLS server certificate trust store.'
-            ).format(name=owner_credential.unique_name),
-        )
-        return HttpResponseRedirect(
-            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
-        )
-
-    def form_invalid(self, form: OwnerCredentialAddRequestCmpForm) -> HttpResponse:
-        """Show form-level errors as Django messages."""
-        for error in form.non_field_errors():
-            messages.error(self.request, str(error))
-        return super().form_invalid(form)
-
-
-class OwnerCredentialTruststoreAssociationView(
-    UserPermissionRequiredMixin, ZeroTouchContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
-):
-    """View for associating a TLS truststore with a Zero-Touch Credential EST configuration."""
-
-    form_class = OwnerCredentialTruststoreAssociationForm
-    permission_required = AppPermissions.MANAGE_DEVICES
-    template_name = 'devices/zero_touch_credentials/truststore_association.html'
-
-    def get_owner_credential(self) -> OwnerCredentialModel:
-        """Get the OwnerCredentialModel from the URL pk."""
-        return get_object_or_404(OwnerCredentialModel, pk=self.kwargs['pk'])
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Load the pending DevOwnerID and selected profile."""
+        if not self.has_permission():
+            raise PermissionDenied
+        self.owner_credential = get_object_or_404(_dev_owner_id_credentials(), pk=kwargs['pk'])
+        self.state = request.session.get(f'dev_owner_id_external_csr_{self.owner_credential.pk}') or {}
+        if not self.state.get('credential_pk'):
+            messages.error(request, _('The DevOwnerID key is missing. Start the CSR flow again.'))
+            return redirect('devices:zero_touch_credentials-add')
+        self.credential = get_object_or_404(CredentialModel, pk=self.state['credential_pk'])
+        resolved = self._resolve_cert_profile(request)
+        if resolved is None:
+            messages.error(request, _('No certificate profiles found. Please create one first.'))
+            return redirect('devices:zero_touch_credentials')
+        self.cert_profile = resolved
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Pass the OwnerCredentialModel instance to the form."""
-        kwargs = super().get_form_kwargs()
-        kwargs['instance'] = self.get_owner_credential()
-        truststore_id = self.request.GET.get('truststore_id')
-        if truststore_id:
-            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-
-            try:
-                truststore = TruststoreModel.objects.get(pk=truststore_id)
-                kwargs.setdefault('initial', {})['trust_store'] = truststore
-            except TruststoreModel.DoesNotExist:
-                pass  # Invalid truststore_id in query param — skip pre-selection silently.
-        return kwargs
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle both association and truststore-import form submissions."""
-        if 'trust_store_file' in request.FILES:
-            return self._handle_import(request)
-        return super().post(request, *args, **kwargs)
-
-    def _handle_import(self, request: HttpRequest) -> HttpResponse:
-        """Import a truststore from the modal form and redirect back with its id pre-selected."""
-        if not request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
-            raise PermissionDenied
-        from pki.forms import TruststoreAddForm  # noqa: PLC0415
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-
-        import_form = TruststoreAddForm(request.POST, request.FILES)
-        owner_credential = self.get_owner_credential()
-
-        if import_form.is_valid():
-            truststore = import_form.cleaned_data['truststore']
-            if truststore.intended_usage != TruststoreModel.IntendedUsage.TLS:
-                usage_name = TruststoreModel.IntendedUsage(TruststoreModel.IntendedUsage.TLS).label
-                import_form.add_error(
-                    'intended_usage',
-                    _('Only "{usage}" truststores can be associated here.').format(usage=usage_name),
-                )
-                context = self.get_context_data()
-                context['import_form'] = import_form
-                return self.render_to_response(context)
-
-            messages.success(
-                request,
-                _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
-            )
-            return HttpResponseRedirect(
-                reverse(
-                    'devices:zero_touch_credentials-truststore-association',
-                    kwargs={'pk': owner_credential.pk},
-                )
-                + f'?truststore_id={truststore.pk}'
-            )
-
-        context = self.get_context_data()
-        context['import_form'] = import_form
-        return self.render_to_response(context)
+        """Inject the selected profile into the form."""
+        return super().get_form_kwargs() | {'profile': self.cert_profile.profile}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the owner credential and import form to the context."""
-        from pki.forms import TruststoreAddForm  # noqa: PLC0415
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+        """Add owner credential, profile and profile list to the context."""
+        return super().get_context_data(**kwargs) | {
+            'owner_credential': self.owner_credential,
+            'cert_profile': self.cert_profile,
+            'available_profiles': self.available_profiles,
+        }
 
-        context = super().get_context_data(**kwargs)
-        owner_credential = self.get_owner_credential()
-        context['owner_credential'] = owner_credential
+    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Build and store the CSR, then continue to the certificate upload page."""
+        content = dict(form.cleaned_data)
+        try:
+            csr = build_external_csr(self.credential, self.cert_profile, content, allow_ca=True)
+        except (ValueError, ProfileValidationError) as exc:
+            form.add_error(None, str(exc))
+            return self.form_invalid(form)
+        self.owner_credential.certificate_profile = self.cert_profile
+        self.owner_credential.save(update_fields=['certificate_profile'])
+        self.state.update(
+            {
+                'profile_pk': self.cert_profile.pk,
+                'content': content,
+                'csr_pem': csr.public_bytes(serialization.Encoding.PEM).decode('ascii'),
+            }
+        )
+        self.request.session[f'dev_owner_id_external_csr_{self.owner_credential.pk}'] = self.state
+        return redirect('devices:zero_touch_credentials-external-csr', pk=self.owner_credential.pk)
 
-        import_form = TruststoreAddForm()
-        intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
-        raw_choices: Any = intended_usage_field.choices
-        intended_usage_field.choices = [
-            choice
-            for choice in raw_choices
-            if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
-        ]
-        context['import_form'] = import_form
-        return context
 
-    def form_valid(self, form: OwnerCredentialTruststoreAssociationForm) -> HttpResponse:
-        """Associate the selected truststore and redirect to the credential list."""
-        form.save()
-        owner_credential = self.get_owner_credential()
+class OwnerCredentialExternalCsrView(
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, FormView[OwnerCredentialExternalCsrCertificateForm]
+):
+    """Download the DevOwnerID CSR and upload the certificate issued for it."""
+
+    template_name = 'devices/zero_touch_credentials/external_csr.html'
+    form_class = OwnerCredentialExternalCsrCertificateForm
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Load the pending DevOwnerID, key, CSR and state."""
+        if not self.has_permission():
+            raise PermissionDenied
+        self.owner_credential = get_object_or_404(_dev_owner_id_credentials(), pk=kwargs['pk'])
+        self.state = request.session.get(f'dev_owner_id_external_csr_{self.owner_credential.pk}') or {}
+        if not self.state.get('credential_pk') or not self.state.get('csr_pem'):
+            messages.error(request, _('The DevOwnerID CSR is missing. Start the CSR flow again.'))
+            return redirect('devices:zero_touch_credentials-add')
+        self.credential = get_object_or_404(CredentialModel, pk=self.state['credential_pk'])
+        self.csr = parse_csr(self.state['csr_pem'].encode('ascii'), encoding='pem')
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the upload form to the pending key and CSR."""
+        return super().get_form_kwargs() | {'credential': self.credential, 'csr': self.csr}
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Expose the DevOwnerID and CSR download URL."""
+        return super().get_context_data(**kwargs) | {'owner_credential': self.owner_credential}
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Serve the CSR as a download when requested."""
+        if request.GET.get('download') == '1':
+            return csr_download_response(self.csr, f'devownerid-{self.owner_credential.pk}')
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form: OwnerCredentialExternalCsrCertificateForm) -> HttpResponse:
+        """Persist the uploaded certificate and finish the CSR flow."""
+        profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
+        certificate = form.cleaned_data['certificate'].as_crypto()
+        persist_owner_credential_certificate(
+            self.owner_credential,
+            profile,
+            self.csr,
+            certificate,
+            form.chain,
+            logger=self.logger,
+        )
+        del self.request.session[f'dev_owner_id_external_csr_{self.owner_credential.pk}']
         messages.success(
             self.request,
-            _('Successfully associated TLS truststore with DevOwnerID "{name}".').format(
-                name=owner_credential.unique_name
+            _('Successfully imported DevOwnerID certificate for "{name}".').format(
+                name=self.owner_credential.common_name
             ),
         )
-        return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials'))
+        return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
 
 
 class OwnerCredentialOnboardingSetupView(
     UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, FormView[OwnerCredentialOnboardingSetupForm]
 ):
-    """Combined view for setting up AOKI zero-touch onboarding after DevOwnerID file import.
+    """Set up AOKI zero-touch onboarding after DevOwnerID file import.
 
     Handles truststore import, domain association, and DevID registration pattern
     creation in a single step. Pre-populates the serial number pattern from the
@@ -469,29 +399,27 @@ class OwnerCredentialOnboardingSetupView(
         """Setup creates a global truststore as well as device registration state."""
         return super().has_permission() and self.request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES)
 
-    def get_owner_credential(self) -> OwnerCredentialModel:
-        """Get the OwnerCredentialModel from the URL pk."""
-        return get_object_or_404(OwnerCredentialModel, pk=self.kwargs['pk'])
+    def get_owner_credential(self) -> RemoteIssuedCredentialModel:
+        """Get the DevOwnerID credential from the URL pk."""
+        return get_object_or_404(_dev_owner_id_credentials(), pk=self.kwargs['pk'])
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Pass the OwnerCredentialModel instance to the form."""
+        """Pass the DevOwnerID credential instance to the form."""
         kwargs = super().get_form_kwargs()
         kwargs['owner_credential'] = self.get_owner_credential()
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the owner credential and IDevID references to the context."""
+        """Add the DevOwnerID and IDevID references to the context."""
         context = super().get_context_data(**kwargs)
         owner_credential = self.get_owner_credential()
         context['owner_credential'] = owner_credential
 
-        # Collect IDevID subject serial numbers for the regex helper
         idevid_refs = list(owner_credential.idevid_ref_set.all())
         idevid_reference_strs = [ref.idevid_subj_sn_or_san_uri for ref in idevid_refs if ref.idevid_subj_sn_or_san_uri]
         context['idevid_reference_strs'] = idevid_reference_strs
         context['idevid_refs'] = idevid_refs
 
-        # Build a suggested regex from the serial numbers
         if idevid_reference_strs:
             import re  # noqa: PLC0415
 
@@ -519,7 +447,7 @@ class OwnerCredentialOnboardingSetupView(
                     'truststore "{ts}" and registration pattern "{reg}" created '
                     'in domain "{domain}".'
                 ).format(
-                    name=owner_credential.unique_name,
+                    name=owner_credential.common_name,
                     ts=truststore.unique_name,
                     reg=dev_id_registration.unique_name,
                     domain=dev_id_registration.domain.unique_name,
@@ -535,93 +463,53 @@ class OwnerCredentialOnboardingSetupView(
         return super().form_invalid(form)
 
 
-class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
-    """Certificate Lifecycle Management view for a Zero-Touch Credential in the Devices section."""
+class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]):
+    """Certificate Lifecycle Management view for one DevOwnerID certificate."""
 
     http_method_names = ('get',)
-    model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/clm.html'
     context_object_name = 'owner_credential'
 
     _get_expires_in = staticmethod(credential_expiry_display)
 
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Limit CLM access to DevOwnerID rows."""
+        return _dev_owner_id_credentials().select_related('credential__certificate', 'certificate_profile', 'ca')
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds issued credentials with computed display fields to the context."""
+        """Add computed expiry information."""
         context = super().get_context_data(**kwargs)
-        issued_creds: QuerySet[RemoteIssuedCredentialModel] = (
-            RemoteIssuedCredentialModel.objects.filter(
-                owner_credential=self.object,
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            )
-            .select_related('credential__certificate', 'certificate_profile')
-            .order_by('-created_at')
-        )
-
-        for cred in issued_creds:
-            if cred.credential.certificate is not None:
-                cred.expires_in = self._get_expires_in(cred)  # type: ignore[attr-defined]
-                cred.expiration_date = cred.credential.certificate.not_valid_after  # type: ignore[attr-defined]
-            else:
-                cred.expires_in = _('Pending enrollment')  # type: ignore[attr-defined]
-                cred.expiration_date = '—'  # type: ignore[attr-defined]
-
-        context['issued_credentials'] = issued_creds
+        credential: RemoteIssuedCredentialModel = self.object
+        if credential.credential.certificate is not None:
+            credential.expires_in = self._get_expires_in(credential)  # type: ignore[attr-defined]
+            credential.expiration_date = credential.credential.certificate.not_valid_after  # type: ignore[attr-defined]
+        else:
+            credential.expires_in = _('Pending enrollment')  # type: ignore[attr-defined]
+            credential.expiration_date = '—'  # type: ignore[attr-defined]
+        context['idevid_refs'] = list(credential.idevid_ref_set.select_related('dev_owner_id_certificate').all())
         context['back_url'] = reverse_lazy('devices:zero_touch_credentials')
-
-        owner_credential: OwnerCredentialModel = self.object
-        tls_trust_store = None
-        if owner_credential.no_onboarding_config is not None:
-            tls_trust_store = owner_credential.no_onboarding_config.trust_store
-        elif owner_credential.onboarding_config is not None:
-            tls_trust_store = owner_credential.onboarding_config.trust_store
-        context['tls_trust_store'] = tls_trust_store
-
-        # Domain credentials (only relevant for REMOTE_EST_ONBOARDING)
-        is_onboarding = (
-            owner_credential.owner_credential_type
-            == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        )
-        context['is_onboarding'] = is_onboarding
-
-        if is_onboarding:
-            domain_creds: QuerySet[RemoteIssuedCredentialModel] = (
-                RemoteIssuedCredentialModel.objects.filter(
-                    owner_credential=self.object,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-                )
-                .select_related('credential__certificate', 'certificate_profile')
-                .order_by('-created_at')
-            )
-
-            for cred in domain_creds:
-                if cred.credential.certificate is not None:
-                    cred.expires_in = self._get_expires_in(cred)  # type: ignore[attr-defined]
-                    cred.expiration_date = cred.credential.certificate.not_valid_after  # type: ignore[attr-defined]
-                else:
-                    cred.expires_in = _('Pending enrollment')  # type: ignore[attr-defined]
-                    cred.expiration_date = '—'  # type: ignore[attr-defined]
-
-            context['domain_credentials'] = domain_creds
-            context['has_valid_domain_credential'] = owner_credential.has_valid_domain_credential
-
         return context
 
 
 class OwnerCredentialBulkDeleteConfirmView(UserPermissionRequiredMixin, ZeroTouchContextMixin, BulkDeleteView):
-    """View to confirm the deletion of multiple zero-touch credentials in the Devices section."""
+    """View to confirm the deletion of multiple DevOwnerID credentials."""
 
-    model = OwnerCredentialModel
     permission_required = AppPermissions.MANAGE_DEVICES
+    model = RemoteIssuedCredentialModel
     success_url = reverse_lazy('devices:zero_touch_credentials')
     ignore_url = reverse_lazy('devices:zero_touch_credentials')
     template_name = 'devices/zero_touch_credentials/confirm_delete.html'
     context_object_name = 'owner_credentials'
 
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Limit deletion to DevOwnerID rows."""
+        return super().get_queryset().filter(issued_credential_type=DEV_OWNER_ID)
+
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
         queryset = self.get_queryset()
         if not queryset.exists():
-            messages.error(request, _('No owner credentials selected for deletion.'))
+            messages.error(request, _('No DevOwnerIDs selected for deletion.'))
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
@@ -650,52 +538,25 @@ class OwnerCredentialBulkDeleteConfirmView(UserPermissionRequiredMixin, ZeroTouc
 class IssuedCredentialDeleteView(
     UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]
 ):
-    """Confirm and delete a single zero-touch issued credential in the Devices section.
-
-    Only credentials owned by an ``OwnerCredentialModel`` are accessible via this view.
-    The parent ``OwnerCredentialModel`` is resolved from the URL ``owner_pk`` parameter
-    so the back-link can always return to the correct CLM page.
-    """
+    """Confirm and delete a single DevOwnerID credential."""
 
     http_method_names = ('get', 'post')
     permission_required = AppPermissions.MANAGE_DEVICES
-    model = RemoteIssuedCredentialModel
     template_name = 'devices/zero_touch_credentials/confirm_delete_issued_credential.html'
-    context_object_name = 'issued_credential'
+    context_object_name = 'owner_credential'
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Verify the RemoteIssuedCredential belongs to the given OwnerCredential."""
-        self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['owner_pk'])
-        issued: RemoteIssuedCredentialModel = get_object_or_404(
-            RemoteIssuedCredentialModel,
-            pk=kwargs['pk'],
-            owner_credential=self.owner_credential,
-            issued_credential_type__in=[
-                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            ],
-        )
-        self.issued_credential = issued
-        return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
-
-    def get_object(self, queryset: Any = None) -> RemoteIssuedCredentialModel:  # noqa: ARG002
-        """Return the pre-fetched issued credential."""
-        return self.issued_credential
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the parent OwnerCredential to the template context."""
-        context = super().get_context_data(**kwargs)
-        context['owner_credential'] = self.owner_credential
-        return context
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Limit deletion to DevOwnerID rows."""
+        return _dev_owner_id_credentials()
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Delete the issued credential and redirect back to the CLM page."""
-        issued = self.issued_credential
-        cn = issued.common_name
+        """Delete the DevOwnerID credential and redirect back to the list."""
+        credential = self.get_object()
+        cn = credential.common_name
         try:
-            issued.pre_delete()
+            credential.delete()
         except Exception as exc:  # broad catch to surface any deletion error to the user
-            self.logger.exception('Failed to delete RemoteIssuedCredentialModel pk=%s', issued.pk)
+            self.logger.exception('Failed to delete RemoteIssuedCredentialModel pk=%s', credential.pk)
             messages.error(
                 request,
                 _('Failed to delete credential "{cn}": {error}').format(cn=cn, error=str(exc)),
@@ -705,15 +566,15 @@ class IssuedCredentialDeleteView(
                 request,
                 _('DevOwnerID credential "{cn}" has been deleted.').format(cn=cn),
             )
-        return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
+        return redirect('devices:zero_touch_credentials')
 
 
 # ---------------------------------------------------------------------------
-# DevOwnerID EST certificate issuance (define content → request)
+# DevOwnerID management CA issuance (define content -> request)
 # ---------------------------------------------------------------------------
 
 
-class OwnerCredentialDefineCertContentEstView(
+class OwnerCredentialDefineCertContentManagementCaView(
     UserPermissionRequiredMixin,
     FormErrorMessageMixin,
     CertificateProfileSelectionMixin,
@@ -721,216 +582,95 @@ class OwnerCredentialDefineCertContentEstView(
     ZeroTouchContextMixin,
     FormView[CertificateIssuanceForm],
 ):
-    """Step 1 - Define the certificate content for a new Zero-Touch EST enrollment in the Devices section.
+    """Define the certificate content for a DevOwnerID issued by a management CA.
 
-    On every GET/POST a fresh EC P-256 key pair is generated and a key-only
-    :class:`~devices.models.IssuedCredentialModel` (type ``DEV_OWNER_ID``) is
-    created.  Its primary key is stored in the session together with the
-    certificate content so that Step 2 can fetch exactly this credential.
-
-    Loads the selected certificate profile (defaulting to ``dev_owner_id``), renders the
-    :class:`~pki.forms.CertificateIssuanceForm`, and stores the validated
-    field values in the session under ``dev_owner_id_cert_content_<pk>``.
+    The default profile is ``dev_owner_id``. The pending key-only credential was
+    created by the add view and already carries the selected management CA.
     """
 
     default_profile_name = 'dev_owner_id'
     permission_required = AppPermissions.ISSUE_CERTIFICATES
-    protocol_name: ClassVar[str] = 'EST'
-    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-est'
+    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-management-ca'
 
     form_class = CertificateIssuanceForm
     template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
     available_profiles: list[CertificateProfileModel]
 
-    def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
-        return f'dev_owner_id_cert_content_{owner_credential.pk}'
-
-    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
-
-    def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
-        """Delete all key-only (certificate-less) DEV_OWNER_ID credentials for this owner.
-
-        These are credentials created during a previous "define cert content" visit that
-        were never enrolled (the user navigated away or the session expired).  Keeping
-        them creates confusing "Pending enrollment" rows in the CLM.
-
-        Args:
-            exclude_pk: If given, the credential with this pk is kept (it is the one
-                currently in use by the active session).
-        """
-        qs = RemoteIssuedCredentialModel.objects.filter(
-            owner_credential=self.owner_credential,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            credential__certificate__isnull=True,
-        )
-        if exclude_pk is not None:
-            qs = qs.exclude(pk=exclude_pk)
-        for orphan in qs.select_related('credential'):
-            try:
-                credential = orphan.credential
-                orphan.delete()
-                if credential is not None:
-                    credential.delete()
-            except Exception:  # noqa: BLE001
-                self.logger.warning('Could not delete orphan pending credential pk=%s', orphan.pk)
-
-    def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
-        """Create the pending key and issued record for the selected profile."""
-        return create_pending_owner_credential(
-            self.owner_credential,
-            self.cert_profile,
-            RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
-        )
+    def _pending_session_key(self, credential: RemoteIssuedCredentialModel) -> str:
+        return f'dev_owner_id_cert_content_{credential.pk}'
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Resolve the OwnerCredentialModel and the selected certificate profile.
-
-        On each visit a fresh key-only RemoteIssuedCredentialModel is created.  If there
-        is already a pending (certificate-less) credential from a previous visit its
-        pk is reused so we do not accumulate orphan credentials.
-        """
+        """Resolve the pending credential and profile."""
         if not self.has_permission():
             raise PermissionDenied
-        self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
+        self.owner_credential = get_object_or_404(_dev_owner_id_credentials(), pk=kwargs['pk'])
+        if self.owner_credential.ca is None:
+            messages.error(request, _('Select a management CA before issuing a DevOwnerID.'))
+            return redirect('devices:zero_touch_credentials')
+        if self.owner_credential.credential.certificate is not None:
+            messages.info(request, _('This DevOwnerID already has a certificate.'))
+            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
 
         resolved_profile = self._resolve_cert_profile(request)
         if resolved_profile is None:
-            messages.error(
-                request,
-                _('No certificate profiles found. Please create one first.'),
-            )
-            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
+            messages.error(request, _('No certificate profiles found. Please create one first.'))
+            return redirect('devices:zero_touch_credentials')
         self.cert_profile = resolved_profile
-
-        # Reuse an existing pending (certificate-less) credential if one exists,
-        # otherwise generate a fresh key pair and create a new one.
-        session_key = self._pending_session_key(self.owner_credential)
-        existing_pk = (request.session.get(session_key) or {}).get('issued_credential_pk')
-        if existing_pk:
-            try:
-                self.pending_issued = RemoteIssuedCredentialModel.objects.select_related('credential').get(
-                    pk=existing_pk,
-                    owner_credential=self.owner_credential,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-                    credential__certificate__isnull=True,
-                )
-                # Delete any other orphan pending credentials (from even older aborted sessions)
-                self._delete_orphan_pending_credentials(exclude_pk=existing_pk)
-            except RemoteIssuedCredentialModel.DoesNotExist:
-                self._delete_orphan_pending_credentials(exclude_pk=None)
-                self.pending_issued = self._create_pending_issued_credential()
-        else:
-            # Clean up any leftover key-only credentials from previous aborted sessions
-            # before creating the new one.
-            self._delete_orphan_pending_credentials(exclude_pk=None)
-            self.pending_issued = self._create_pending_issued_credential()
-
         return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Inject the profile into the form."""
-        kwargs = super().get_form_kwargs()
-        kwargs['profile'] = self.cert_profile.profile
-        return kwargs
+        """Inject the selected profile into the form."""
+        return super().get_form_kwargs() | {'profile': self.cert_profile.profile}
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add owner credential, profile and profile list to template context."""
-        context = super().get_context_data(**kwargs)
-        context['owner_credential'] = self.owner_credential
-        context['cert_profile'] = self.cert_profile
-        context['available_profiles'] = self.available_profiles
-        return context
+        """Add the DevOwnerID, profile and profile list to the template context."""
+        return super().get_context_data(**kwargs) | {
+            'owner_credential': self.owner_credential,
+            'cert_profile': self.cert_profile,
+            'available_profiles': self.available_profiles,
+        }
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Store certificate content and pending credential pk in session, then proceed to Step 2."""
-        session_key = self._pending_session_key(self.owner_credential)
+        """Store certificate content and proceed to enrollment."""
+        self.owner_credential.certificate_profile = self.cert_profile
+        self.owner_credential.save(update_fields=['certificate_profile'])
         session_data = dict(form.cleaned_data)
-        session_data['issued_credential_pk'] = self.pending_issued.pk
         session_data['cert_profile_unique_name'] = self.cert_profile.unique_name
-        self.request.session[session_key] = session_data
-        messages.success(
-            self.request,
-            _('Certificate content defined. Please proceed to request the DevOwnerID via {protocol}.').format(
-                protocol=self.protocol_name
-            ),
-        )
+        self.request.session[self._pending_session_key(self.owner_credential)] = session_data
+        messages.success(self.request, _('Certificate content defined. Proceed to request the DevOwnerID.'))
         return redirect(self.request_cert_url_name, pk=self.owner_credential.pk)
 
 
-class OwnerCredentialDefineCertContentCmpView(OwnerCredentialDefineCertContentEstView):
-    """Step 1 - Define the certificate content for a CMP DevOwnerID enrollment."""
-
-    protocol_name = 'CMP'
-    request_cert_url_name = 'devices:zero_touch_credentials-request-cert-cmp'
-
-
-class OwnerCredentialRequestCertEstView(
-    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
+class OwnerCredentialRequestCertManagementCaView(
+    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]
 ):
-    """Step 2 - Review and trigger the EST enrollment for a new Zero-Touch certificate in the Devices section.
-
-    Reads the certificate content stored by
-    :class:`OwnerCredentialDefineCertContentEstView`, builds a CSR using the
-    ``dev_owner_id`` profile, signs it with the existing DevOwnerID key, sends
-    it to the configured EST server and stores the issued certificate back in
-    the :class:`~devices.models.IssuedCredentialModel`.
-    """
+    """Review and issue a DevOwnerID locally or through an external management CA."""
 
     http_method_names = ('get', 'post')
     permission_required = AppPermissions.ISSUE_CERTIFICATES
-    model = OwnerCredentialModel
     template_name = 'devices/zero_touch_credentials/request_cert_est.html'
     context_object_name = 'owner_credential'
+    protocol_name: ClassVar[str] = 'Management CA'
+    client_error_types: ClassVar[tuple[type[Exception], ...]] = (EstClientError, CmpClientError)
+    define_content_url_name: ClassVar[str] = 'devices:zero_touch_credentials-define-cert-content-management-ca'
+    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-management-ca'
 
-    protocol_name: ClassVar[str] = 'EST'
-    client_error_types: ClassVar[tuple[type[Exception], ...]] = (EstClientError,)
-    define_content_url_name: ClassVar[str] = 'devices:zero_touch_credentials-define-cert-content-est'
-    request_cert_url_name: ClassVar[str] = 'devices:zero_touch_credentials-request-cert-est'
+    def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Limit access to DevOwnerID rows."""
+        return _dev_owner_id_credentials().select_related('credential__certificate', 'ca')
 
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    def _session_key(self, owner_credential: OwnerCredentialModel) -> str:
-        return f'dev_owner_id_cert_content_{owner_credential.pk}'
-
-    def _get_pending_issued(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> RemoteIssuedCredentialModel:
-        """Fetch the pending RemoteIssuedCredentialModel whose pk was stored in the session by Step 1.
-
-        :raises ValueError: if no matching pending credential is found.
-        """
-        issued_pk = cert_content_data.get('issued_credential_pk')
-        if issued_pk:
-            try:
-                return RemoteIssuedCredentialModel.objects.select_related('credential').get(
-                    pk=issued_pk,
-                    owner_credential=owner_credential,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-                )
-            except RemoteIssuedCredentialModel.DoesNotExist:
-                pass  # pk no longer valid; fall through to raise ValueError below.
-        msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
-        raise ValueError(msg)
-
-    _build_request_data = staticmethod(build_request_data)
-
-    _build_cert_content_summary = staticmethod(build_cert_content_summary)
-
-    # ------------------------------------------------------------------
-    # GET
-    # ------------------------------------------------------------------
+    def _session_key(self, credential: RemoteIssuedCredentialModel) -> str:
+        return f'dev_owner_id_cert_content_{credential.pk}'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add cert-content summary and profile to the template context."""
+        """Add protocol name, content summary and profile to the context."""
         context = super().get_context_data(**kwargs)
-        owner_credential: OwnerCredentialModel = self.get_object()
-        cert_content_data = self.request.session.get(self._session_key(owner_credential))
+        context['protocol_name'] = self.protocol_name
+        credential: RemoteIssuedCredentialModel = self.get_object()
+        cert_content_data = self.request.session.get(self._session_key(credential))
         if cert_content_data:
             context['has_cert_content'] = True
-            context['cert_content_summary'] = self._build_cert_content_summary(cert_content_data)
+            context['cert_content_summary'] = build_cert_content_summary(cert_content_data)
         else:
             context['has_cert_content'] = False
             context['cert_content_summary'] = None
@@ -941,65 +681,48 @@ class OwnerCredentialRequestCertEstView(
             context['cert_profile'] = None
         return context
 
-    # ------------------------------------------------------------------
-    # POST - perform EST enrollment
-    # ------------------------------------------------------------------
-
-    def _build_context_kwargs(
-        self,
-        owner_credential: OwnerCredentialModel,
-        cert_profile: CertificateProfileModel,
-    ) -> dict[str, Any]:
-        """Build EST authentication and truststore arguments for this credential."""
-        return build_owner_credential_est_context_kwargs(owner_credential, cert_profile, translate=_)
-
-    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
-        """Enroll the session's pending credential and persist the issued certificate."""
+    def _perform_enrollment(self, credential: RemoteIssuedCredentialModel, cert_content_data: dict[str, Any]) -> None:
+        """Issue or forward the pending DevOwnerID using its selected management CA."""
         profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
         cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
-        pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
-        if pending_issued.credential is None:
+        if credential.credential is None:
             msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
             raise ValueError(msg)
-        context = EstCertificateRequestContext(**self._build_context_kwargs(owner_credential, cert_profile))
-        context.request_data = self._build_request_data(cert_content_data)
-        enroll_owner_credential_est(
-            context,
-            owner_credential,
-            pending_issued,
+        ca = credential.ca
+        if ca is None:
+            msg = _('No management CA selected for this DevOwnerID.')
+            raise ValueError(msg)
+        issue_owner_credential_from_management_ca(
+            credential,
+            cert_profile,
+            cert_content_data,
+            ca,
             logger=self.logger,
-            domain_credential=False,
         )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Perform the enrollment and redirect to the CLM view."""
-        owner_credential: OwnerCredentialModel = self.get_object()
-        session_key = self._session_key(owner_credential)
+        """Perform enrollment and return to the CLM view."""
+        credential: RemoteIssuedCredentialModel = self.get_object()
+        session_key = self._session_key(credential)
         cert_content_data = request.session.get(session_key)
-
         if not cert_content_data:
-            messages.error(
-                request,
-                _('Certificate content data not found. Please define the certificate content first.'),
-            )
-            return redirect(self.define_content_url_name, pk=owner_credential.pk)
-
+            messages.error(request, _('Certificate content data not found. Please define it first.'))
+            return redirect(self.define_content_url_name, pk=credential.pk)
         try:
-            self._perform_enrollment(owner_credential, cert_content_data)
+            self._perform_enrollment(credential, cert_content_data)
             del request.session[session_key]
+            credential.refresh_from_db()
             messages.success(
                 request,
-                _('Successfully enrolled DevOwnerID certificate for "{name}" via {protocol}.').format(
-                    name=owner_credential.unique_name, protocol=self.protocol_name
-                ),
+                _('Successfully issued DevOwnerID certificate for "{name}".').format(name=credential.common_name),
             )
-            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=credential.pk)
         except (ValueError, KeyError, ProfileValidationError) as exc:
             messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect(self.define_content_url_name, pk=owner_credential.pk)
+            return redirect(self.define_content_url_name, pk=credential.pk)
         except CertificateProfileModel.DoesNotExist:
             messages.error(request, _('Certificate profile "dev_owner_id" not found.'))
-            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials')
         except self.client_error_types as exc:
             self.logger.exception('%s client error during DevOwnerID enrollment', self.protocol_name)
             messages.error(
@@ -1008,309 +731,8 @@ class OwnerCredentialRequestCertEstView(
                     protocol=self.protocol_name, error=str(exc)
                 ),
             )
-            return redirect(self.request_cert_url_name, pk=owner_credential.pk)
+            return redirect(self.request_cert_url_name, pk=credential.pk)
         except Exception as exc:
-            self.logger.exception('Unexpected error during DevOwnerID %s enrollment', self.protocol_name)
-            messages.error(
-                request,
-                _('Unexpected error during enrollment: {error}').format(error=str(exc)),
-            )
-            return redirect(self.request_cert_url_name, pk=owner_credential.pk)
-
-
-class OwnerCredentialRequestCertCmpView(OwnerCredentialRequestCertEstView):
-    """Step 2 - Review and trigger the CMP enrollment for a new Zero-Touch certificate."""
-
-    template_name = 'devices/zero_touch_credentials/request_cert_cmp.html'
-    protocol_name = 'CMP'
-    client_error_types = (CmpClientError,)
-    define_content_url_name = 'devices:zero_touch_credentials-define-cert-content-cmp'
-    request_cert_url_name = 'devices:zero_touch_credentials-request-cert-cmp'
-
-    def _build_context_kwargs(
-        self,
-        owner_credential: OwnerCredentialModel,
-        cert_profile: CertificateProfileModel,
-    ) -> dict[str, Any]:
-        """Build CMP authentication and truststore arguments for this credential."""
-        return build_owner_credential_cmp_context_kwargs(owner_credential, cert_profile, translate=_)
-
-    def _perform_enrollment(self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]) -> None:
-        """Enroll the session's pending credential via CMP and persist the issued certificate."""
-        profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
-        cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
-        pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
-        if pending_issued.credential is None:
-            msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
-            raise ValueError(msg)
-        context = CmpCertificateRequestContext(**self._build_context_kwargs(owner_credential, cert_profile))
-        context.request_data = self._build_request_data(cert_content_data)
-        enroll_owner_credential_cmp(context, owner_credential, pending_issued, logger=self.logger)
-
-
-# ---------------------------------------------------------------------------
-# Domain Credential EST certificate issuance (define content → request)
-# ---------------------------------------------------------------------------
-
-
-class OwnerCredentialDefineCertContentDomainCredentialEstView(
-    UserPermissionRequiredMixin,
-    FormErrorMessageMixin,
-    CertificateProfileSelectionMixin,
-    LoggerMixin,
-    ZeroTouchContextMixin,
-    FormView[CertificateIssuanceForm],
-):
-    """Step 1 - Define the certificate content for a new Domain Credential EST enrollment in the Devices section.
-
-    Only available for REMOTE_EST_ONBOARDING owner credentials.
-    The user can select any available certificate profile via a dropdown.
-    Defaults to ``devownerid_domain_credential`` when present.
-    """
-
-    default_profile_name = 'devownerid_domain_credential'
-    permission_required = AppPermissions.ISSUE_CERTIFICATES
-
-    form_class = CertificateIssuanceForm
-    template_name = 'devices/zero_touch_credentials/define_cert_content_domain_credential_est.html'
-    available_profiles: list[CertificateProfileModel]
-
-    def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
-        return f'domain_credential_cert_content_{owner_credential.pk}'
-
-    _public_key_info_from_key_type = staticmethod(public_key_info_from_key_type)
-
-    def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
-        """Delete all key-only (certificate-less) DOMAIN_CREDENTIAL credentials for this owner."""
-        qs = RemoteIssuedCredentialModel.objects.filter(
-            owner_credential=self.owner_credential,
-            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            credential__certificate__isnull=True,
-        )
-        if exclude_pk is not None:
-            qs = qs.exclude(pk=exclude_pk)
-        for orphan in qs.select_related('credential'):
-            try:
-                credential = orphan.credential
-                orphan.delete()
-                if credential is not None:
-                    credential.delete()
-            except Exception:  # noqa: BLE001
-                self.logger.warning('Could not delete orphan pending domain credential pk=%s', orphan.pk)
-
-    def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
-        """Create the pending key and issued record for the selected profile."""
-        return create_pending_owner_credential(
-            self.owner_credential,
-            self.cert_profile,
-            RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-            CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
-        )
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Resolve the OwnerCredentialModel and the selected certificate profile."""
-        if not self.has_permission():
-            raise PermissionDenied
-        self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
-
-        if (
-            self.owner_credential.owner_credential_type
-            != OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
-        ):
-            messages.error(request, _('Domain credentials are only available for EST onboarding configurations.'))
-            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
-
-        resolved_profile = self._resolve_cert_profile(request)
-        if resolved_profile is None:
-            messages.error(
-                request,
-                _('No certificate profiles found. Please create one first.'),
-            )
-            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
-        self.cert_profile = resolved_profile
-
-        session_key = self._pending_session_key(self.owner_credential)
-        existing_pk = (request.session.get(session_key) or {}).get('issued_credential_pk')
-        if existing_pk:
-            try:
-                self.pending_issued = RemoteIssuedCredentialModel.objects.select_related('credential').get(
-                    pk=existing_pk,
-                    owner_credential=self.owner_credential,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-                    credential__certificate__isnull=True,
-                )
-                self._delete_orphan_pending_credentials(exclude_pk=existing_pk)
-            except RemoteIssuedCredentialModel.DoesNotExist:
-                self._delete_orphan_pending_credentials(exclude_pk=None)
-                self.pending_issued = self._create_pending_issued_credential()
-        else:
-            self._delete_orphan_pending_credentials(exclude_pk=None)
-            self.pending_issued = self._create_pending_issued_credential()
-
-        return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        """Inject the profile into the form."""
-        kwargs = super().get_form_kwargs()
-        kwargs['profile'] = self.cert_profile.profile
-        return kwargs
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add owner credential, profile and profile list to template context."""
-        context = super().get_context_data(**kwargs)
-        context['owner_credential'] = self.owner_credential
-        context['cert_profile'] = self.cert_profile
-        context['available_profiles'] = self.available_profiles
-        return context
-
-    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Store certificate content, selected profile and pending credential pk in session."""
-        session_key = self._pending_session_key(self.owner_credential)
-        session_data = dict(form.cleaned_data)
-        session_data['issued_credential_pk'] = self.pending_issued.pk
-        session_data['cert_profile_unique_name'] = self.cert_profile.unique_name
-        self.request.session[session_key] = session_data
-        messages.success(
-            self.request,
-            _('Certificate content defined. Please proceed to request the Domain Credential via EST.'),
-        )
-        return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=self.owner_credential.pk)
-
-
-class OwnerCredentialRequestDomainCredentialEstView(
-    UserPermissionRequiredMixin, LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
-):
-    """Step 2 - Review and trigger the EST enrollment for a new Domain Credential in the Devices section.
-
-    Uses ``remote_path_domain_credential`` from OwnerCredentialModel,
-    ``trust_store`` from OnboardingConfigModel,
-    ``est_username`` from OwnerCredentialModel,
-    ``est_password`` from OnboardingConfigModel.
-    """
-
-    http_method_names = ('get', 'post')
-    permission_required = AppPermissions.ISSUE_CERTIFICATES
-    model = OwnerCredentialModel
-    template_name = 'devices/zero_touch_credentials/request_domain_credential_est.html'
-    context_object_name = 'owner_credential'
-
-    def _session_key(self, owner_credential: OwnerCredentialModel) -> str:
-        return f'domain_credential_cert_content_{owner_credential.pk}'
-
-    def _get_pending_issued(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> RemoteIssuedCredentialModel:
-        """Fetch the pending RemoteIssuedCredentialModel whose pk was stored in the session by Step 1."""
-        issued_pk = cert_content_data.get('issued_credential_pk')
-        if issued_pk:
-            try:
-                return RemoteIssuedCredentialModel.objects.select_related('credential').get(
-                    pk=issued_pk,
-                    owner_credential=owner_credential,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
-                )
-            except RemoteIssuedCredentialModel.DoesNotExist:
-                pass
-        msg = _('No pending Domain Credential found. Please re-define the certificate content.')
-        raise ValueError(msg)
-
-    _build_request_data = staticmethod(build_request_data)
-
-    _build_cert_content_summary = staticmethod(build_cert_content_summary)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add cert-content summary and profile to the template context."""
-        context = super().get_context_data(**kwargs)
-        owner_credential: OwnerCredentialModel = self.get_object()
-        cert_content_data = self.request.session.get(self._session_key(owner_credential))
-        if cert_content_data:
-            context['has_cert_content'] = True
-            context['cert_content_summary'] = self._build_cert_content_summary(cert_content_data)
-        else:
-            context['has_cert_content'] = False
-            context['cert_content_summary'] = None
-
-        profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'devownerid_domain_credential')
-        try:
-            context['cert_profile'] = CertificateProfileModel.objects.get(unique_name=profile_name)
-        except CertificateProfileModel.DoesNotExist:
-            context['cert_profile'] = None
-
-        onboarding_config = owner_credential.onboarding_config
-        context['trust_store'] = onboarding_config.trust_store if onboarding_config else None
-        context['est_password_set'] = bool(onboarding_config.est_password) if onboarding_config else False
-        return context
-
-    def _perform_est_enrollment(
-        self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> None:
-        """Enroll the session's pending credential and persist the issued certificate."""
-        profile_name = cert_content_data.get('cert_profile_unique_name', 'devownerid_domain_credential')
-        cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
-        pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
-        if pending_issued.credential is None:
-            msg = _('No pending Domain Credential found. Please re-define the certificate content.')
-            raise ValueError(msg)
-        context = EstCertificateRequestContext(
-            **build_domain_credential_est_context_kwargs(owner_credential, cert_profile)
-        )
-        context.request_data = self._build_request_data(cert_content_data)
-        enroll_owner_credential_est(
-            context,
-            owner_credential,
-            pending_issued,
-            logger=self.logger,
-            domain_credential=True,
-        )
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Perform the EST enrollment and redirect to the CLM view."""
-        owner_credential: OwnerCredentialModel = self.get_object()
-        session_key = self._session_key(owner_credential)
-        cert_content_data = request.session.get(session_key)
-
-        if not cert_content_data:
-            messages.error(
-                request,
-                _('Certificate content data not found. Please define the certificate content first.'),
-            )
-            return redirect(
-                'devices:zero_touch_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
-            )
-
-        try:
-            self._perform_est_enrollment(owner_credential, cert_content_data)
-            del request.session[session_key]
-            messages.success(
-                request,
-                _('Successfully enrolled Domain Credential for "{name}" via EST.').format(
-                    name=owner_credential.unique_name
-                ),
-            )
-            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
-            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect(
-                'devices:zero_touch_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
-            )
-        except CertificateProfileModel.DoesNotExist:
-            profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'devownerid_domain_credential')
-            messages.error(
-                request,
-                _('Certificate profile "{name}" not found.').format(name=profile_name),
-            )
-            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
-        except EstClientError as exc:
-            self.logger.exception('EST client error during Domain Credential enrollment')
-            messages.error(
-                request,
-                _('Failed to enroll Domain Credential via EST: {error}').format(error=str(exc)),
-            )
-            return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk)
-        except Exception as exc:
-            self.logger.exception('Unexpected error during Domain Credential EST enrollment')
-            messages.error(
-                request,
-                _('Unexpected error during enrollment: {error}').format(error=str(exc)),
-            )
-            return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk)
+            self.logger.exception('Unexpected error during DevOwnerID enrollment')
+            messages.error(request, _('Unexpected error during enrollment: {error}').format(error=str(exc)))
+            return redirect(self.request_cert_url_name, pk=credential.pk)

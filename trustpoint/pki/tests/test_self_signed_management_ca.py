@@ -28,7 +28,8 @@ def _profiles() -> None:
 def manage_cas_client() -> Client:
     """Return an authenticated client allowed to manage CAs."""
     user = get_user_model().objects.create_user(
-        username='self-signed-ca-admin', password='test-password',  # noqa: S106
+        username='self-signed-ca-admin',
+        password='test-password',  # noqa: S106
     )
     user.role.permissions.add(Permission.objects.get(codename='manage_cas'))
     client = Client()

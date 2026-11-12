@@ -25,12 +25,12 @@ from .issuing_cas import (
     SelfSignedManagementCaForm,
 )
 from .owner_credential import (
-    OwnerCredentialAddRequestCmpForm,
-    OwnerCredentialAddRequestEstNoOnboardingForm,
-    OwnerCredentialAddRequestEstOnboardingForm,
+    OwnerCredentialAddManagementCaForm,
+    OwnerCredentialExternalCsrCertificateForm,
+    OwnerCredentialExternalCsrKeyForm,
     OwnerCredentialFileImportForm,
     OwnerCredentialOnboardingSetupForm,
-    OwnerCredentialTruststoreAssociationForm,
+    OwnerCredentialPkcs12ImportForm,
 )
 from .truststores import TruststoreAddForm, TruststoreDownloadForm
 
@@ -55,12 +55,12 @@ __all__ = [
     'IssuingCaRequestCmpForm',
     'IssuingCaRequestEstForm',
     'IssuingCaTruststoreAssociationForm',
-    'OwnerCredentialAddRequestCmpForm',
-    'OwnerCredentialAddRequestEstNoOnboardingForm',
-    'OwnerCredentialAddRequestEstOnboardingForm',
+    'OwnerCredentialAddManagementCaForm',
+    'OwnerCredentialExternalCsrCertificateForm',
+    'OwnerCredentialExternalCsrKeyForm',
     'OwnerCredentialFileImportForm',
     'OwnerCredentialOnboardingSetupForm',
-    'OwnerCredentialTruststoreAssociationForm',
+    'OwnerCredentialPkcs12ImportForm',
     'ProfileBasedFormFieldBuilder',
     'SelfSignedManagementCaForm',
     'TruststoreAddForm',

@@ -6,10 +6,7 @@
 import pytest
 from django.test import RequestFactory
 
-from devices.views.owner_credentials import (
-    OwnerCredentialDefineCertContentDomainCredentialEstView,
-    OwnerCredentialDefineCertContentEstView,
-)
+from devices.views.owner_credentials import OwnerCredentialDefineCertContentManagementCaView
 from pki.models import CertificateProfileModel
 from pki.views.issuing_cas import IssuingCaDefineCertContentEstView
 
@@ -18,8 +15,7 @@ from pki.views.issuing_cas import IssuingCaDefineCertContentEstView
     'view_type,default_name',
     [
         (IssuingCaDefineCertContentEstView, 'issuing_ca'),
-        (OwnerCredentialDefineCertContentEstView, 'dev_owner_id'),
-        (OwnerCredentialDefineCertContentDomainCredentialEstView, 'devownerid_domain_credential'),
+        (OwnerCredentialDefineCertContentManagementCaView, 'dev_owner_id'),
     ],
 )
 def test_profile_selection_preserves_defaults_and_request_precedence(view_type, default_name):

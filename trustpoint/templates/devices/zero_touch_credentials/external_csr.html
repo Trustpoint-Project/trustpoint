@@ -1,0 +1,45 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'External DevOwnerID CSR' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Download the CSR, have it signed by your external PKI, and upload the issued DevOwnerID certificate.' %}
+        </p>
+    </div>
+
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'Certificate Signing Request' %}</h2>
+                    <p class="mb-0 text-muted">{% if owner_credential.common_name %}{{ owner_credential.common_name }}{% else %}{% trans "New DevOwnerID" %}{% endif %}</p>
+                </div>
+                <hr class="mb-4">
+                <a href="?download=1" class="btn btn-outline-secondary">{% trans 'Download CSR' %}</a>
+            </section>
+
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'Upload Issued Certificate' %}</h2>
+                </div>
+                <hr class="mb-4">
+                <form id="devownerid-external-csr-form" method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {{ form|crispy }}
+                </form>
+            </section>
+        </div>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a href="{% url 'devices:zero_touch_credentials-add' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+        <button type="submit" form="devownerid-external-csr-form" class="btn btn-primary">
+            {% trans 'Upload Certificate' %}
+        </button>
+    </div>
+</div>
+{% endblock %}

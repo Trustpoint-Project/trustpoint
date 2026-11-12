@@ -19,7 +19,7 @@ from cryptography.x509.verification import VerificationError
 from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator, RegexValidator
-from django.db.models import Model, Q
+from django.db.models import Model
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -60,6 +60,7 @@ from pki.services import credential_upload as uploads
 from pki.services.credential_upload import parse_pkcs12
 from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
 from pki.services.key_generation import supported_key_type_choices
+from pki.services.management_issuance import available_management_cas
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 
@@ -196,20 +197,14 @@ class TlsLocalCaSelectForm(forms.Form):
     """Select the management CA used to issue or forward the TLS credential."""
 
     issuing_ca = forms.ModelChoiceField(
-        queryset=(
-            CaModel.objects.filter(ca_role=CaModel.CaRole.MANAGEMENT, is_active=True)
-            .filter(
-                Q(credential__certificate__isnull=False)
-                | Q(
-                    ca_type__in=[CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA],
-                    certificate__isnull=False,
-                )
-            )
-            .select_related('credential__certificate', 'certificate')
-            .order_by('unique_name')
-        ),
+        queryset=CaModel.objects.none(),
         label=_('Management CA'),
     )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Offer only management CAs that can issue locally or forward to an external RA."""
+        super().__init__(*args, **kwargs)
+        cast('forms.ModelChoiceField[CaModel]', self.fields['issuing_ca']).queryset = available_management_cas()
 
 
 class AccountSecurityConfigForm(forms.ModelForm[AccountSecurityConfig]):
