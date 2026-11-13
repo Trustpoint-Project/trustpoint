@@ -586,7 +586,12 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     template_name = 'management/includes/security_configuration.html'
     form_class = SecurityConfigForm
     setting_type = 'security'
-    success_url = reverse_lazy('management:settings-security')
+    success_url = reverse_lazy('management:settings', query={'tab': 'security'})
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Open the complete Settings page instead of its security form fragment."""
+        del request, args, kwargs
+        return redirect(self.success_url)
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form."""

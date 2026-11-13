@@ -40,6 +40,7 @@ def test_creation_disabled_by_security_config(manage_cas_client: Client) -> None
     response = manage_cas_client.get(reverse('pki:issuing_cas-add-method_select'))
     assert b'Self-signed Issuing CA' in response.content
     assert response.context['can_generate_auto_gen_pki'] is False
+    assert f'href="{reverse("management:settings")}?tab=security"' in response.content.decode()
     response = manage_cas_client.post(
         reverse('pki:issuing_cas-add-autogen'), {'unique_name': 'Blocked CA', 'key_type': 'RSA-2048'}
     )

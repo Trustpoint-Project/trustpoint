@@ -170,7 +170,7 @@ def create_self_signed_ca(*, unique_name: str, key_type: str, ca_role: int = CaM
         chain=[],
         unique_name=unique_name,
         ca_type=CaModel.CaTypeChoice.SELF_SIGNED,
-        ca_role=ca_role,
+        ca_role=CaModel.CaRole(ca_role),
     )
 
 

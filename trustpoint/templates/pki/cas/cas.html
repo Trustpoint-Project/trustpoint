@@ -96,7 +96,11 @@
                                 </td>
 
                                 <td>
-                                    {% if ca.ca_type == 4 or ca.ca_type == 5 %}
+                                    {% if ca.is_management_ca %}
+                                        <span class="badge text-bg-secondary">
+                                            {% trans 'MGMT' %}
+                                        </span>
+                                    {% elif ca.ca_type == 4 or ca.ca_type == 5 %}
                                         <span class="badge text-bg-secondary">
                                             {% trans 'RA' %}
                                         </span>
@@ -191,7 +195,7 @@
             href="{% url 'pki:issuing_cas-add-role_select' %}"
             class="btn btn-primary"
         >
-            {% trans 'Add Issuing CA' %}
+            {% trans 'Add Certificate Authority' %}
         </a>
     </div>
 </div>

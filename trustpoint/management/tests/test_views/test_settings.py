@@ -76,7 +76,16 @@ class SecuritySettingsViewTest(TestCase):
 
     def test_success_url(self):
         """Test success URL is set correctly."""
-        self.assertEqual(str(self.view.success_url), reverse('management:settings-security'))
+        self.assertEqual(str(self.view.success_url), reverse('management:settings') + '?tab=security')
+
+    def test_get_redirects_to_full_settings_page(self):
+        """Direct security links open the full application layout."""
+        self.client.force_login(self.view.request.user)
+        response = self.client.get(reverse('management:settings-security'), follow=True)
+        self.assertRedirects(response, reverse('management:settings') + '?tab=security')
+        self.assertTemplateUsed(response, 'management/settings.html')
+        self.assertTemplateUsed(response, 'trustpoint/base.html')
+        self.assertEqual(response.context['active_tab'], 'security')
 
     def test_page_category_and_name(self):
         """Test page category and name are set correctly."""
@@ -128,9 +137,10 @@ class SecuritySettingsViewTest(TestCase):
         form.changed_data = []
         form.save = Mock()
 
-        self.view.form_valid(form)
+        response = self.view.form_valid(form)
 
         form.save.assert_called_once()
+        self.assertEqual(response.url, reverse('management:settings') + '?tab=security')
 
     @patch.object(SecurityConfig, 'apply_security_settings')
     def test_form_valid_resets_settings_on_security_mode_increase(self, mock_apply):

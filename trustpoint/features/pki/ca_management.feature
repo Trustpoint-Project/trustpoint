@@ -19,9 +19,9 @@ Feature: Certificate Authority management
     Then the response status code is 200
     And the issuing CA list contains "behave-local-ca"
 
-  Scenario: Add Issuing CA page offers separate generation workflows
+  Scenario: Add Issuing CA page offers import, enrollment and self-signed creation
     When the admin opens the Add Issuing CA method selection
     Then the response status code is 200
     And the response contains "Import existing Issuing CA"
     And the response contains "Generate CSR"
-    And the response contains "Auto-generated PKI"
+    And the response contains "Self-signed Issuing CA"

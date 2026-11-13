@@ -306,7 +306,7 @@
             {% if not auto_gen_pki_allowed %}
                 <div class="alert alert-info" role="status">
                     {% trans 'Self-signed CA creation is disabled in the Security Settings.' %}
-                    <a href="{% url 'management:settings-security' %}">{% trans 'Security Settings' %}</a>
+                    <a href="{% url 'management:settings' %}?tab=security">{% trans 'Security Settings' %}</a>
                 </div>
             {% endif %}
             {% if can_generate_auto_gen_pki %}
