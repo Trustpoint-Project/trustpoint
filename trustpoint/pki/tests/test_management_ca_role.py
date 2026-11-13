@@ -5,8 +5,11 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from django.core.exceptions import ValidationError
+from django.template.loader import render_to_string
 
 from management.models import CertificateAuthenticationConfig
 from pki.models import CaModel, DomainModel
@@ -106,3 +109,20 @@ def test_service_selects_management_ca_for_user_authentication() -> None:
     CertificateAuthenticationConfig.objects.filter(issuing_ca=first).update(enabled=True)
     ManagementCAService.select_issuing_ca(first.pk)
     assert CertificateAuthenticationConfig.objects.get(issuing_ca=first).enabled is True
+
+
+@pytest.mark.parametrize('ca_type', [CaModel.CaTypeChoice.SELF_SIGNED, CaModel.CaTypeChoice.REMOTE_EST_RA])
+@pytest.mark.parametrize('ca_role', [CaModel.CaRole.ISSUING, CaModel.CaRole.MANAGEMENT])
+def test_ca_table_labels_management_role(ca_type: int, ca_role: int) -> None:
+    """Management CAs show MGMT for both local and remote configurations."""
+    ca = CaModel(ca_type=ca_type, ca_role=ca_role)
+    row = SimpleNamespace(
+        id=1,
+        unique_name='Table CA',
+        ca_type=ca_type,
+        is_management_ca=ca.is_management_ca,
+        domains=SimpleNamespace(exists=False),
+    )
+    html = render_to_string('pki/cas/cas.html', {'cas': [row]})
+    expected = 'MGMT' if ca.is_management_ca else ('RA' if ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA else 'CA')
+    assert f'<span class="badge text-bg-secondary"> {expected} </span>' in ' '.join(html.split())

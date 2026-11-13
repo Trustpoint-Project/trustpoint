@@ -123,7 +123,7 @@ _SECURITY_AUDIT_SPECS: Final[dict[str, SecurityAuditSpec]] = {
             'credential_ttl_seconds',
             'allow_user_defined_device_secrets',
             'allow_ca_issuance',
-            'allow_auto_gen_pki',
+            'allow_self_signed_ca_creation',
             'allow_self_signed_ca',
             'allow_imported_private_keys',
             'permitted_cmp_hmac_algorithms',

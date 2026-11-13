@@ -72,7 +72,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
         raise CommandError(msg)
 
     @staticmethod
-    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey) -> CryptoManagedKeyModel:
+    def _managed_key_model(
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey | ManagedMLDSAPrivateKey,
+    ) -> CryptoManagedKeyModel:
         """Resolve a generated managed key facade to its database model."""
         return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
 
@@ -94,9 +96,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
         key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
         return self._generate_managed_private_key(alias=key_label, key_spec=RsaKeySpec(key_size=key_size))
 
-    def _generate_demo_ec_issuing_key(
-        self, *, unique_name: str, curve: ec.EllipticCurve
-    ) -> ec.EllipticCurvePrivateKey:
+    def _generate_demo_ec_issuing_key(self, *, unique_name: str, curve: ec.EllipticCurve) -> ec.EllipticCurvePrivateKey:
         """Generate a demo issuing-CA EC key in the configured backend."""
         self._require_ec_demo_support(curve)
         curve_name = normalize_curve_name(curve)
@@ -127,9 +127,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
         msg = f'The active crypto backend does not support {variant.value} issuing-CA demo keys: {diagnostics}'
         raise CommandError(msg)
 
-    def _generate_demo_mldsa_issuing_key(
-        self, *, unique_name: str, variant: MlDsaVariant
-    ) -> ManagedMLDSAPrivateKey:
+    def _generate_demo_mldsa_issuing_key(self, *, unique_name: str, variant: MlDsaVariant) -> ManagedMLDSAPrivateKey:
         """Generate a demo issuing-CA ML-DSA key in the configured backend."""
         self._require_mldsa_demo_support(variant)
         key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
@@ -227,13 +225,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             str: The CRL in PEM format.
         """
         from pki.util.crl import generate_empty_crl  # noqa: PLC0415
+
         return generate_empty_crl(ca_cert, private_key, hash_algorithm, crl_validity_hours)
 
     def verify_ca_certificate(
-        self,
-        ca_cert: x509.Certificate,
-        issuer_cert: x509.Certificate | None = None,
-        ca_name: str = 'CA'
+        self, ca_cert: x509.Certificate, issuer_cert: x509.Certificate | None = None, ca_name: str = 'CA'
     ) -> bool:
         """Verify a CA certificate against its issuer.
 
@@ -266,16 +262,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             return True
 
         except ValueError as e:
-            self.log_and_stdout(
-                f'✗ Certificate verification failed for {ca_name}: {e}',
-                level='error'
-            )
+            self.log_and_stdout(f'✗ Certificate verification failed for {ca_name}: {e}', level='error')
             return False
         except Exception as e:
-            self.log_and_stdout(
-                f'✗ Unexpected error during verification of {ca_name}: {e}',
-                level='error'
-            )
+            self.log_and_stdout(f'✗ Unexpected error during verification of {ca_name}: {e}', level='error')
             return False
 
     def _audit_ca_created(self, ca: CaModel, label: str) -> None:
@@ -294,24 +284,26 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             pk=1,
             defaults={
                 'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
-            }
+            },
         )
         if created:
             security_config.apply_security_settings()
             self.log_and_stdout('Created default SecurityConfig with BROWNFIELD security mode')
         else:
-            self.log_and_stdout(f'Using existing SecurityConfig with security mode: {security_config.get_security_mode_display()}')
+            self.log_and_stdout(
+                f'Using existing SecurityConfig with security mode: {security_config.get_security_mode_display()}'
+            )
 
         # Determine CA type based on storage configuration
         ca_type = self.get_ca_type_from_storage_config()
         self.log_and_stdout(f'Using CA type: {ca_type}')
 
         self.log_and_stdout('Creating RSA-2048 Root CA, Intermediate CA, and Issuing CA A...')
-        rsa2_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-2048-sha256', key_size=2048)
-        rsa2_int_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='intermediate-ca-a-1', key_size=2048)
-        rsa2_int_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='intermediate-ca-a-2', key_size=2048)
-        rsa2_issuing_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-1', key_size=2048)
-        rsa2_issuing_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-2', key_size=2048)
+        rsa2_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='DemoRootCA_rsa-2048-sha256', key_size=2048)
+        rsa2_int_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='DemoIntCA_a-1', key_size=2048)
+        rsa2_int_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='DemoIntCA_a-2', key_size=2048)
+        rsa2_issuing_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='DemoIssuingCA_a-1', key_size=2048)
+        rsa2_issuing_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='DemoIssuingCA_a-2', key_size=2048)
         root_validity_days: int = 7300
         intermediate_validity_days: int = 5475
         issuing_validity_days: int = 3650
@@ -322,10 +314,12 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             validity_days=root_validity_days,
             path_length=2,  # Allow 2 non-self-issued intermediate CAs (intermediate + issuing)
         )
-        rsa2_root_crl = self.generate_empty_crl(rsa2_root, rsa2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        rsa2_root_crl = self.generate_empty_crl(
+            rsa2_root, rsa2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         rsa2_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa2_root,
-            unique_name='root-ca-rsa-2048-sha256',
+            unique_name='DemoRootCA_rsa-2048-sha256',
             crl_pem=rsa2_root_crl,
         )
         self._audit_ca_created(rsa2_root_ca, 'Root-CA RSA-2048-SHA256')
@@ -340,10 +334,12 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             validity_days=intermediate_validity_days,
             path_length=1,
         )
-        rsa2_int_ca_crl = self.generate_empty_crl(rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24)
+        rsa2_int_ca_crl = self.generate_empty_crl(
+            rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24
+        )
         rsa2_int_ca_model_1 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_1,
-            unique_name='intermediate-ca-a-1',
+            unique_name='DemoIntCA_a-1',
             crl_pem=rsa2_int_ca_crl,
         )
         rsa2_int_ca_model_1.parent_ca = rsa2_root_ca
@@ -360,10 +356,12 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             validity_days=intermediate_validity_days,
             path_length=1,
         )
-        rsa2_int_ca_crl_2 = self.generate_empty_crl(rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24)
+        rsa2_int_ca_crl_2 = self.generate_empty_crl(
+            rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24
+        )
         rsa2_int_ca_model_2 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_2,
-            unique_name='intermediate-ca-a-2',
+            unique_name='DemoIntCA_a-2',
             crl_pem=rsa2_int_ca_crl_2,
         )
         rsa2_int_ca_model_2.parent_ca = rsa2_root_ca
@@ -383,7 +381,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=rsa2_issuing_ca_1,
             private_key=rsa2_issuing_ca_key_1,
             chain=[rsa2_root, rsa2_int_ca_1],
-            unique_name='issuing-ca-a-1',
+            unique_name='DemoIssuingCA_a-1',
             ca_type=ca_type,
             parent_ca=rsa2_int_ca_model_1,
         )
@@ -402,7 +400,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=rsa2_issuing_ca_2,
             private_key=rsa2_issuing_ca_key_2,
             chain=[rsa2_root, rsa2_int_ca_2],
-            unique_name='issuing-ca-a-2',
+            unique_name='DemoIssuingCA_a-2',
             ca_type=ca_type,
             parent_ca=rsa2_int_ca_model_2,
         )
@@ -410,15 +408,20 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
         self.verify_ca_certificate(rsa2_issuing_ca_2, issuer_cert=rsa2_int_ca_2, ca_name='Issuing CA A-2')
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
-        rsa3_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-3072-sha256', key_size=3072)
-        rsa3_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-b', key_size=3072)
+        rsa3_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='DemoRootCA_rsa-3072-sha256', key_size=3072)
+        rsa3_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='DemoIssuingCA_b', key_size=3072)
         rsa3_root, _ = self.create_root_ca(
-            'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA RSA-3072-SHA256',
+            private_key=rsa3_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        rsa3_root_crl = self.generate_empty_crl(rsa3_root, rsa3_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        rsa3_root_crl = self.generate_empty_crl(
+            rsa3_root, rsa3_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         rsa3_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa3_root,
-            unique_name='root-ca-rsa-3072-sha256',
+            unique_name='DemoRootCA_rsa-3072-sha256',
             crl_pem=rsa3_root_crl,
         )
         self._audit_ca_created(rsa3_root_ca, 'Root-CA RSA-3072-SHA256')
@@ -436,7 +439,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=rsa3_issuing_ca,
             private_key=rsa3_issuing_ca_key,
             chain=[rsa3_root],
-            unique_name='issuing-ca-b',
+            unique_name='DemoIssuingCA_b',
             ca_type=ca_type,
             parent_ca=rsa3_root_ca,
         )
@@ -444,15 +447,20 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
         self.verify_ca_certificate(rsa3_issuing_ca, issuer_cert=rsa3_root, ca_name='Issuing CA B')
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
-        rsa4_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-4096-sha256', key_size=4096)
-        rsa4_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-c', key_size=4096)
+        rsa4_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='DemoRootCA_rsa-4096-sha256', key_size=4096)
+        rsa4_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='DemoIssuingCA_c', key_size=4096)
         rsa4_root, _ = self.create_root_ca(
-            'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512(), validity_days=root_validity_days
+            'Root-CA RSA-4096-SHA256',
+            private_key=rsa4_root_ca_key,
+            hash_algorithm=hashes.SHA512(),
+            validity_days=root_validity_days,
         )
-        rsa4_root_crl = self.generate_empty_crl(rsa4_root, rsa4_root_ca_key, hashes.SHA512(), crl_validity_hours=root_validity_days * 24)
+        rsa4_root_crl = self.generate_empty_crl(
+            rsa4_root, rsa4_root_ca_key, hashes.SHA512(), crl_validity_hours=root_validity_days * 24
+        )
         rsa4_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa4_root,
-            unique_name='root-ca-rsa-4096-sha256',
+            unique_name='DemoRootCA_rsa-4096-sha256',
             crl_pem=rsa4_root_crl,
         )
         self._audit_ca_created(rsa4_root_ca, 'Root-CA RSA-4096-SHA256')
@@ -470,7 +478,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=rsa4_issuing_ca,
             private_key=rsa4_issuing_ca_key,
             chain=[rsa4_root],
-            unique_name='issuing-ca-c',
+            unique_name='DemoIssuingCA_c',
             ca_type=ca_type,
             parent_ca=rsa4_root_ca,
         )
@@ -479,20 +487,25 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
         ecc1_root_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='root-ca-secp256r1-sha256',
+            unique_name='DemoRootCA_secp256r1-sha256',
             curve=ec.SECP256R1(),
         )
         ecc1_issuing_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='issuing-ca-d',
+            unique_name='DemoIssuingCA_d',
             curve=ec.SECP256R1(),
         )
         ecc1_root, _ = self.create_root_ca(
-            'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA SECP256R1-SHA256',
+            private_key=ecc1_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        ecc1_root_crl = self.generate_empty_crl(ecc1_root, ecc1_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        ecc1_root_crl = self.generate_empty_crl(
+            ecc1_root, ecc1_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         ecc1_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc1_root,
-            unique_name='root-ca-secp256r1-sha256',
+            unique_name='DemoRootCA_secp256r1-sha256',
             crl_pem=ecc1_root_crl,
         )
         self._audit_ca_created(ecc1_root_ca, 'Root-CA SECP256R1-SHA256')
@@ -510,7 +523,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=ecc1_issuing_ca,
             private_key=ecc1_issuing_ca_key,
             chain=[ecc1_root],
-            unique_name='issuing-ca-d',
+            unique_name='DemoIssuingCA_d',
             ca_type=ca_type,
             parent_ca=ecc1_root_ca,
         )
@@ -519,20 +532,25 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
         ecc2_root_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='root-ca-secp384r1-sha256',
+            unique_name='DemoRootCA_secp384r1-sha256',
             curve=ec.SECP384R1(),
         )
         ecc2_issuing_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='issuing-ca-e',
+            unique_name='DemoIssuingCA_e',
             curve=ec.SECP384R1(),
         )
         ecc2_root, _ = self.create_root_ca(
-            'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA SECP384R1-SHA256',
+            private_key=ecc2_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        ecc2_root_crl = self.generate_empty_crl(ecc2_root, ecc2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        ecc2_root_crl = self.generate_empty_crl(
+            ecc2_root, ecc2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         ecc2_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc2_root,
-            unique_name='root-ca-secp384r1-sha256',
+            unique_name='DemoRootCA_secp384r1-sha256',
             crl_pem=ecc2_root_crl,
         )
         self._audit_ca_created(ecc2_root_ca, 'Root-CA SECP384R1-SHA256')
@@ -550,7 +568,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=ecc2_issuing_ca,
             private_key=ecc2_issuing_ca_key,
             chain=[ecc2_root],
-            unique_name='issuing-ca-e',
+            unique_name='DemoIssuingCA_e',
             ca_type=ca_type,
             parent_ca=ecc2_root_ca,
         )
@@ -559,20 +577,25 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
         ecc3_root_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='root-ca-secp521r1-sha256',
+            unique_name='DemoRootCA_secp521r1-sha256',
             curve=ec.SECP521R1(),
         )
         ecc3_issuing_ca_key = self._generate_demo_ec_issuing_key(
-            unique_name='issuing-ca-f',
+            unique_name='DemoIssuingCA_f',
             curve=ec.SECP521R1(),
         )
         ecc3_root, _ = self.create_root_ca(
-            'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512(), validity_days=root_validity_days
+            'Root-CA SECP521R1-SHA256',
+            private_key=ecc3_root_ca_key,
+            hash_algorithm=hashes.SHA3_512(),
+            validity_days=root_validity_days,
         )
-        ecc3_root_crl = self.generate_empty_crl(ecc3_root, ecc3_root_ca_key, hashes.SHA3_512(), crl_validity_hours=root_validity_days * 24)
+        ecc3_root_crl = self.generate_empty_crl(
+            ecc3_root, ecc3_root_ca_key, hashes.SHA3_512(), crl_validity_hours=root_validity_days * 24
+        )
         ecc3_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc3_root,
-            unique_name='root-ca-secp521r1-sha256',
+            unique_name='DemoRootCA_secp521r1-sha256',
             crl_pem=ecc3_root_crl,
         )
         self._audit_ca_created(ecc3_root_ca, 'Root-CA SECP521R1-SHA256')
@@ -590,7 +613,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=ecc3_issuing_ca,
             private_key=ecc3_issuing_ca_key,
             chain=[ecc3_root],
-            unique_name='issuing-ca-f',
+            unique_name='DemoIssuingCA_f',
             ca_type=ca_type,
             parent_ca=ecc3_root_ca,
         )
@@ -599,20 +622,22 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
 
         self.log_and_stdout('Creating ML-DSA-65 Root CA and Issuing CA G...')
         mldsa_root_ca_key = self._generate_demo_mldsa_issuing_key(
-            unique_name='root-ca-mldsa65',
+            unique_name='DemoRootCA_mldsa65',
             variant=MlDsaVariant.MLDSA65,
         )
         mldsa_issuing_ca_key = self._generate_demo_mldsa_issuing_key(
-            unique_name='issuing-ca-g',
+            unique_name='DemoIssuingCA_g',
             variant=MlDsaVariant.MLDSA65,
         )
         mldsa_root, _ = self.create_root_ca(
             'Root-CA ML-DSA-65', private_key=mldsa_root_ca_key, hash_algorithm=None, validity_days=root_validity_days
         )
-        mldsa_root_crl = self.generate_empty_crl(mldsa_root, mldsa_root_ca_key, None, crl_validity_hours=root_validity_days * 24)
+        mldsa_root_crl = self.generate_empty_crl(
+            mldsa_root, mldsa_root_ca_key, None, crl_validity_hours=root_validity_days * 24
+        )
         mldsa_root_ca = self.save_keyless_ca(
             root_ca_cert=mldsa_root,
-            unique_name='root-ca-mldsa65',
+            unique_name='DemoRootCA_mldsa65',
             crl_pem=mldsa_root_crl,
         )
         self._audit_ca_created(mldsa_root_ca, 'Root-CA ML-DSA-65')
@@ -630,7 +655,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, CommandLoggingMixin)
             issuing_ca_cert=mldsa_issuing_ca,
             private_key=mldsa_issuing_ca_key,
             chain=[mldsa_root],
-            unique_name='issuing-ca-g',
+            unique_name='DemoIssuingCA_g',
             ca_type=ca_type,
             parent_ca=mldsa_root_ca,
         )

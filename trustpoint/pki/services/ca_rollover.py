@@ -78,6 +78,7 @@ class CaRolloverService:
             old_ca.CaTypeChoice.AUTOGEN,
             old_ca.CaTypeChoice.LOCAL_UNPROTECTED,
             old_ca.CaTypeChoice.LOCAL_PKCS11,
+            old_ca.CaTypeChoice.SELF_SIGNED,
         }
         if old_ca.ca_type not in local_types:
             msg = 'Only locally managed Issuing CAs can be rolled over.'

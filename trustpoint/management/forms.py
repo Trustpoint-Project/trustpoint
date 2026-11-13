@@ -333,10 +333,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     auto_gen_pki = forms.BooleanField(
         required=False,
-        label=_('Allow local auto-generated PKI creation'),
-        help_text=_(
-            'Turning this off disables the local auto-generated PKI and revokes all certificates issued by it.'
-        ),
+        label=_('Allow local self-signed CA creation'),
+        help_text=_('Allow creating self-signed management and issuing CAs.'),
         widget=forms.CheckboxInput(
             attrs={
                 'class': 'form-check-input',
@@ -477,7 +475,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 f'Minimum key size for this level is {default_rsa}.',
             )
 
-        for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
+        for field in ['allow_ca_issuance', 'allow_self_signed_ca_creation', 'allow_self_signed_ca']:
             if not defaults.get(field) and cleaned.get(field):
                 self.add_error(field, 'This feature cannot be enabled at this security level.')
 
@@ -510,12 +508,12 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         selected_mode = str(mode)
         mode_defaults = SecurityConfig._MODE_DEFAULTS.get(selected_mode)  # noqa: SLF001
         if self.instance and selected_mode == self.instance.security_mode:
-            auto_gen_pki_allowed = self.instance.allow_auto_gen_pki
+            auto_gen_pki_allowed = self.instance.allow_self_signed_ca_creation
         else:
-            auto_gen_pki_allowed = mode_defaults['allow_auto_gen_pki'] if mode_defaults else False
+            auto_gen_pki_allowed = mode_defaults['allow_self_signed_ca_creation'] if mode_defaults else False
 
         if cleaned.get('auto_gen_pki') and not auto_gen_pki_allowed:
-            self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
+            self.add_error('auto_gen_pki', 'Cannot enable self-signed CA creation when it is not permitted.')
 
         return cleaned
 

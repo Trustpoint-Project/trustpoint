@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 
 from crypto.application.private_keys import ManagedMLDSAPrivateKey, generate_managed_signing_private_key
 from crypto.models import CryptoManagedKeyModel
+from management.models import SecurityConfig
 from pki.management.commands.create_management_ca import ISSUING_CA_NAME
 from pki.models import CaModel, CertificateProfileModel
 from pki.services.key_generation import key_spec_for_key_type, supported_key_type_choices
@@ -28,6 +29,21 @@ from pki.util.x509 import (
 
 SELF_SIGNED_MANAGEMENT_CA_PROFILE = 'issuing_ca'
 SELF_SIGNED_MANAGEMENT_CA_OU = 'Self-Signed Management CA'
+
+
+SELF_SIGNED_CA_PREFIX = 'SelfSignedCA_'
+MAX_COMMON_NAME_BYTES = 64
+
+
+def self_signed_ca_name(unique_name: str) -> str:
+    """Apply the mandatory prefix once and validate the final name."""
+    if not unique_name.startswith(SELF_SIGNED_CA_PREFIX):
+        unique_name = f'{SELF_SIGNED_CA_PREFIX}{unique_name}'
+    if unique_name == SELF_SIGNED_CA_PREFIX:
+        raise ValidationError(_('Enter a unique name after the SelfSignedCA_ prefix.'))
+    if len(unique_name.encode('utf-8')) > MAX_COMMON_NAME_BYTES:
+        raise ValidationError(_('The full CA name, including SelfSignedCA_, must not exceed 64 UTF-8 bytes.'))
+    return unique_name
 
 
 class ManagementCAService:
@@ -89,8 +105,17 @@ class ManagementCAService:
 
 
 @transaction.atomic
-def create_self_signed_management_ca(*, unique_name: str, key_type: str) -> CaModel:
-    """Create a self-signed management CA using the default ``issuing_ca`` certificate profile."""
+def create_self_signed_ca(*, unique_name: str, key_type: str, ca_role: int = CaModel.CaRole.ISSUING) -> CaModel:
+    """Create a self-signed CA using the default ``issuing_ca`` certificate profile."""
+    config = SecurityConfig.objects.select_for_update().first()
+    if config is None or not config.auto_gen_pki:
+        raise ValidationError(_('Auto-generated PKI creation is disabled in the Security Settings.'))
+    if ca_role == CaModel.CaRole.MANAGEMENT and not config.allow_self_signed_ca_creation:
+        raise ValidationError(_('Self-signed management CA creation is disabled in the Security Settings.'))
+    if ca_role not in CaModel.CaRole.values:
+        raise ValidationError(_('Select a valid CA role.'))
+    unique_name = self_signed_ca_name(unique_name)
+    subject_ou = SELF_SIGNED_MANAGEMENT_CA_OU if ca_role == CaModel.CaRole.MANAGEMENT else 'Self-Signed Issuing CA'
     if CaModel.objects.filter(unique_name=unique_name).exists():
         raise ValidationError(_('A CA with this unique name already exists.'))
     if CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():
@@ -111,7 +136,7 @@ def create_self_signed_management_ca(*, unique_name: str, key_type: str) -> CaMo
     subject = x509.Name(
         [
             x509.NameAttribute(NameOID.COMMON_NAME, unique_name),
-            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, SELF_SIGNED_MANAGEMENT_CA_OU),
+            x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, subject_ou),
         ]
     )
     builder = JSONCertRequestConverter.from_json(
@@ -119,7 +144,7 @@ def create_self_signed_management_ca(*, unique_name: str, key_type: str) -> CaMo
             'type': 'cert_request',
             'subject': {
                 'common_name': unique_name,
-                'organizational_unit_name': SELF_SIGNED_MANAGEMENT_CA_OU,
+                'organizational_unit_name': subject_ou,
             },
             'extensions': profile_data.get('ext', {}),
             'validity': profile_data.get('validity', {}),
@@ -144,6 +169,11 @@ def create_self_signed_management_ca(*, unique_name: str, key_type: str) -> CaMo
         private_key=private_key,  # type: ignore[arg-type]
         chain=[],
         unique_name=unique_name,
-        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
-        ca_role=CaModel.CaRole.MANAGEMENT,
+        ca_type=CaModel.CaTypeChoice.SELF_SIGNED,
+        ca_role=CaModel.CaRole(ca_role),
     )
+
+
+def create_self_signed_management_ca(*, unique_name: str, key_type: str) -> CaModel:
+    """Create a self-signed CA with the management role."""
+    return create_self_signed_ca(unique_name=unique_name, key_type=key_type, ca_role=CaModel.CaRole.MANAGEMENT)

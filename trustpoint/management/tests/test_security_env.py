@@ -26,7 +26,10 @@ class SecurityEnvironmentTest(TestCase):
 
     def test_credential_ttl_environment_policy(self) -> None:
         for mode in SecurityConfig.SecurityModeChoices:
-            hardened = mode in (SecurityConfig.SecurityModeChoices.HARDENED, SecurityConfig.SecurityModeChoices.CRITICAL)
+            hardened = mode in (
+                SecurityConfig.SecurityModeChoices.HARDENED,
+                SecurityConfig.SecurityModeChoices.CRITICAL,
+            )
             with self.subTest(mode=mode):
                 defaults = effective_security_defaults(mode, parse_security_restrictions({}))
                 self.assertEqual(defaults['credential_ttl_seconds'], 600 if hardened else None)
@@ -41,17 +44,28 @@ class SecurityEnvironmentTest(TestCase):
 
     def test_invalid_credential_ttl_is_rejected(self) -> None:
         for value in ('0', '-1', '', 'invalid', '1.5'):
-            with self.subTest(value=value), self.assertRaisesRegex(
-                SecurityConfigurationError, 'TP_SECURITY_CREDENTIAL_TTL_SECONDS',
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
+                    SecurityConfigurationError,
+                    'TP_SECURITY_CREDENTIAL_TTL_SECONDS',
+                ),
             ):
                 parse_security_restrictions({'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value})
 
     def test_credential_ttl_synchronization(self) -> None:
         for value, expected in (('300', 300), ('null', None)):
-            with self.subTest(value=value), patch.dict('os.environ', {
-                'TP_SECURITY_MODE': 'LAB',
-                'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value,
-            }, clear=True):
+            with (
+                self.subTest(value=value),
+                patch.dict(
+                    'os.environ',
+                    {
+                        'TP_SECURITY_MODE': 'LAB',
+                        'TP_SECURITY_CREDENTIAL_TTL_SECONDS': value,
+                    },
+                    clear=True,
+                ),
+            ):
                 self.assertTrue(synchronize_security_config())
                 self.assertEqual(SecurityConfig.objects.get(pk=1).credential_ttl_seconds, expected)
         with patch.dict('os.environ', {'TP_SECURITY_MODE': 'HARDENED'}, clear=True):
@@ -68,7 +82,8 @@ class SecurityEnvironmentTest(TestCase):
 
     def test_unset_restrictions_inherit_preset(self) -> None:
         defaults = effective_security_defaults(
-            SecurityConfig.SecurityModeChoices.BROWNFIELD, parse_security_restrictions({}),
+            SecurityConfig.SecurityModeChoices.BROWNFIELD,
+            parse_security_restrictions({}),
         )
         preset = SecurityConfig._MODE_DEFAULTS[SecurityConfig.SecurityModeChoices.BROWNFIELD]
         self.assertEqual(defaults['rsa_minimum_key_size'], preset['rsa_minimum_key_size'])
@@ -76,55 +91,97 @@ class SecurityEnvironmentTest(TestCase):
 
     def test_boolean_restrictions_are_monotonic(self) -> None:
         defaults = SecurityConfig.SecurityModeChoices.BROWNFIELD
-        self.assertFalse(effective_security_defaults(defaults, parse_security_restrictions({
-            'TP_SECURITY_ALLOW_AUTO_GEN_PKI': 'false',
-        }))['allow_auto_gen_pki'])
+        self.assertFalse(
+            effective_security_defaults(
+                defaults,
+                parse_security_restrictions(
+                    {
+                        'TP_SECURITY_ALLOW_AUTO_GEN_PKI': 'false',
+                    }
+                ),
+            )['allow_self_signed_ca_creation']
+        )
         with self.assertRaisesRegex(SecurityConfigurationError, 'allow_ca_issuance'):
-            effective_security_defaults(defaults, parse_security_restrictions({
-                'TP_SECURITY_ALLOW_CA_ISSUANCE': 'true',
-            }))
+            effective_security_defaults(
+                defaults,
+                parse_security_restrictions(
+                    {
+                        'TP_SECURITY_ALLOW_CA_ISSUANCE': 'true',
+                    }
+                ),
+            )
 
     def test_numeric_restrictions_are_monotonic(self) -> None:
         mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
-        restricted = effective_security_defaults(mode, parse_security_restrictions({
-            'TP_SECURITY_RSA_MINIMUM_KEY_SIZE': '2048',
-            'TP_SECURITY_MAX_CERT_VALIDITY_DAYS': '365',
-        }))
+        restricted = effective_security_defaults(
+            mode,
+            parse_security_restrictions(
+                {
+                    'TP_SECURITY_RSA_MINIMUM_KEY_SIZE': '2048',
+                    'TP_SECURITY_MAX_CERT_VALIDITY_DAYS': '365',
+                }
+            ),
+        )
         self.assertEqual(restricted['rsa_minimum_key_size'], 2048)
         self.assertEqual(restricted['max_cert_validity_days'], 365)
         with self.assertRaises(SecurityConfigurationError):
             effective_security_defaults(mode, parse_security_restrictions({'TP_SECURITY_RSA_MINIMUM_KEY_SIZE': '512'}))
         with self.assertRaises(SecurityConfigurationError):
             effective_security_defaults(
-                mode, parse_security_restrictions({'TP_SECURITY_MAX_CERT_VALIDITY_DAYS': 'null'}),
+                mode,
+                parse_security_restrictions({'TP_SECURITY_MAX_CERT_VALIDITY_DAYS': 'null'}),
             )
 
     def test_protocol_lists_must_be_subsets(self) -> None:
         mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
-        restricted = effective_security_defaults(mode, parse_security_restrictions({
-            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,EST_IDEVID',
-        }))
+        restricted = effective_security_defaults(
+            mode,
+            parse_security_restrictions(
+                {
+                    'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,EST_IDEVID',
+                }
+            ),
+        )
         self.assertEqual(restricted['permitted_onboarding_protocols'], [1, 3])
         with self.assertRaisesRegex(SecurityConfigurationError, 'not permitted'):
-            effective_security_defaults(mode, parse_security_restrictions({
-                'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,BRSKI',
-            }))
+            effective_security_defaults(
+                mode,
+                parse_security_restrictions(
+                    {
+                        'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'CMP_IDEVID,BRSKI',
+                    }
+                ),
+            )
         with self.assertRaisesRegex(SecurityConfigurationError, 'not permitted'):
-            effective_security_defaults(SecurityConfig.SecurityModeChoices.HARDENED, parse_security_restrictions({
-                'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'MANUAL,CMP_IDEVID',
-            }))
+            effective_security_defaults(
+                SecurityConfig.SecurityModeChoices.HARDENED,
+                parse_security_restrictions(
+                    {
+                        'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'MANUAL,CMP_IDEVID',
+                    }
+                ),
+            )
 
     def test_auto_gen_pki_cannot_bypass_policy(self) -> None:
         with self.assertRaisesRegex(SecurityConfigurationError, 'AUTO_GEN_PKI'):
-            effective_security_defaults(SecurityConfig.SecurityModeChoices.HARDENED, parse_security_restrictions({
-                'TP_SECURITY_AUTO_GEN_PKI': 'true',
-            }))
+            effective_security_defaults(
+                SecurityConfig.SecurityModeChoices.HARDENED,
+                parse_security_restrictions(
+                    {
+                        'TP_SECURITY_AUTO_GEN_PKI': 'true',
+                    }
+                ),
+            )
 
     def test_synchronization_restores_preset_after_restriction_is_removed(self) -> None:
-        with patch.dict('os.environ', {
-            'TP_SECURITY_MODE': 'BROWNFIELD',
-            'TP_SECURITY_RSA_MINIMUM_KEY_SIZE': '2048',
-        }, clear=True):
+        with patch.dict(
+            'os.environ',
+            {
+                'TP_SECURITY_MODE': 'BROWNFIELD',
+                'TP_SECURITY_RSA_MINIMUM_KEY_SIZE': '2048',
+            },
+            clear=True,
+        ):
             synchronize_security_config()
         config = SecurityConfig.objects.get(pk=1)
         self.assertEqual(config.rsa_minimum_key_size, 2048)
@@ -148,14 +205,22 @@ class SecurityEnvironmentTest(TestCase):
             'rsa_minimum_key_size': config.rsa_minimum_key_size,
             'permitted_onboarding_protocols': config.permitted_onboarding_protocols,
         }
-        with patch.dict('os.environ', {
-            'TP_SECURITY_MODE': 'BROWNFIELD',
-            'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'EST_IDEVID,CMP_IDEVID',
-        }, clear=True), patch.object(
-            SecurityConfig,
-            'check_policy_transition',
-            return_value=['Device "PLC-01" uses onboarding protocol "CMP - Shared Secret".'],
-        ) as check_policy, self.assertLogs('trustpoint.security', level='ERROR') as logs:
+        with (
+            patch.dict(
+                'os.environ',
+                {
+                    'TP_SECURITY_MODE': 'BROWNFIELD',
+                    'TP_SECURITY_PERMITTED_ONBOARDING_PROTOCOLS': 'EST_IDEVID,CMP_IDEVID',
+                },
+                clear=True,
+            ),
+            patch.object(
+                SecurityConfig,
+                'check_policy_transition',
+                return_value=['Device "PLC-01" uses onboarding protocol "CMP - Shared Secret".'],
+            ) as check_policy,
+            self.assertLogs('trustpoint.security', level='ERROR') as logs,
+        ):
             applied = synchronize_security_config()
 
         self.assertFalse(applied)

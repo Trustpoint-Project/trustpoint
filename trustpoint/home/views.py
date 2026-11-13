@@ -104,6 +104,7 @@ def get_overview_payload(*, expiry_days: int, as_of: datetime | None = None) -> 
         CaModel.CaTypeChoice.AUTOGEN,
         CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
         CaModel.CaTypeChoice.LOCAL_PKCS11,
+        CaModel.CaTypeChoice.SELF_SIGNED,
         CaModel.CaTypeChoice.REMOTE_ISSUING_EST,
         CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
         CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,

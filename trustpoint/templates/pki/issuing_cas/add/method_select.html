@@ -294,49 +294,31 @@
             </div>
         </section>
 
-        {% if management_ca %}
         <section class="mt-5">
             <div class="mb-3">
                 <h2 class="h4 mb-1">
-                    {% trans 'Self-signed Management CA' %}
+                    {% if management_ca %}{% trans 'Self-signed Management CA' %}{% else %}{% trans 'Self-signed Issuing CA' %}{% endif %}
                 </h2>
                 <p class="text-muted mb-0">
-                    {% trans 'Generate a management CA key in Trustpoint and self-sign its certificate using the default issuing CA profile.' %}
+                    {% trans 'Choose a unique name and any key type supported by the active crypto backend to create a self-signed CA using the default issuing CA profile.' %}
                 </p>
             </div>
-
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <a
-                        href="{% url 'pki:issuing_cas-add-self_signed_management_ca' %}"
-                        class="text-decoration-none text-reset"
-                    >
-                        <div class="card h-100 shadow-sm">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <h3 class="h5 mb-2">
-                                        {% trans 'Generate Self-Signed Management CA' %}
-                                    </h3>
-
-                                    <span class="badge text-bg-primary">
-                                        {% trans 'Self-signed' %}
-                                    </span>
-                                </div>
-
-                                <p class="text-muted mb-3">
-                                    {% trans 'Choose the unique name and key algorithm. The certificate subject identifies the CA as self-signed.' %}
-                                </p>
-
-                                <span class="btn btn-primary">
-                                    {% trans 'Create Self-Signed CA' %}
-                                </span>
-                            </div>
-                        </div>
-                    </a>
+            {% if not auto_gen_pki_allowed %}
+                <div class="alert alert-info" role="status">
+                    {% trans 'Self-signed CA creation is disabled in the Security Settings.' %}
+                    <a href="{% url 'management:settings' %}?tab=security">{% trans 'Security Settings' %}</a>
                 </div>
-            </div>
+            {% endif %}
+            {% if can_generate_auto_gen_pki %}
+                {% if management_ca %}
+                    <a href="{% url 'pki:issuing_cas-add-self_signed_management_ca' %}" class="btn btn-primary">{% trans 'Create Self-Signed CA' %}</a>
+                {% else %}
+                    <a href="{% url 'pki:issuing_cas-add-autogen' %}" class="btn btn-primary">{% trans 'Create Self-Signed CA' %}</a>
+                {% endif %}
+            {% else %}
+                <button class="btn btn-primary" disabled>{% trans 'Create Self-Signed CA' %}</button>
+            {% endif %}
         </section>
-        {% endif %}
 
     </div>
 
@@ -352,44 +334,4 @@
 
 </div>
 
-{% if not management_ca %}
-<div class="card mt-4">
-    <div class="card-header">
-        <h2 class="h4 mb-1">{% trans 'Auto-generated PKI' %}</h2>
-        <p class="mb-0 text-muted">
-            {% trans 'Generate a local Root CA, Issuing CA and Domain managed by Trustpoint.' %}
-        </p>
-    </div>
-    <div class="card-body">
-        {% if active_auto_gen_pki %}
-            <div class="alert alert-info" role="status">
-                {% trans 'An auto-generated PKI is already active.' %}
-                <a href="{% url 'pki:issuing_cas-detail' pk=active_auto_gen_pki.pk %}">
-                    {% trans 'View the active Issuing CA' %}
-                </a>
-            </div>
-        {% elif not auto_gen_pki_allowed %}
-            <div class="alert alert-info" role="status">
-                {% trans 'Auto-generated PKI creation is disabled in the Security Settings.' %}
-                <a href="{% url 'management:settings-security' %}">
-                    {% trans 'Security Settings' %}
-                </a>
-            </div>
-        {% endif %}
-
-        <form method="post" action="{% url 'pki:issuing_cas-add-autogen' %}">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label for="{{ auto_gen_pki_form.key_type.id_for_label }}" class="form-label">
-                    {{ auto_gen_pki_form.key_type.label }}
-                </label>
-                {{ auto_gen_pki_form.key_type }}
-            </div>
-            <button type="submit" class="btn btn-primary" {% if not can_generate_auto_gen_pki %}disabled{% endif %}>
-                {% trans 'Generate Auto-generated PKI' %}
-            </button>
-        </form>
-    </div>
-</div>
-{% endif %}
 {% endblock content %}

@@ -44,6 +44,7 @@ def _get_local_issuing_ca(pk: int) -> CaModel:
         CaModel.CaTypeChoice.AUTOGEN,
         CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
         CaModel.CaTypeChoice.LOCAL_PKCS11,
+        CaModel.CaTypeChoice.SELF_SIGNED,
     }
     if issuing_ca.ca_type not in local_types:
         raise PermissionDenied

@@ -36,6 +36,7 @@ LOCAL_CA_TYPES = frozenset(
         CaModel.CaTypeChoice.AUTOGEN,
         CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
         CaModel.CaTypeChoice.LOCAL_PKCS11,
+        CaModel.CaTypeChoice.SELF_SIGNED,
     }
 )
 

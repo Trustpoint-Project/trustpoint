@@ -61,8 +61,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """
 
         KEYLESS = -1, _('Keyless CA')
-        AUTOGEN_ROOT = 0, _('Auto-Generated Root')  # Trustpoint = CA
-        AUTOGEN = 1, _('Auto-Generated')  # Trustpoint = CA
+        AUTOGEN_ROOT = 0, _('Auto-Generated Root (Legacy)')
+        AUTOGEN = 1, _('Auto-Generated (Legacy)')
         LOCAL_UNPROTECTED = 2, _('Local-Legacy Software')  # Legacy local software-managed CA type
         LOCAL_PKCS11 = 3, _('Local-Managed Backend')  # Current local Trustpoint-managed CA type
         REMOTE_EST_RA = 4, _('Remote-EST-RA')  # Trustpoint = RA
@@ -70,6 +70,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_ISSUING_EST = 6, _('Remote-Issuing-EST')  # Trustpoint = CA
         REMOTE_ISSUING_CMP = 7, _('Remote-Issuing-CMP')  # Trustpoint = CA
         REMOTE_ISSUING_CSR = 8, _('Remote-Issuing-CSR')  # Trustpoint = CA, CSR external issuance
+        SELF_SIGNED = 9, _('Self-Signed')
 
     class CaRole(models.IntegerChoices):
         """The CaRole limits what a CA may be used for.
@@ -251,13 +252,13 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
                 condition=(
                     models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True)
                     | models.Q(ca_type__in=[4, 5], credential__isnull=True)
-                    | models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8], certificate__isnull=True, credential__isnull=False)
+                    | models.Q(ca_type__in=[0, 1, 2, 3, 6, 7, 8, 9], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration'),
             ),
             models.CheckConstraint(
-                condition=(models.Q(ca_role=0) | models.Q(ca_role=1, ca_type__in=[2, 3, 4, 5, 6, 7, 8])),
+                condition=(models.Q(ca_role=0) | models.Q(ca_role=1, ca_type__in=[2, 3, 4, 5, 6, 7, 8, 9])),
                 name='management_ca_role_constraint',
                 violation_error_message=_('Management CAs cannot use this CA type'),
             ),
@@ -647,6 +648,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             cls.CaTypeChoice.AUTOGEN,
             cls.CaTypeChoice.LOCAL_UNPROTECTED,
             cls.CaTypeChoice.LOCAL_PKCS11,
+            cls.CaTypeChoice.SELF_SIGNED,
             cls.CaTypeChoice.REMOTE_ISSUING_EST,
             cls.CaTypeChoice.REMOTE_ISSUING_CMP,
             cls.CaTypeChoice.REMOTE_ISSUING_CSR,

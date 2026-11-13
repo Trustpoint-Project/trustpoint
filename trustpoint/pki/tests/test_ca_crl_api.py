@@ -132,16 +132,15 @@ def test_generate_error_does_not_expose_exception_details(api, lab_config):
     lab_config.auto_gen_pki = True
     lab_config.save()
     with (
-        patch('pki.views.ca_api.AutoGenPki.get_auto_gen_pki', return_value=None),
-        patch(
-            'pki.views.ca_api.AutoGenPki.enable_auto_gen_pki', side_effect=ValueError('secret credential path')
-        ) as generate,
+        patch('pki.views.ca_api.create_self_signed_ca', side_effect=ValueError('secret credential path')) as generate,
     ):
-        response = api.post('/api/issuing-cas/generate/', {'key_type': 'RSA-2048'}, format='json')
+        response = api.post(
+            '/api/issuing-cas/generate/', {'unique_name': 'Generated CA', 'key_type': 'RSA-2048'}, format='json'
+        )
 
     generate.assert_called_once()
     assert response.status_code == 400
-    assert response.json() == ['Unable to generate the PKI. Check the key type and security settings.']
+    assert response.json() == ['Unable to generate the CA. Check the name, key type and security settings.']
     assert b'secret credential path' not in response.content
 
 
@@ -336,9 +335,9 @@ def test_rollover_invalid_plan_rolls_back_import(api, ca):
 
 def test_generate_disabled_by_policy(api):
     """API clients cannot bypass the AutoGenPKI policy check."""
-    with patch('pki.views.ca_api.IssuingCaAddAutoGenForm') as form:
-        form.return_value.is_valid.return_value = True
-        response = api.post('/api/issuing-cas/generate/', {'key_type': 'RSA-2048'}, format='json')
+    response = api.post(
+        '/api/issuing-cas/generate/', {'unique_name': 'Generated CA', 'key_type': 'RSA-2048'}, format='json'
+    )
     assert response.status_code == 400
 
 
@@ -605,3 +604,23 @@ def test_remote_protocol_policy_denial_rolls_back(api, ca, lab_config):
     )
     assert response.status_code == 400, response.data
     assert not CaModel.objects.filter(unique_name='forbidden-est').exists()
+
+
+def test_generate_creates_independent_self_signed_cas(api, lab_config):
+    """The generation API supports multiple named CAs without domains."""
+    from django.core.management import call_command
+    from pki.models import DomainModel
+
+    call_command('create_default_cert_profiles')
+    lab_config.auto_gen_pki = True
+    lab_config.save()
+    for name in ['API CA One', 'API CA Two']:
+        response = api.post('/api/issuing-cas/generate/', {'unique_name': name, 'key_type': 'RSA-2048'}, format='json')
+        assert response.status_code == 201, response.data
+        ca = CaModel.objects.get(pk=response.data['id'])
+        assert ca.unique_name == f'SelfSignedCA_{name}'
+        assert ca.ca_type == CaModel.CaTypeChoice.SELF_SIGNED
+        certificate = ca.get_certificate()
+        certificate.verify_directly_issued_by(certificate)
+        assert ca.parent_ca is None
+    assert not DomainModel.objects.exists()

@@ -24,13 +24,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
 from management.security_change_audit import audit_security_change, security_change, snapshot_security_state
-from pki.auto_gen_pki import AutoGenPki
 from pki.forms.cert_profiles import CertificateIssuanceForm
 from pki.forms.issuing_cas import (
-    IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
@@ -39,6 +36,7 @@ from pki.forms.issuing_cas import (
     IssuingCaExternalCsrCertificateForm,
     IssuingCaImportMixin,
     IssuingCaTruststoreAssociationForm,
+    SelfSignedCaForm,
 )
 from pki.models import CaModel, CertificateModel, CrlModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverStrategyType
@@ -67,6 +65,7 @@ from pki.serializer.ca_api import (
 from pki.services.ca_enrollment import CmpCaEnrollmentService, EstCaEnrollmentService
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 from pki.services.external_csr import build_external_csr
+from pki.services.management_ca import create_self_signed_ca
 from pki.util.cert_profile import ProfileValidationError
 from pki.views.issuing_cas import CanManageIssuingCas, IssuingCaViewSet
 from request.clients import EstClientError
@@ -329,25 +328,15 @@ class IssuingCaManagementViewSet(PkiApiErrorsMixin, CaInventoryMixin, IssuingCaV
     @action(detail=False, methods=['post'])
     @transaction.atomic
     def generate(self, request: Request) -> Response:
-        """Generate the local AutoGenPKI when enabled by the security policy."""
+        """Create a named self-signed issuing CA when enabled by security policy."""
         serializer = CaGenerateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        form = validated_form(IssuingCaAddAutoGenForm(serializer.validated_data))
-        config = SecurityConfig.objects.select_for_update().first()
-        if config is None or not config.auto_gen_pki:
-            msg = 'Auto-generated PKI creation is disabled in the Security Settings.'
-            raise ValidationError(msg)
-        if AutoGenPki.get_auto_gen_pki() is not None:
-            msg = 'An auto-generated PKI is already active.'
-            raise Conflict(msg)
+        form = validated_form(SelfSignedCaForm(serializer.validated_data))
         try:
-            ca = AutoGenPki.enable_auto_gen_pki(form.cleaned_data['key_type'])
-        except ValueError as exc:
-            msg = 'Unable to generate the PKI. Check the key type and security settings.'
+            ca = create_self_signed_ca(**form.cleaned_data)
+        except (ValueError, DjangoValidationError) as exc:
+            msg = 'Unable to generate the CA. Check the name, key type and security settings.'
             raise ValidationError(msg) from exc
-        if ca is None:
-            msg = 'An auto-generated PKI is already active.'
-            raise Conflict(msg)
         return self._created(ca)
 
     def _created(self, ca: CaModel) -> Response:
@@ -569,6 +558,7 @@ class CaRolloverViewSet(
             CaModel.CaTypeChoice.AUTOGEN,
             CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
             CaModel.CaTypeChoice.LOCAL_PKCS11,
+            CaModel.CaTypeChoice.SELF_SIGNED,
         ):
             msg = 'Only locally managed issuing CAs can be rolled over.'
             raise ValidationError(msg)

@@ -5346,7 +5346,7 @@
 <text xml:space="preserve" text-anchor="start" x="6479.59" y="-3413.4" font-family="Roboto" font-weight="bold" font-size="8.00">BigAutoField</text>
 <text xml:space="preserve" text-anchor="start" x="6532.09" y="-3413.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="6305.34" y="-3400.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
-<text xml:space="preserve" text-anchor="start" x="6314.34" y="-3400.4" font-family="Roboto" font-size="8.00">allow_auto_gen_pki</text>
+<text xml:space="preserve" text-anchor="start" x="6314.34" y="-3400.4" font-family="Roboto" font-size="8.00">allow_self_signed_ca_creation</text>
 <text xml:space="preserve" text-anchor="start" x="6384.84" y="-3400.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="6470.59" y="-3400.4" font-family="Roboto" font-size="8.00"> &#160;&#160;&#160;</text>
 <text xml:space="preserve" text-anchor="start" x="6479.59" y="-3400.4" font-family="Roboto" font-size="8.00">BooleanField</text>
