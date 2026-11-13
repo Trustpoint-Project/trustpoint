@@ -3,13 +3,30 @@
 
 """Keep the renamed CA creation policy readable by the previous release."""
 
+from collections.abc import Iterator
+
 import pytest
+from django.apps import apps as django_apps
+from django.core.management.sql import emit_post_migrate_signal
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
+from pytest_django.plugin import DjangoDbBlocker
 
 from management.models import SecurityConfig
 
-pytestmark = pytest.mark.django_db(transaction=True)
+# Include retained legacy tables in PostgreSQL's cascading test cleanup.
+pytestmark = pytest.mark.django_db(
+    transaction=True, available_apps=[config.name for config in django_apps.get_app_configs()]
+)
+
+
+@pytest.fixture(scope='module', autouse=True)
+def restore_post_migrate_data(django_db_setup: None, django_db_blocker: DjangoDbBlocker) -> Iterator[None]:
+    """Restore permissions and content types after the cascading test flush."""
+    del django_db_setup
+    yield
+    with django_db_blocker.unblock():
+        emit_post_migrate_signal(verbosity=0, interactive=False, db=connection.alias)
 
 
 @pytest.mark.parametrize('start', ['0004_tp_v1_0_1_dev0', '0005_rename_allow_self_signed_ca_creation'])

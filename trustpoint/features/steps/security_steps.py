@@ -236,7 +236,7 @@ def step_security_configuration_exists(context: runner.Context) -> None:  # noqa
 @when('the admin opens the security configuration')
 def step_admin_opens_security_configuration(context: runner.Context) -> None:
     """Open the real security settings endpoint."""
-    context.response = context.authenticated_client.get(SECURITY_SETTINGS_URL)
+    context.response = context.authenticated_client.get(SECURITY_SETTINGS_URL, follow=True)
 
     context.security_form = _extract_security_form(context.response)
 
