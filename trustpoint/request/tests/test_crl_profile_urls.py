@@ -19,36 +19,58 @@ from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseRequestContext, ManualCredentialRequestContext
-from request.template_vars import resolve_crl_urls
+from request.template_vars import resolve_crl_urls, resolve_template_variables
 
 
 def profile(uris: Any) -> dict[str, Any]:
     """Build a minimal CRL profile."""
-    return {'type': 'cert_profile', 'validity': {'days': 10},
-            'ext': {'crl_distribution_points': {'uris': uris}}}
+    return {'type': 'cert_profile', 'validity': {'days': 10}, 'ext': {'crl_distribution_points': {'uris': uris}}}
 
 
-@pytest.mark.parametrize('url', [
-    'http://2.2.2.2/crl/{issuing_ca.id}',
-    'http://2.2.2.2/crl/{issuing_ca.id}.crl',
-    'http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}',
-    'https://{{ tls_certificate.ip_address.2 }}/crl/{{ issuing_ca.id }}',
-    'http://[2001:db8::1]/crl/4',
-])
+@pytest.mark.parametrize(
+    'url',
+    [
+        'http://2.2.2.2/crl/{issuing_ca.id}',
+        'http://2.2.2.2/crl/{issuing_ca.id}.crl',
+        'http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}',
+        'https://{{ tls_certificate.ip_address.2 }}/crl/{{ issuing_ca.id }}',
+        'http://[2001:db8::1]/crl/4',
+    ],
+)
 def test_profile_accepts_crl_templates(url: str) -> None:
     """Accept fixed URLs and supported placeholders."""
     assert JSONProfileVerifier(profile({'value': [url]})).get_profile()
 
 
-@pytest.mark.parametrize('url', [
-    'http:2.2.2.2/crl/4', 'http://{unknown}/crl/4',
-    'http://{tls_certificate.ip_address.0}/crl/4', 'http://host/crl/{issuing_ca.id',
-    'http://host with spaces/crl/4', 'http://host:bad/crl/4',
-])
+@pytest.mark.parametrize(
+    'url',
+    [
+        'http:2.2.2.2/crl/4',
+        'http://{unknown}/crl/4',
+        'http://{tls_certificate.ip_address.0}/crl/4',
+        'http://host/crl/{issuing_ca.id',
+        'http://host with spaces/crl/4',
+        'http://host:bad/crl/4',
+    ],
+)
 def test_profile_rejects_invalid_crl_urls(url: str) -> None:
     """Reject malformed URLs and unsupported placeholders."""
     with pytest.raises(ValidationError):
         JSONProfileVerifier(profile({'default': [url]}))
+
+
+def test_profile_url_policy_is_resolved_after_profile_application() -> None:
+    """Resolving a profile must preserve URL policy objects until they become URL lists."""
+    verifier = JSONProfileVerifier(profile({'value': ['http://ca.example/crl/4']}))
+    definition = verifier.get_profile()
+    context = BaseRequestContext()
+
+    resolved_profile = resolve_template_variables(definition, context)
+    request = verifier.apply_profile_to_request({'type': 'cert_request'})
+    resolved_request = resolve_template_variables(request, context)
+
+    assert resolved_profile == definition
+    assert resolved_request['extensions']['crl_distribution_points']['uris'] == ['http://ca.example/crl/4']
 
 
 def test_crl_templates_use_active_tls_ip_sans_and_ca_rollover() -> None:
@@ -59,22 +81,36 @@ def test_crl_templates_use_active_tls_ip_sans_and_ca_rollover() -> None:
     rollover = Mock()
     rollover.new_issuing_ca.pk = 9
     rollover.state = CaRolloverState.TRANSITION
-    data = {'extensions': {'crl_distribution_points': {'uris': [
-        'http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}',
-        'http://{{ tls_certificate.ip_address.2 }}/crl/{{ issuing_ca.id }}',
-    ]}}}
+    data = {
+        'extensions': {
+            'crl_distribution_points': {
+                'uris': [
+                    'http://{tls_certificate.ip_address.1}/crl/{issuing_ca.id}',
+                    'http://{{ tls_certificate.ip_address.2 }}/crl/{{ issuing_ca.id }}',
+                ]
+            }
+        }
+    }
     cert = Mock()
-    cert.extensions.get_extension_for_class.return_value.value = x509.SubjectAlternativeName([
-        x509.DNSName('example.test'), x509.IPAddress(ipaddress.ip_address('192.0.2.3')),
-        x509.IPAddress(ipaddress.ip_address('2001:db8::1')),
-    ])
-    with patch('request.template_vars.ActiveTrustpointTlsServerCredentialModel.objects') as objects, patch(
-        'request.template_vars.CaRolloverService.get_active_rollover', return_value=rollover,
+    cert.extensions.get_extension_for_class.return_value.value = x509.SubjectAlternativeName(
+        [
+            x509.DNSName('example.test'),
+            x509.IPAddress(ipaddress.ip_address('192.0.2.3')),
+            x509.IPAddress(ipaddress.ip_address('2001:db8::1')),
+        ]
+    )
+    with (
+        patch('request.template_vars.ActiveTrustpointTlsServerCredentialModel.objects') as objects,
+        patch(
+            'request.template_vars.CaRolloverService.get_active_rollover',
+            return_value=rollover,
+        ),
     ):
         objects.select_related.return_value.first.return_value.credential.get_certificate.return_value = cert
         resolve_crl_urls(data, context)
     assert data['extensions']['crl_distribution_points']['uris'] == [
-        'http://192.0.2.3/crl/9', 'http://[2001:db8::1]/crl/9',
+        'http://192.0.2.3/crl/9',
+        'http://[2001:db8::1]/crl/9',
     ]
 
 
@@ -120,8 +156,13 @@ def test_manual_crl_url_survives_pipeline_and_signing() -> None:
     name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'CRL test')])
     builder = context.cert_requested_profile_validated
     assert builder is not None
-    certificate = (builder.subject_name(name).issuer_name(name).public_key(key.public_key())
-                   .serial_number(1).sign(key, hashes.SHA256()))
+    certificate = (
+        builder.subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(1)
+        .sign(key, hashes.SHA256())
+    )
     points = certificate.extensions.get_extension_for_class(x509.CRLDistributionPoints).value
     assert points[0].full_name == [x509.UniformResourceIdentifier(url)]
 
@@ -135,14 +176,21 @@ def test_form_displays_resolved_crl_url_without_changing_profile(*, mutable: boo
     domain = Mock(organization=None)
     domain.get_issuing_ca_or_value_error.return_value.pk = 4
     variables = {'tls_certificate.ip_address.1': '127.0.0.1'}
-    with patch('request.template_vars._tls_ip_variables', return_value=variables), patch(
-        'request.template_vars.CaRolloverService.get_active_rollover', return_value=None,
-    ), patch('pki.forms.cert_profiles.check_validity_days_against_security_config'):
+    with (
+        patch('request.template_vars._tls_ip_variables', return_value=variables),
+        patch(
+            'request.template_vars.CaRolloverService.get_active_rollover',
+            return_value=None,
+        ),
+        patch('pki.forms.cert_profiles.check_validity_days_against_security_config'),
+    ):
         form = CertificateIssuanceForm(cert_profile, domain=domain)
         assert form['crl_distribution_point_uris'].value() == 'http://127.0.0.1/crl/4'
         assert cert_profile['ext']['crl_distribution_points']['uris']['value'] == [template]
         bound = CertificateIssuanceForm(
-            cert_profile, domain=domain, data={'crl_distribution_point_uris': 'http://127.0.0.1/crl/4'},
+            cert_profile,
+            domain=domain,
+            data={'crl_distribution_point_uris': 'http://127.0.0.1/crl/4'},
         )
         assert bound.is_valid(), bound.errors
         builder = bound.get_certificate_builder(ManualCredentialRequestContext(domain=domain))

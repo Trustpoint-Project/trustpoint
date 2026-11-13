@@ -8,6 +8,9 @@ from __future__ import annotations
 import uuid
 from unittest.mock import Mock
 
+import pytest
+
+from pki.forms.cert_profiles import CertificateIssuanceForm
 from request.request_context import BaseRequestContext
 from request.template_vars import (
     TemplateVariableResolver,
@@ -67,15 +70,15 @@ class TestBuildVariableMap:
         assert 'time.date' in variables
         assert variables['time.timestamp'].isdigit()
 
-    def test_optional_device_fields_omitted_when_unset(self):
+    def test_optional_fields_empty_when_unset(self):
         ctx = _make_context()
         ctx.device.ip_address = None
         ctx.device.opc_ua_gds_push_config.opc_server_port = 0
         ctx.domain.issuing_ca = None
         variables = _build_variable_map(ctx)
-        assert 'device.ip_address' not in variables
-        assert 'device.opc_server_port' not in variables
-        assert 'domain.issuing_ca' not in variables
+        assert variables['device.ip_address'] == ''
+        assert variables['device.opc_server_port'] == ''
+        assert variables['domain.issuing_ca'] == ''
 
     def test_organization_values_added_when_domain_has_organization(self):
         ctx = _make_context()
@@ -125,11 +128,12 @@ class TestBuildVariableMap:
 
         assert resolved['subject'] == {'common_name': 'device'}
 
-    def test_resolved_profile_without_organization_builds_certificate_subject(self) -> None:
+    @pytest.mark.parametrize('with_domain', [False, True])
+    def test_resolved_profile_without_organization_builds_certificate_subject(self, with_domain: bool) -> None:
         """Regression: empty organization values must not break building the X.509 subject."""
         from pki.util.cert_req_converter import JSONCertRequestConverter
 
-        ctx = _make_context()
+        ctx = _make_context(with_domain=with_domain)
         request = {
             'type': 'cert_request',
             'subject': {
@@ -147,23 +151,23 @@ class TestBuildVariableMap:
     def test_no_device(self):
         ctx = _make_context(with_device=False)
         variables = _build_variable_map(ctx)
-        assert 'device.rfc_4122_uuid' not in variables
-        assert 'device.common_name' not in variables
+        assert variables['device.rfc_4122_uuid'] == ''
+        assert variables['device.common_name'] == ''
         assert 'domain.unique_name' in variables
 
     def test_no_domain(self):
         ctx = _make_context(with_domain=False)
         variables = _build_variable_map(ctx)
         assert 'device.rfc_4122_uuid' in variables
-        assert 'domain.unique_name' not in variables
+        assert variables['domain.unique_name'] == ''
 
     def test_empty_context(self):
         ctx = _make_context(with_device=False, with_domain=False)
         variables = _build_variable_map(ctx)
         # time.now is always present even without device/domain
         assert 'time.now' in variables
-        assert 'device.rfc_4122_uuid' not in variables
-        assert 'domain.unique_name' not in variables
+        assert variables['device.rfc_4122_uuid'] == ''
+        assert variables['domain.unique_name'] == ''
 
 
 class TestResolveString:
@@ -171,9 +175,7 @@ class TestResolveString:
 
     def test_single_variable(self):
         variables = {'device.rfc_4122_uuid': '550e8400-e29b-41d4-a716-446655440000'}
-        result = _resolve_string(
-            'spiffe://trustpoint/device/{{ device.rfc_4122_uuid }}', variables
-        )
+        result = _resolve_string('spiffe://trustpoint/device/{{ device.rfc_4122_uuid }}', variables)
         assert result == 'spiffe://trustpoint/device/550e8400-e29b-41d4-a716-446655440000'
 
     def test_multiple_variables(self):
@@ -181,9 +183,7 @@ class TestResolveString:
             'device.rfc_4122_uuid': 'abc-123',
             'domain.unique_name': 'my-domain',
         }
-        result = _resolve_string(
-            'spiffe://{{ domain.unique_name }}/device/{{ device.rfc_4122_uuid }}', variables
-        )
+        result = _resolve_string('spiffe://{{ domain.unique_name }}/device/{{ device.rfc_4122_uuid }}', variables)
         assert result == 'spiffe://my-domain/device/abc-123'
 
     def test_no_variables(self):
@@ -201,6 +201,35 @@ class TestResolveString:
         assert _resolve_string('{{ device.rfc_4122_uuid }}', variables) == 'test-uuid'
 
 
+@pytest.mark.parametrize('with_domain', [False, True])
+def test_certificate_form_clears_unavailable_defaults(with_domain: bool) -> None:
+    """TLS and device forms display missing organization values as empty inputs."""
+    ctx = _make_context(with_device=False, with_domain=with_domain)
+    subject_variables = {
+        'organization_name': 'domain.organization',
+        'organizational_unit_name': 'domain.organization_unit',
+        'country_name': 'domain.country',
+        'state_or_province_name': 'domain.state',
+        'locality_name': 'domain.locality',
+        'serial_number': 'device.serial_number',
+    }
+    profile = {
+        'type': 'cert_profile',
+        'subj': {
+            'common_name': {'default': 'tls.example'},
+            **{field: {'default': '{{ ' + variable + ' }}'} for field, variable in subject_variables.items()},
+        },
+        'validity': {'days': 10},
+    }
+
+    form = CertificateIssuanceForm(profile, domain=ctx.domain)
+
+    assert form['common_name'].value() == 'tls.example'
+    for field in subject_variables:
+        assert form[field].value() == ''
+        assert '{{' not in str(form[field])
+
+
 class TestResolveRecursively:
     """Tests for _resolve_recursively."""
 
@@ -214,9 +243,7 @@ class TestResolveRecursively:
             },
         }
         result = _resolve_recursively(data, variables)
-        assert result['ext']['subject_alternative_name']['uris'] == [
-            'spiffe://tp/test-uuid'
-        ]
+        assert result['ext']['subject_alternative_name']['uris'] == ['spiffe://tp/test-uuid']
 
     def test_list_of_strings(self):
         variables = {'device.rfc_4122_uuid': 'uuid-val'}
@@ -251,8 +278,7 @@ class TestResolveTemplateVariables:
             'ext': {
                 'subject_alternative_name': {
                     'uris': [
-                        'spiffe://trustpoint/{{ domain.unique_name }}/device/'
-                        '{{ device.rfc_4122_uuid }}',
+                        'spiffe://trustpoint/{{ domain.unique_name }}/device/{{ device.rfc_4122_uuid }}',
                     ],
                 },
             },
@@ -264,12 +290,11 @@ class TestResolveTemplateVariables:
         # subject unchanged
         assert result['subject'] == {'common_name': 'my-device'}
 
-    def test_no_context_returns_data_unchanged(self):
+    def test_missing_context_drops_empty_values(self):
         ctx = _make_context(with_device=False, with_domain=False)
         data = {'uri': '{{ device.rfc_4122_uuid }}'}
         result = resolve_template_variables(data, ctx)
-        # No variables available, data returned as-is
-        assert result == data
+        assert result == {}
 
     def test_mixed_literal_and_template(self):
         ctx = _make_context(device_cn='my-device')
@@ -312,6 +337,4 @@ class TestResolveTemplateVariables:
         }
         resolve_template_variables(data, ctx)
         # Original must be unchanged
-        assert data['ext']['subject_alternative_name']['uris'] == [
-            'spiffe://tp/{{ device.rfc_4122_uuid }}'
-        ]
+        assert data['ext']['subject_alternative_name']['uris'] == ['spiffe://tp/{{ device.rfc_4122_uuid }}']

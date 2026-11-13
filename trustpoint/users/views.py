@@ -19,7 +19,6 @@ from django.contrib.auth import get_user_model, login, logout, update_session_au
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, PasswordChangeView
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.management import CommandError
 from django.db import DatabaseError, IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.http import FileResponse, Http404, HttpResponseBase
@@ -45,9 +44,9 @@ from trustpoint_core.serializer import CredentialFileFormat, CredentialSerialize
 
 from crypto.domain.errors import CryptoError
 from management.models import CertificateAuthenticationConfig, PasswordPolicy
-from pki.management.commands.create_user_client_certificate import create_user_client_certificate
 from pki.models import CaModel, CertificateModel
 from pki.services.management_ca import ManagementCAService
+from pki.services.user_client_certificate import create_user_client_certificate
 from setup_wizard.models import SetupWizardCompletedModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import ContextDataMixin
@@ -324,7 +323,10 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, LoggerMixin, Fo
                     certificate=certificate,
                     additional_certificates=[issuing_certificate] if issuing_certificate else [],
                 )
-                pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
+                try:
+                    pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
+                except TypeError as exc:
+                    raise ValidationError(str(exc)) from exc
                 certificate_model = CertificateModel.save_certificate(certificate)
                 association = UserClientCertificate.objects.create(
                     user=user,
@@ -343,8 +345,6 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, LoggerMixin, Fo
             else:
                 self.logger.exception('Failed to create client certificate due to a database integrity error.')
                 form.add_error(None, _('The client certificate could not be created.'))
-        except CommandError as exc:
-            form.add_error(None, str(exc))
         except (CryptoError, ValueError, RuntimeError):
             self.logger.exception('Failed to create client certificate with the selected management CA.')
             form.add_error(

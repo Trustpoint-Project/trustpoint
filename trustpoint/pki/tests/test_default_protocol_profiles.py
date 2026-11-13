@@ -5,6 +5,10 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
 from django.core.management import call_command
 
 from pki.forms.cert_profiles import CertificateIssuanceForm
@@ -22,10 +26,11 @@ PROTOCOL_PROFILE_NAMES = {
 }
 
 
-def test_default_loader_preserves_customized_profile() -> None:
+@pytest.mark.parametrize('unique_name', ['mqtt_server', 'user_client'])
+def test_default_loader_preserves_customized_profile(unique_name: str) -> None:
     """Rerunning setup must not replace an administrator's certificate policy."""
     call_command('create_default_cert_profiles')
-    profile = CertificateProfileModel.objects.get(unique_name='mqtt_server')
+    profile = CertificateProfileModel.objects.get(unique_name=unique_name)
     customized = profile.profile
     customized['validity']['days'] = 17
     profile.profile_json = customized
@@ -39,6 +44,18 @@ def test_default_loader_preserves_customized_profile() -> None:
     assert profile.profile == customized
     assert profile.display_name == 'Local MQTT policy'
     assert not profile.is_default
+
+
+def test_default_loader_installs_user_client_profile() -> None:
+    """The standard loader stores the canonical user client policy as a default profile."""
+    call_command('create_default_cert_profiles')
+    profile = CertificateProfileModel.objects.get(unique_name='user_client')
+    definition = json.loads((Path(__file__).parents[1] / 'default_certificate_profiles/user_client.json').read_text())
+
+    assert profile.profile == definition
+    assert profile.is_default
+    assert profile.credential_type == CertificateProfileModel.ProfileCredentialType.APPLICATION
+    CertProfilePydanticModel.model_validate(profile.profile)
 
 
 def test_default_loader_installs_traceability_profile() -> None:

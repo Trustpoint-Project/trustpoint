@@ -276,7 +276,15 @@ class TlsLocalCaRequestView(
                 issue_tls_server_local(credential, profile, content, issuing_ca)
             else:
                 issue_tls_server_remote(credential, profile, content, issuing_ca)
-        except (ValueError, KeyError, ProfileValidationError, CryptoError, EstClientError, CmpClientError):
+        except (
+            ValidationError,
+            ValueError,
+            KeyError,
+            ProfileValidationError,
+            CryptoError,
+            EstClientError,
+            CmpClientError,
+        ):
             self.logger.exception('Failed to issue TLS certificate from the management CA')
             return redirect('management:tls-local-content', pk=credential.pk)
         del request.session[self.session_key]
