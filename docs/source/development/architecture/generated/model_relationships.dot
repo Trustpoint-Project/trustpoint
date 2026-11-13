@@ -5322,7 +5322,7 @@ digraph model_graph {
   
   
     <TR><TD ALIGN="LEFT" BORDER="0">
-    <FONT FACE="Roboto">allow_auto_gen_pki</FONT>
+    <FONT FACE="Roboto">allow_self_signed_ca_creation</FONT>
     </TD><TD ALIGN="LEFT">
     <FONT FACE="Roboto">BooleanField</FONT>
     </TD></TR>

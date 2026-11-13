@@ -41,7 +41,7 @@ class _SecurityModeDefaults(TypedDict):
     credential_ttl_seconds: int | None
     allow_user_defined_device_secrets: bool
     allow_ca_issuance: bool
-    allow_auto_gen_pki: bool
+    allow_self_signed_ca_creation: bool
     allow_self_signed_ca: bool
     allow_imported_private_keys: bool
     permitted_cmp_hmac_algorithms: list[str]
@@ -51,9 +51,14 @@ class _SecurityModeDefaults(TypedDict):
 
 def default_cmp_hmac_algorithms() -> list[str]:
     """Return the default CMP MAC allowlist without shared mutable state."""
-    return [algorithm.dotted_string for algorithm in (
-        HmacAlgorithm.HMAC_SHA256, HmacAlgorithm.HMAC_SHA384, HmacAlgorithm.HMAC_SHA512,
-    )]
+    return [
+        algorithm.dotted_string
+        for algorithm in (
+            HmacAlgorithm.HMAC_SHA256,
+            HmacAlgorithm.HMAC_SHA384,
+            HmacAlgorithm.HMAC_SHA512,
+        )
+    ]
 
 
 class SecurityConfig(models.Model):
@@ -70,7 +75,7 @@ class SecurityConfig(models.Model):
     * :attr:`max_cert_validity_days` — maximum certificate validity in days (``None`` = no limit).
     * :attr:`max_crl_validity_days` — maximum CRL validity in days (``None`` = no limit).
     * :attr:`allow_ca_issuance` — whether BasicConstraints ca=True is permitted in issued certs.
-    * :attr:`allow_auto_gen_pki` — whether auto-generated PKI may be enabled.
+    * :attr:`allow_self_signed_ca_creation` — whether local self-signed CA creation may be enabled.
     * :attr:`allow_self_signed_ca` — whether self-signed CAs with credentials are allowed.
     * :attr:`permitted_no_onboarding_pki_protocols` — JSON list of allowed
       :class:`onboarding.models.NoOnboardingPkiProtocol` integer values.
@@ -199,8 +204,7 @@ class SecurityConfig(models.Model):
         blank=True,
         default=None,
         help_text=_(
-            'Maximum certificate validity period in days. '
-            'Set to null for no limit.',
+            'Maximum certificate validity period in days. Set to null for no limit.',
         ),
     )
 
@@ -209,8 +213,7 @@ class SecurityConfig(models.Model):
         blank=True,
         default=None,
         help_text=_(
-            'Maximum CRL validity period in days. '
-            'Set to null for no limit.',
+            'Maximum CRL validity period in days. Set to null for no limit.',
         ),
     )
 
@@ -236,9 +239,9 @@ class SecurityConfig(models.Model):
         help_text=_('Allow issuance of certificates with BasicConstraints ca=True.'),
     )
 
-    allow_auto_gen_pki = models.BooleanField(
+    allow_self_signed_ca_creation = models.BooleanField(
         default=False,
-        help_text=_('Allow enabling the auto-generated PKI feature.'),
+        help_text=_('Allow enabling local self-signed CA creation.'),
     )
 
     allow_self_signed_ca = models.BooleanField(
@@ -298,7 +301,8 @@ class SecurityConfig(models.Model):
     ]
     #: All implemented OnboardingProtocol values except MANUAL
     _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [
-        protocol.value for protocol in OnboardingProtocol
+        protocol.value
+        for protocol in OnboardingProtocol
         if protocol not in (OnboardingProtocol.MANUAL, OnboardingProtocol.BRSKI)
     ]
 
@@ -316,7 +320,7 @@ class SecurityConfig(models.Model):
             'credential_ttl_seconds': None,
             'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': True,
-            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca_creation': True,
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
@@ -337,7 +341,7 @@ class SecurityConfig(models.Model):
             'credential_ttl_seconds': None,
             'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
-            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca_creation': True,
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
@@ -364,7 +368,7 @@ class SecurityConfig(models.Model):
             'credential_ttl_seconds': None,
             'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
-            'allow_auto_gen_pki': False,
+            'allow_self_signed_ca_creation': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
@@ -393,7 +397,7 @@ class SecurityConfig(models.Model):
             'credential_ttl_seconds': 600,
             'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
-            'allow_auto_gen_pki': False,
+            'allow_self_signed_ca_creation': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
@@ -424,7 +428,7 @@ class SecurityConfig(models.Model):
             'credential_ttl_seconds': 600,
             'allow_user_defined_device_secrets': False,
             'allow_ca_issuance': False,
-            'allow_auto_gen_pki': False,
+            'allow_self_signed_ca_creation': False,
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
@@ -436,10 +440,13 @@ class SecurityConfig(models.Model):
     class Meta:
         """Enforce the custom-secret policy for every database writer."""
 
-        constraints: ClassVar[list[models.BaseConstraint]] = [models.CheckConstraint(
-            condition=models.Q(allow_user_defined_device_secrets=False) | models.Q(credential_ttl_seconds__isnull=True),
-            name='custom_device_secrets_require_no_ttl',
-        )]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=models.Q(allow_user_defined_device_secrets=False)
+                | models.Q(credential_ttl_seconds__isnull=True),
+                name='custom_device_secrets_require_no_ttl',
+            )
+        ]
 
     def __str__(self) -> str:
         """Output as string."""
@@ -457,14 +464,19 @@ class SecurityConfig(models.Model):
             effective = effective_security_defaults(self.security_mode)
 
             if parse_security_restrictions().allow_user_defined_device_secrets is False:
-                raise ValidationError({
-                    'allow_user_defined_device_secrets': _('Custom secrets are disabled by deployment policy.'),
-                })
+                raise ValidationError(
+                    {
+                        'allow_user_defined_device_secrets': _('Custom secrets are disabled by deployment policy.'),
+                    }
+                )
             if self.credential_ttl_seconds is not None or effective['credential_ttl_seconds'] is not None:
-                raise ValidationError({
-                    'allow_user_defined_device_secrets':
-                        _('Custom device secrets require an unset credential TTL and a mode permitting no expiry.'),
-                })
+                raise ValidationError(
+                    {
+                        'allow_user_defined_device_secrets': _(
+                            'Custom device secrets require an unset credential TTL and a mode permitting no expiry.'
+                        ),
+                    }
+                )
 
     def apply_security_settings(self, *, save: bool = True) -> None:
         """Reset all thresholds to the defaults for the current security mode."""
@@ -484,7 +496,7 @@ class SecurityConfig(models.Model):
         self.max_crl_validity_days = defaults['max_crl_validity_days']
         self.credential_ttl_seconds = defaults['credential_ttl_seconds']
         self.allow_ca_issuance = defaults['allow_ca_issuance']
-        self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
+        self.allow_self_signed_ca_creation = defaults['allow_self_signed_ca_creation']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
         self.allow_imported_private_keys = defaults['allow_imported_private_keys']
         self.permitted_cmp_hmac_algorithms = list(defaults['permitted_cmp_hmac_algorithms'])
@@ -501,7 +513,7 @@ class SecurityConfig(models.Model):
                     'max_crl_validity_days',
                     'credential_ttl_seconds',
                     'allow_ca_issuance',
-                    'allow_auto_gen_pki',
+                    'allow_self_signed_ca_creation',
                     'allow_self_signed_ca',
                     'allow_imported_private_keys',
                     'permitted_cmp_hmac_algorithms',
@@ -538,7 +550,7 @@ class SecurityConfig(models.Model):
                 'credential_ttl_seconds': defaults['credential_ttl_seconds'],
                 'allow_user_defined_device_secrets': defaults['allow_user_defined_device_secrets'],
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
-                'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
+                'allow_self_signed_ca_creation': defaults['allow_self_signed_ca_creation'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
                 'permitted_cmp_hmac_algorithms': defaults['permitted_cmp_hmac_algorithms'],
                 'permitted_no_onboarding_pki_protocols': [
@@ -553,7 +565,9 @@ class SecurityConfig(models.Model):
         return json.dumps(preview)
 
     def check_policy_transition(
-        self, requested_policy: _SecurityModeDefaults, target_mode: str,
+        self,
+        requested_policy: _SecurityModeDefaults,
+        target_mode: str,
     ) -> list[str]:
         """Check existing data against an already-built requested policy."""
         mode_label = str(self.SecurityModeChoices(target_mode).label)
@@ -581,7 +595,7 @@ class SecurityConfig(models.Model):
 
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
         """Return a violation if auto-generated PKI is enabled but not permitted in the target mode."""
-        if not defaults['allow_auto_gen_pki'] and self.auto_gen_pki:
+        if not defaults['allow_self_signed_ca_creation'] and self.auto_gen_pki:
             return [
                 str(
                     _(
@@ -616,7 +630,9 @@ class SecurityConfig(models.Model):
 
     @staticmethod
     def _check_cryptographic_policy(
-        defaults: _SecurityModeDefaults, mode_label: str, ca_model: type[CaModel],
+        defaults: _SecurityModeDefaults,
+        mode_label: str,
+        ca_model: type[CaModel],
     ) -> list[str]:
         """Evaluate existing CA material against the requested immutable policy."""
         policy = CryptographicPolicy.from_mapping(defaults)
@@ -627,12 +643,19 @@ class SecurityConfig(models.Model):
             if certificate is None:
                 continue
             failures = evaluate_cryptographic_policy(
-                policy, key=stored_public_key_facts(certificate), signature=stored_signature_facts(certificate),
+                policy,
+                key=stored_public_key_facts(certificate),
+                signature=stored_signature_facts(certificate),
             )
             violations.extend(
-                str(_('Issuing CA "%(ca)s": %(violation)s Requested mode: %(mode)s.') % {
-                    'ca': ca.unique_name, 'violation': failure.message, 'mode': mode_label,
-                })
+                str(
+                    _('Issuing CA "%(ca)s": %(violation)s Requested mode: %(mode)s.')
+                    % {
+                        'ca': ca.unique_name,
+                        'violation': failure.message,
+                        'mode': mode_label,
+                    }
+                )
                 for failure in failures
             )
         return violations

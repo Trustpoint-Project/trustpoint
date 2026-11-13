@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 
@@ -16,8 +17,11 @@ from pki.services.ca_rollover import CaRolloverError, CaRolloverService
 class TestCaRolloverServicePlan:
     """Test CaRolloverService.plan_rollover."""
 
-    def test_plan_rollover_import_ca(self, issuing_ca_model, second_issuing_ca_model):
+    @pytest.mark.parametrize('ca_type', [CaModel.CaTypeChoice.LOCAL_PKCS11, CaModel.CaTypeChoice.SELF_SIGNED])
+    def test_plan_rollover_import_ca(self, issuing_ca_model, second_issuing_ca_model, ca_type):
         """Test planning a rollover with import_ca strategy."""
+        issuing_ca_model.ca_type = ca_type
+        issuing_ca_model.save(update_fields=['ca_type'])
         # Ensure the import_ca strategy is registered
         import pki.rollover.import_ca  # noqa: F401
 

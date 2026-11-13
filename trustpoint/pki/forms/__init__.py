@@ -22,7 +22,7 @@ from .issuing_cas import (
     IssuingCaRequestCmpForm,
     IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
-    SelfSignedManagementCaForm,
+    SelfSignedCaForm,
 )
 from .owner_credential import (
     OwnerCredentialAddManagementCaForm,
@@ -62,7 +62,7 @@ __all__ = [
     'OwnerCredentialOnboardingSetupForm',
     'OwnerCredentialPkcs12ImportForm',
     'ProfileBasedFormFieldBuilder',
-    'SelfSignedManagementCaForm',
+    'SelfSignedCaForm',
     'TruststoreAddForm',
     'TruststoreDownloadForm',
 ]

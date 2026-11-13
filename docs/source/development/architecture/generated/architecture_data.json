@@ -3689,7 +3689,7 @@
             "type": "BooleanField"
           },
           {
-            "name": "allow_auto_gen_pki",
+            "name": "allow_self_signed_ca_creation",
             "type": "BooleanField"
           },
           {

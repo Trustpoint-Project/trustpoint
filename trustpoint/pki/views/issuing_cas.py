@@ -41,11 +41,9 @@ from rest_framework.response import Response
 
 from management.models.security import SecurityConfig
 from management.security_change_audit import audit_security_change, security_change
-from pki.auto_gen_pki import AutoGenPki
 from pki.forms import (
     CaAddRoleSelectForm,
     CertificateIssuanceForm,
-    IssuingCaAddAutoGenForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
@@ -57,7 +55,7 @@ from pki.forms import (
     IssuingCaRequestCmpForm,
     IssuingCaRequestEstForm,
     IssuingCaTruststoreAssociationForm,
-    SelfSignedManagementCaForm,
+    SelfSignedCaForm,
     TruststoreAddForm,
 )
 from pki.forms.issuing_cas import IssuingCaAddRequestMixin, IssuingCaImportMixin
@@ -70,7 +68,7 @@ from pki.rollover.import_ca import ImportCaRolloverForm
 from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
 from pki.services.ca_enrollment import finalize_cmp_issuing_ca, finalize_est_issuing_ca
 from pki.services.ca_rollover import CaRolloverService
-from pki.services.management_ca import create_self_signed_management_ca
+from pki.services.management_ca import create_self_signed_ca
 from pki.util.cert_profile import ProfileValidationError
 from pki.util.certificate_request import build_ca_request_data
 from pki.views.cmp_request import CmpRequestCertView, CmpRequestView
@@ -143,35 +141,42 @@ class CaAddRoleSelectView(IssuingCaContextMixin, FormView[CaAddRoleSelectForm]):
         return redirect('pki:issuing_cas-add-method_select')
 
 
-class SelfSignedManagementCaAddView(IssuingCaContextMixin, LoggerMixin, FormView[SelfSignedManagementCaForm]):
+class SelfSignedManagementCaAddView(IssuingCaContextMixin, LoggerMixin, FormView[SelfSignedCaForm]):
     """Create a self-signed management CA using the default issuing CA profile."""
 
     template_name = 'pki/issuing_cas/add/self_signed_management_ca.html'
-    form_class = SelfSignedManagementCaForm
+    form_class = SelfSignedCaForm
+    ca_role = CaModel.CaRole.MANAGEMENT
 
+    @transaction.atomic
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Only CA managers may create a management CA."""
+        """Keep permission checks, self-signed creation, and its audit together."""
         if not request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
         return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
-    def form_valid(self, form: SelfSignedManagementCaForm) -> HttpResponse:
-        """Generate and persist the self-signed management CA."""
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Use the same creation form for both CA roles."""
+        return super().get_context_data(**kwargs) | {'management_ca': self.ca_role == CaModel.CaRole.MANAGEMENT}
+
+    def form_valid(self, form: SelfSignedCaForm) -> HttpResponse:
+        """Generate and persist the self-signed CA with the endpoint's role."""
         try:
-            ca = create_self_signed_management_ca(
+            ca = create_self_signed_ca(
+                ca_role=self.ca_role,
                 unique_name=form.cleaned_data['unique_name'],
                 key_type=form.cleaned_data['key_type'],
             )
         except ValidationError as exc:
             form.add_error(None, exc)
         except Exception:
-            self.logger.exception('Failed to create self-signed management CA.')
-            form.add_error(None, _('The self-signed management CA could not be created.'))
+            self.logger.exception('Failed to create self-signed CA.')
+            form.add_error(None, _('The self-signed CA could not be created.'))
         else:
             audit_security_change(target=ca, actor=self.request.user, before=None, action='created')
             messages.success(
                 self.request,
-                _('Successfully created self-signed Management CA {name}.').format(name=ca.unique_name),
+                _('Successfully created self-signed CA {name}.').format(name=ca.unique_name),
             )
             return redirect('pki:issuing_cas-config', pk=ca.pk)
         return self.form_invalid(form)
@@ -210,34 +215,19 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
     form_class = IssuingCaAddMethodSelectForm
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the independent AutoGenPKI form and its current availability."""
+        """Expose self-signed creation availability and the selected role."""
         context = super().get_context_data(**kwargs)
-        auto_gen_form = IssuingCaAddAutoGenForm()
         security_config = SecurityConfig.objects.first()
-        active_auto_gen_pki = AutoGenPki.get_auto_gen_pki()
-        can_manage_cas = self.request.user.has_perm(AppPermissions.MANAGE_CAS)
-        auto_gen_allowed = bool(security_config and security_config.auto_gen_pki)
-        key_type_field = cast('ChoiceField', auto_gen_form.fields['key_type'])
-        can_generate = (
-            auto_gen_allowed
-            and active_auto_gen_pki is None
-            and can_manage_cas
-            and auto_gen_form.has_supported_key_types
-        )
-        if not can_generate:
-            key_type_field.widget.attrs['disabled'] = 'disabled'
+        allowed = bool(security_config and security_config.auto_gen_pki)
         ca_role = selected_ca_role(self.request)
-        context.update(
-            {
-                'auto_gen_pki_form': auto_gen_form,
-                'auto_gen_pki_allowed': auto_gen_allowed,
-                'active_auto_gen_pki': active_auto_gen_pki,
-                'can_generate_auto_gen_pki': can_generate and ca_role == CaModel.CaRole.ISSUING,
-                'ca_role': ca_role,
-                'management_ca': ca_role == CaModel.CaRole.MANAGEMENT,
-            }
-        )
-        return context
+        if ca_role == CaModel.CaRole.MANAGEMENT:
+            allowed = allowed and bool(security_config and security_config.allow_self_signed_ca_creation)
+        return context | {
+            'auto_gen_pki_allowed': allowed,
+            'can_generate_auto_gen_pki': allowed and self.request.user.has_perm(AppPermissions.MANAGE_CAS),
+            'ca_role': ca_role,
+            'management_ca': ca_role == CaModel.CaRole.MANAGEMENT,
+        }
 
     def form_valid(self, form: IssuingCaAddMethodSelectForm) -> HttpResponseRedirect:
         """Redirect to the next step based on the selected method."""
@@ -257,55 +247,10 @@ class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddM
         return HttpResponseRedirect(reverse_lazy('pki:issuing_cas-add-method_select'))
 
 
-class IssuingCaAddAutoGenView(IssuingCaContextMixin, FormView[IssuingCaAddAutoGenForm]):
-    """Generate the local AutoGenPKI from the dedicated Add Issuing CA action."""
+class IssuingCaAddAutoGenView(SelfSignedManagementCaAddView):
+    """Create a named self-signed issuing CA without a hierarchy or domain."""
 
-    form_class = IssuingCaAddAutoGenForm
-    template_name = 'pki/issuing_cas/add/method_select.html'
-    success_url = reverse_lazy('pki:issuing_cas')
-
-    def form_invalid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
-        """Return to method selection with validation feedback."""
-        for error in form.errors.values():
-            messages.error(self.request, ' '.join(str(message) for message in error))
-        return redirect('pki:issuing_cas-add-method_select')
-
-    @transaction.atomic
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Keep form persistence and the creation audit in one transaction."""
-        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
-
-    def form_valid(self, form: IssuingCaAddAutoGenForm) -> HttpResponseRedirect:
-        """Enforce permissions and current security state before creating any CA."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
-            raise PermissionDenied
-        if selected_ca_role(self.request) == CaModel.CaRole.MANAGEMENT:
-            messages.error(self.request, _('Auto-generated PKI is only available for issuing CAs.'))
-            return redirect('pki:issuing_cas-add-method_select')
-
-        security_config = SecurityConfig.objects.first()
-        if not security_config or not security_config.auto_gen_pki:
-            messages.error(self.request, _('Auto-generated PKI creation is disabled in the Security Settings.'))
-            return redirect('pki:issuing_cas-add-method_select')
-
-        if AutoGenPki.get_auto_gen_pki() is not None:
-            messages.warning(self.request, _('An auto-generated PKI is already active.'))
-            return redirect('pki:issuing_cas-add-method_select')
-
-        try:
-            issuing_ca = AutoGenPki.enable_auto_gen_pki(form.cleaned_data['key_type'])
-        except ValueError as error:
-            messages.error(self.request, str(error))
-            return redirect('pki:issuing_cas-add-method_select')
-
-        if issuing_ca is None:
-            messages.warning(self.request, _('An auto-generated PKI is already active.'))
-            return redirect('pki:issuing_cas-add-method_select')
-
-        actor = self.request.user if self.request.user.is_authenticated else None
-        audit_security_change(target=issuing_ca, actor=actor, before=None, action='created')
-        messages.success(self.request, _('Successfully generated auto-generated PKI.'))
-        return redirect(self.success_url)
+    ca_role = CaModel.CaRole.ISSUING
 
 
 class IssuingCaFileImportView(IssuingCaContextMixin, FormView[Form]):

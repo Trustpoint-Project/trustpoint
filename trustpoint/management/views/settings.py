@@ -619,7 +619,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
 
                 mode_defaults = SecurityConfig._MODE_DEFAULTS.get(str(new_value))  # noqa: SLF001
                 if mode_defaults is not None:
-                    form.instance.allow_auto_gen_pki = mode_defaults['allow_auto_gen_pki']
+                    form.instance.allow_self_signed_ca_creation = mode_defaults['allow_self_signed_ca_creation']
                     form.instance.not_permitted_ecc_curve_oids = list(mode_defaults['not_permitted_ecc_curve_oids'])
                     form.instance.not_permitted_mldsa_variant_oids = list(
                         mode_defaults['not_permitted_mldsa_variant_oids']
@@ -629,7 +629,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
                     )
                     form.instance.save(
                         update_fields=[
-                            'allow_auto_gen_pki',
+                            'allow_self_signed_ca_creation',
                             'not_permitted_ecc_curve_oids',
                             'not_permitted_mldsa_variant_oids',
                             'not_permitted_signature_algorithm_oids',

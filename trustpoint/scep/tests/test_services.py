@@ -12,6 +12,7 @@ import pytest
 from crypto.application.private_keys import generate_managed_signing_private_key
 from crypto.domain.specs import RsaKeySpec
 from django.test import Client
+from pki.models import CaModel
 from pki.util.x509 import CertificateGenerator
 
 from scep import services
@@ -80,3 +81,12 @@ def test_invalid_ca_is_not_served_or_used_to_generate_keys(rsa_env: ScepEnv, off
     with patch('scep.services.dt', clock), patch('scep.services.rsa.generate_private_key') as generate:
         assert services.get_serving_credential(rsa_env.domain) is None
         generate.assert_not_called()
+
+
+def test_self_signed_ca_is_supported(rsa_env: ScepEnv) -> None:
+    """Self-signed CAs remain available for SCEP enrollment."""
+    ca = rsa_env.domain.issuing_ca
+    ca.ca_type = CaModel.CaTypeChoice.SELF_SIGNED
+    ca.save(update_fields=['ca_type'])
+    assert services.get_local_issuing_ca(rsa_env.domain) == ca
+    assert services.ensure_server_credential(rsa_env.domain) is not None

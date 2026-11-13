@@ -52,6 +52,7 @@ from pki.services.key_generation import (
     key_spec_for_key_type,
     supported_key_type_choices,
 )
+from pki.services.management_ca import SELF_SIGNED_CA_PREFIX, self_signed_ca_name
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
@@ -367,20 +368,24 @@ class IssuingCaAddAutoGenForm(forms.Form):
         return key_type
 
 
-class SelfSignedManagementCaForm(IssuingCaAddAutoGenForm):
-    """Create a self-signed management CA with a chosen name and key algorithm."""
+class SelfSignedCaForm(IssuingCaAddAutoGenForm):
+    """Create a self-signed CA with a chosen name and key algorithm."""
 
     unique_name = forms.CharField(
         label=_('Unique Name'),
-        max_length=100,
+        max_length=64,
         required=True,
         validators=[UniqueNameValidator()],
-        help_text=_('Used as the Trustpoint CA name and as the certificate common name.'),
+        initial=SELF_SIGNED_CA_PREFIX,
+        help_text=_(
+            'The SelfSignedCA_ prefix is required and added automatically if omitted. '
+            'The full name is also used as the certificate common name and must not exceed 64 UTF-8 bytes.'
+        ),
     )
 
     def clean_unique_name(self) -> str:
         """Reject names already used by a CA or a managed key."""
-        unique_name = cast('str', self.cleaned_data['unique_name'])
+        unique_name = self_signed_ca_name(cast('str', self.cleaned_data['unique_name']))
         if CaModel.objects.filter(unique_name=unique_name).exists():
             raise ValidationError(_('A CA with this unique name already exists.'))
         if CryptoManagedKeyModel.objects.filter(alias=unique_name).exists():

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for SecurityConfigForm."""
+
 import pytest
 from django.test import TestCase
 from management.forms import SecurityConfigForm
@@ -24,7 +25,7 @@ class SecurityConfigFormTest(TestCase):
         form = SecurityConfigForm(instance=self.config)
         self.assertIn('security_mode', form.fields)
         self.assertIn('auto_gen_pki', form.fields)
-        assert 'allow_auto_gen_pki' not in form.fields
+        assert 'allow_self_signed_ca_creation' not in form.fields
         assert 'auto_gen_pki_key_algorithm' not in form.fields
         assert 'allow_imported_private_keys' in form.fields
 
@@ -50,6 +51,7 @@ class SecurityConfigFormTest(TestCase):
         """Test that security_mode uses RadioSelect widget."""
         form = SecurityConfigForm()
         from django.forms import RadioSelect
+
         self.assertIsInstance(form.fields['security_mode'].widget, RadioSelect)
 
     def test_auto_gen_pki_field_has_correct_attributes(self):
@@ -65,7 +67,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.LAB,
             'auto_gen_pki': True,
-            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca_creation': True,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -81,7 +83,7 @@ class SecurityConfigFormTest(TestCase):
             'max_crl_validity_days': 90,
             'credential_ttl_seconds': 600,
             'allow_ca_issuance': False,
-            'allow_auto_gen_pki': False,
+            'allow_self_signed_ca_creation': False,
             'allow_self_signed_ca': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
@@ -104,22 +106,21 @@ class SecurityConfigFormTest(TestCase):
         for mode in SecurityConfig.SecurityModeChoices:
             instance = SecurityConfig.objects.get(pk=self.config.pk)
 
-
             defaults = SecurityConfig._MODE_DEFAULTS[mode]  # type: ignore[attr-defined]
 
             form_data = {
                 'security_mode': mode,
-                'auto_gen_pki': defaults['allow_auto_gen_pki'],
+                'auto_gen_pki': defaults['allow_self_signed_ca_creation'],
                 'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
                 'max_cert_validity_days': defaults['max_cert_validity_days'],
                 'max_crl_validity_days': defaults['max_crl_validity_days'],
                 'credential_ttl_seconds': defaults['credential_ttl_seconds'],
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
-                'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
+                'allow_self_signed_ca_creation': defaults['allow_self_signed_ca_creation'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
             }
             form = SecurityConfigForm(data=form_data, instance=instance)
-            self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
+            self.assertTrue(form.is_valid(), f'Form should be valid for mode {mode}')
 
     def test_form_helper_layout(self):
         """Test that form has crispy forms helper with proper layout."""
@@ -151,13 +152,16 @@ def test_credential_ttl_form_policy(mode: str, ttl_seconds: int | None) -> None:
     """The form permits custom TTLs without weakening the hardened presets."""
     defaults = SecurityConfig._MODE_DEFAULTS[mode]
     config = SecurityConfig.objects.create(security_mode=mode)
-    form = SecurityConfigForm(data={
-        'security_mode': mode,
-        'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
-        'max_cert_validity_days': defaults['max_cert_validity_days'],
-        'max_crl_validity_days': defaults['max_crl_validity_days'],
-        'credential_ttl_seconds': ttl_seconds,
-    }, instance=config)
+    form = SecurityConfigForm(
+        data={
+            'security_mode': mode,
+            'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
+            'max_cert_validity_days': defaults['max_cert_validity_days'],
+            'max_crl_validity_days': defaults['max_crl_validity_days'],
+            'credential_ttl_seconds': ttl_seconds,
+        },
+        instance=config,
+    )
     hardened = mode in (SecurityConfig.SecurityModeChoices.HARDENED, SecurityConfig.SecurityModeChoices.CRITICAL)
     valid = ttl_seconds != 0 and (not hardened or (ttl_seconds is not None and ttl_seconds <= 600))
     assert form.is_valid() == valid, form.errors

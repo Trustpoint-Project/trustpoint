@@ -154,9 +154,10 @@ Additional actions:
 
 * ``POST /api/issuing-cas/import-pkcs12/``: upload ``pkcs12_file`` with optional
   ``pkcs12_password`` and ``unique_name``.
-* ``POST /api/issuing-cas/generate/``: supply ``key_type`` to generate the local
-  AutoGenPKI. The security policy must enable AutoGenPKI, and an active
-  AutoGenPKI must not already exist.
+* ``POST /api/issuing-cas/generate/``: supply ``unique_name`` and ``key_type`` to create a
+  self-signed issuing CA. The security policy must enable local auto-generated
+  PKI creation. The ``SelfSignedCA_`` prefix is added to the name if omitted.
+  Multiple CAs are supported; no parent CA or domain is created.
 * ``POST /api/issuing-cas/configure-est/`` and ``configure-cmp/``: configure an
   upstream CA using ``unique_name``, ``key_type``, ``remote_host``,
   ``remote_port``, and ``remote_path``. EST additionally requires

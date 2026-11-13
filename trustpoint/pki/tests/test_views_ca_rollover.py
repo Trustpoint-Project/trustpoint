@@ -172,6 +172,7 @@ def test_transition_reports_invalid_state() -> None:
     assert error.call_args.args[1] == 'wrong state'
 
 
+@pytest.mark.parametrize('ca_type', [CaModel.CaTypeChoice.LOCAL_PKCS11, CaModel.CaTypeChoice.SELF_SIGNED])
 @pytest.mark.parametrize(
     ('view_class', 'method', 'target'),
     [
@@ -183,9 +184,9 @@ def test_transition_reports_invalid_state() -> None:
         (RolloverRequestMethodSelectView, 'cmp', 'pki:issuing_cas-rollover-request-cmp'),
     ],
 )
-def test_rollover_method_selection_routes(method: str, view_class: type, target: str) -> None:
+def test_rollover_method_selection_routes(method: str, view_class: type, target: str, ca_type: int) -> None:
     """Each selection step routes to the shared acquisition endpoint."""
-    issuing_ca = SimpleNamespace(ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11)
+    issuing_ca = SimpleNamespace(ca_type=ca_type)
     with (
         patch('pki.views.ca_rollover.get_object_or_404', return_value=issuing_ca),
         patch('pki.views.ca_rollover.CaRolloverService.get_active_rollover', return_value=None),

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for settings views."""
+
 import logging
 import smtplib
 from unittest.mock import Mock, patch
@@ -53,6 +54,7 @@ class SecuritySettingsViewTest(TestCase):
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(self.view.request, 'session', 'session')
         messages_storage = FallbackStorage(self.view.request)
         setattr(self.view.request, '_messages', messages_storage)
@@ -84,7 +86,7 @@ class SecuritySettingsViewTest(TestCase):
     def test_get_form_kwargs_with_existing_config(self):
         """Test get_form_kwargs returns existing SecurityConfig."""
         form_kwargs = self.view.get_form_kwargs()
-        
+
         self.assertIn('instance', form_kwargs)
         self.assertEqual(form_kwargs['instance'], self.security_config)
 
@@ -100,16 +102,17 @@ class SecuritySettingsViewTest(TestCase):
     def test_get_context_data_includes_page_info(self):
         """Test get_context_data includes page category and name."""
         context = self.view.get_context_data()
-        
+
         self.assertEqual(context['page_category'], 'management')
         self.assertEqual(context['page_name'], 'settings')
 
     def test_get_context_data_includes_notification_configs(self):
         """Test get_context_data includes notification configurations JSON."""
         context = self.view.get_context_data()
-        
+
         self.assertIn('notification_configurations_json', context)
         import json
+
         config_json = json.loads(context['notification_configurations_json'])
         self.assertIsInstance(config_json, dict)
         # Should have entries for all security modes
@@ -124,9 +127,9 @@ class SecuritySettingsViewTest(TestCase):
         form.instance.pk = 1
         form.changed_data = []
         form.save = Mock()
-        
+
         self.view.form_valid(form)
-        
+
         form.save.assert_called_once()
 
     @patch.object(SecurityConfig, 'apply_security_settings')
@@ -134,22 +137,20 @@ class SecuritySettingsViewTest(TestCase):
         """Test form_valid resets settings when security mode is increased."""
         mock_sec = Mock()
         self.view.sec = mock_sec
-        
+
         # Change from BROWNFIELD (1) to HARDENED (3)
         self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
-        
+
         form = Mock(spec=SecurityConfigForm)
         form.instance = self.security_config
         form.instance.pk = 1
         form.changed_data = ['security_mode']
-        form.cleaned_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.HARDENED
-        }
+        form.cleaned_data = {'security_mode': SecurityConfig.SecurityModeChoices.HARDENED}
         form.save = Mock()
-        
+
         self.view.form_valid(form)
-        
+
         mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HARDENED)
 
     @patch('management.security.features.AutoGenPkiFeature.enable')
@@ -159,7 +160,7 @@ class SecuritySettingsViewTest(TestCase):
         mock_sec = Mock()
         mock_sec.enable_feature = Mock()
         self.view.sec = mock_sec
-        
+
         form = Mock(spec=SecurityConfigForm)
         form.instance = self.security_config
         form.instance.pk = 1
@@ -168,9 +169,9 @@ class SecuritySettingsViewTest(TestCase):
             'auto_gen_pki': True,
         }
         form.save = Mock()
-        
+
         self.view.form_valid(form)
-        
+
         mock_enable.assert_not_called()
         mock_sec.enable_feature.assert_not_called()
         self.assertFalse(CaModel.objects.exists())
@@ -183,7 +184,7 @@ class SecuritySettingsViewTest(TestCase):
         # Start with it enabled
         self.security_config.auto_gen_pki = True
         self.security_config.save()
-        
+
         form = Mock(spec=SecurityConfigForm)
         form.instance = self.security_config
         form.instance.pk = 1
@@ -192,9 +193,9 @@ class SecuritySettingsViewTest(TestCase):
             'auto_gen_pki': False,
         }
         form.save = Mock()
-        
+
         self.view.form_valid(form)
-        
+
         mock_disable.assert_called_once()
 
     def test_form_valid_shows_success_message(self):
@@ -204,10 +205,10 @@ class SecuritySettingsViewTest(TestCase):
         form.instance.pk = 1
         form.changed_data = []
         form.save = Mock()
-        
+
         with patch.object(SecurityConfig, 'apply_security_settings'):
             self.view.form_valid(form)
-        
+
         messages_list = list(get_messages(self.view.request))
         self.assertEqual(len(messages_list), 1)
         self.assertIn('saved successfully', str(messages_list[0]))
@@ -220,10 +221,10 @@ class SecuritySettingsViewTest(TestCase):
         form.changed_data = ['security_mode']
         form.cleaned_data = {'security_mode': None}
         form.save = Mock()
-        
+
         with patch.object(SecurityConfig, 'apply_security_settings'):
             self.view.form_valid(form)
-        
+
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
 
@@ -252,7 +253,7 @@ class SecuritySettingsViewTest(TestCase):
                 'max_cert_validity_days': 365,
                 'max_crl_validity_days': 90,
                 'allow_ca_issuance': True,
-                'allow_auto_gen_pki': False,
+                'allow_self_signed_ca_creation': False,
                 'allow_self_signed_ca': False,
             },
             instance=self.security_config,
@@ -267,6 +268,7 @@ class SecuritySettingsViewTest(TestCase):
     def test_inherits_from_form_view(self):
         """Test SecuritySettingsView inherits from FormView."""
         from django.views.generic.edit import FormView
+
         self.assertTrue(issubclass(SecuritySettingsView, FormView))
 
 
@@ -293,14 +295,14 @@ class SettingsTabViewTest(TestCase):
     def test_get_context_data_includes_log_levels(self):
         """Test get_context_data includes log levels."""
         context = self.view.get_context_data()
-        
+
         self.assertIn('loglevels', context)
         self.assertEqual(context['loglevels'], LOG_LEVELS)
 
     def test_get_context_data_includes_current_log_level(self):
         """Test get_context_data includes current log level."""
         context = self.view.get_context_data()
-        
+
         self.assertIn('current_loglevel', context)
         self.assertIsInstance(context['current_loglevel'], str)
 
@@ -320,18 +322,22 @@ class SettingsTabViewTest(TestCase):
     )
     def test_post_smtp_email_settings_saves_and_applies_runtime_settings(self):
         """Test SMTP email settings can be saved from the tab view."""
-        request = self.factory.post('/settings/', {
-            'form_name': 'smtp_email',
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '2525',
-            'use_tls': 'on',
-            'username': 'mailer',
-            'password': 'secret',
-            'timeout_seconds': '15',
-            'default_from_email': 'no-reply@example.com',
-        })
+        request = self.factory.post(
+            '/settings/',
+            {
+                'form_name': 'smtp_email',
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '2525',
+                'use_tls': 'on',
+                'username': 'mailer',
+                'password': 'secret',
+                'timeout_seconds': '15',
+                'default_from_email': 'no-reply@example.com',
+            },
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -356,16 +362,20 @@ class SettingsTabViewTest(TestCase):
             port=2525,
             default_from_email='saved@example.com',
         )
-        request = self.factory.post('/settings/', {
-            'form_name': 'smtp_email_test',
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '2525',
-            'timeout_seconds': '15',
-            'default_from_email': 'unsaved@example.com',
-            'recipient': 'admin@example.com',
-        })
+        request = self.factory.post(
+            '/settings/',
+            {
+                'form_name': 'smtp_email_test',
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '2525',
+                'timeout_seconds': '15',
+                'default_from_email': 'unsaved@example.com',
+                'recipient': 'admin@example.com',
+            },
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -375,7 +385,9 @@ class SettingsTabViewTest(TestCase):
             self.assertEqual(recipient, 'admin@example.com')
             return 1
 
-        with patch.object(SmtpEmailConfig, 'send_test_email', autospec=True, side_effect=fake_send_test_email) as mock_send:
+        with patch.object(
+            SmtpEmailConfig, 'send_test_email', autospec=True, side_effect=fake_send_test_email
+        ) as mock_send:
             response = self.view.post(request)
 
         self.assertEqual(response.status_code, 302)
@@ -393,18 +405,22 @@ class SettingsTabViewTest(TestCase):
             port=2525,
             default_from_email='saved@example.com',
         )
-        request = self.factory.post('/settings/', {
-            'form_name': 'smtp_email_test',
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '2525',
-            'username': 'admin',
-            'password': 'secret',
-            'timeout_seconds': '15',
-            'default_from_email': 'unsaved@example.com',
-            'recipient': 'admin@example.com',
-        })
+        request = self.factory.post(
+            '/settings/',
+            {
+                'form_name': 'smtp_email_test',
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '2525',
+                'username': 'admin',
+                'password': 'secret',
+                'timeout_seconds': '15',
+                'default_from_email': 'unsaved@example.com',
+                'recipient': 'admin@example.com',
+            },
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -428,15 +444,19 @@ class SettingsTabViewTest(TestCase):
             port=2525,
             default_from_email='no-reply@example.com',
         )
-        request = self.factory.post('/settings/', {
-            'form_name': 'smtp_email_test',
-            'host': 'smtp.example.com',
-            'port': '2525',
-            'timeout_seconds': '15',
-            'default_from_email': 'no-reply@example.com',
-            'recipient': 'admin@example.com',
-        })
+        request = self.factory.post(
+            '/settings/',
+            {
+                'form_name': 'smtp_email_test',
+                'host': 'smtp.example.com',
+                'port': '2525',
+                'timeout_seconds': '15',
+                'default_from_email': 'no-reply@example.com',
+                'recipient': 'admin@example.com',
+            },
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -457,18 +477,22 @@ class SettingsTabViewTest(TestCase):
             port=2525,
             default_from_email='no-reply@example.com',
         )
-        request = self.factory.post('/settings/', {
-            'form_name': 'smtp_email_test',
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '2525',
-            'use_tls': 'on',
-            'use_ssl': 'on',
-            'timeout_seconds': '15',
-            'default_from_email': 'no-reply@example.com',
-            'recipient': 'admin@example.com',
-        })
+        request = self.factory.post(
+            '/settings/',
+            {
+                'form_name': 'smtp_email_test',
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '2525',
+                'use_tls': 'on',
+                'use_ssl': 'on',
+                'timeout_seconds': '15',
+                'default_from_email': 'no-reply@example.com',
+                'recipient': 'admin@example.com',
+            },
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -483,6 +507,7 @@ class SettingsTabViewTest(TestCase):
     def test_inherits_from_template_view(self):
         """Test SettingsTabView inherits from TemplateView."""
         from django.views.generic import TemplateView
+
         self.assertTrue(issubclass(SettingsTabView, TemplateView))
 
 
@@ -491,43 +516,49 @@ class SmtpEmailConfigFormTest(TestCase):
 
     def test_valid_enabled_smtp_config(self):
         """Test a complete enabled SMTP configuration is valid."""
-        form = SmtpEmailConfigForm(data={
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '587',
-            'use_tls': 'on',
-            'username': 'mailer',
-            'password': 'secret',
-            'timeout_seconds': '10',
-            'default_from_email': 'no-reply@example.com',
-        })
+        form = SmtpEmailConfigForm(
+            data={
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '587',
+                'use_tls': 'on',
+                'username': 'mailer',
+                'password': 'secret',
+                'timeout_seconds': '10',
+                'default_from_email': 'no-reply@example.com',
+            }
+        )
 
         self.assertTrue(form.is_valid(), form.errors)
 
     def test_enabled_requires_host(self):
         """Test SMTP host is required when delivery is enabled."""
-        form = SmtpEmailConfigForm(data={
-            'enabled': 'on',
-            'host': '',
-            'port': '587',
-            'timeout_seconds': '10',
-            'default_from_email': 'no-reply@example.com',
-        })
+        form = SmtpEmailConfigForm(
+            data={
+                'enabled': 'on',
+                'host': '',
+                'port': '587',
+                'timeout_seconds': '10',
+                'default_from_email': 'no-reply@example.com',
+            }
+        )
 
         self.assertFalse(form.is_valid())
         self.assertIn('host', form.errors)
 
     def test_tls_and_ssl_are_mutually_exclusive(self):
         """Test STARTTLS and SSL/TLS cannot be enabled together."""
-        form = SmtpEmailConfigForm(data={
-            'enabled': 'on',
-            'host': 'smtp.example.com',
-            'port': '465',
-            'use_tls': 'on',
-            'use_ssl': 'on',
-            'timeout_seconds': '10',
-            'default_from_email': 'no-reply@example.com',
-        })
+        form = SmtpEmailConfigForm(
+            data={
+                'enabled': 'on',
+                'host': 'smtp.example.com',
+                'port': '465',
+                'use_tls': 'on',
+                'use_ssl': 'on',
+                'timeout_seconds': '10',
+                'default_from_email': 'no-reply@example.com',
+            }
+        )
 
         self.assertFalse(form.is_valid())
         self.assertIn('use_ssl', form.errors)
@@ -550,7 +581,6 @@ class SmtpEmailTestFormTest(TestCase):
         self.assertIn('recipient', form.errors)
 
 
-
 class ChangeLogLevelViewTest(TestCase):
     """Test suite for ChangeLogLevelView."""
 
@@ -558,7 +588,7 @@ class ChangeLogLevelViewTest(TestCase):
         """Set up test fixtures."""
         self.factory = authorized_request_factory('manage_system_configuration')
         self.view = ChangeLogLevelView()
-        
+
         # Save original log level
         self.original_level = logging.getLogger().getEffectiveLevel()
 
@@ -571,23 +601,24 @@ class ChangeLogLevelViewTest(TestCase):
         request = self.factory.post('/change-log-level/', {'loglevel': 'DEBUG'})
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         response = self.view.post(request)
-        
+
         # Check logger was updated
         self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.DEBUG)
-        
+
         # Check database was updated
         config = LoggingConfig.objects.get(id=1)
         self.assertEqual(config.log_level, 'DEBUG')
-        
+
         # Check success message
         messages_list = list(get_messages(request))
         self.assertTrue(any('updated successfully' in str(msg).lower() for msg in messages_list))
-        
+
         # Check redirect
         self.assertEqual(response.status_code, 302)
         self.assertTrue(response.url.startswith(reverse('management:settings')))
@@ -597,17 +628,18 @@ class ChangeLogLevelViewTest(TestCase):
         request = self.factory.post('/change-log-level/', {'loglevel': 'INVALID'})
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         original_level = logging.getLogger().getEffectiveLevel()
-        
+
         self.view.post(request)
-        
+
         # Logger should not be changed
         self.assertEqual(logging.getLogger().getEffectiveLevel(), original_level)
-        
+
         # Check error message
         messages_list = list(get_messages(request))
         self.assertTrue(any('invalid' in str(msg).lower() for msg in messages_list))
@@ -617,12 +649,13 @@ class ChangeLogLevelViewTest(TestCase):
         request = self.factory.post('/change-log-level/', {'loglevel': 'info'})
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.post(request)
-        
+
         # Should be converted to uppercase and accepted
         self.assertEqual(logging.getLogger().getEffectiveLevel(), logging.INFO)
 
@@ -631,12 +664,13 @@ class ChangeLogLevelViewTest(TestCase):
         request = self.factory.post('/change-log-level/', {'loglevel': ''})
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.post(request)
-        
+
         messages_list = list(get_messages(request))
         self.assertTrue(any('invalid' in str(msg).lower() for msg in messages_list))
 
@@ -644,16 +678,17 @@ class ChangeLogLevelViewTest(TestCase):
         """Test POST updates existing LoggingConfig instead of creating new one."""
         # Create initial config
         LoggingConfig.objects.create(id=1, log_level='INFO')
-        
+
         request = self.factory.post('/change-log-level/', {'loglevel': 'WARNING'})
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.post(request)
-        
+
         # Should still only be one config
         self.assertEqual(LoggingConfig.objects.count(), 1)
         # And it should be updated
@@ -666,18 +701,20 @@ class ChangeLogLevelViewTest(TestCase):
             request = self.factory.post('/change-log-level/', {'loglevel': level})
             # Enable message storage
             from django.contrib.messages.storage.fallback import FallbackStorage
+
             setattr(request, 'session', 'session')
             messages_storage = FallbackStorage(request)
             setattr(request, '_messages', messages_storage)
-            
+
             self.view.post(request)
-            
+
             expected_level = getattr(logging, level)
             self.assertEqual(logging.getLogger().getEffectiveLevel(), expected_level)
 
     def test_inherits_from_view(self):
         """Test ChangeLogLevelView inherits from View."""
         from django.views import View
+
         self.assertTrue(issubclass(ChangeLogLevelView, View))
 
 

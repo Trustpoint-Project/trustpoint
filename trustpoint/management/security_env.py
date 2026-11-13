@@ -54,7 +54,7 @@ class SecurityRestrictions:
     credential_ttl_seconds: int | _Unset | None = UNSET
     allow_user_defined_device_secrets: bool | _Unset = UNSET
     allow_ca_issuance: bool | _Unset = UNSET
-    allow_auto_gen_pki: bool | _Unset = UNSET
+    allow_self_signed_ca_creation: bool | _Unset = UNSET
     allow_self_signed_ca: bool | _Unset = UNSET
     allow_imported_private_keys: bool | _Unset = UNSET
     allow_cmp_hmac_sha1: bool | _Unset = UNSET
@@ -170,7 +170,7 @@ def parse_security_restrictions(environment: Mapping[str, str] | None = None) ->
             'TP_SECURITY_ALLOW_CA_ISSUANCE',
             _raw_environment(environment, 'TP_SECURITY_ALLOW_CA_ISSUANCE'),
         ),
-        allow_auto_gen_pki=_parse_bool(
+        allow_self_signed_ca_creation=_parse_bool(
             'TP_SECURITY_ALLOW_AUTO_GEN_PKI',
             _raw_environment(environment, 'TP_SECURITY_ALLOW_AUTO_GEN_PKI'),
         ),
@@ -221,7 +221,9 @@ def security_mode_from_environment(environment: Mapping[str, str] | None = None)
 
 
 def _apply_cmp_hmac_restrictions(
-    defaults: dict[str, object], restrictions: SecurityRestrictions, mode: str,
+    defaults: dict[str, object],
+    restrictions: SecurityRestrictions,
+    mode: str,
 ) -> None:
     """Apply the algorithm allowlist and the legacy SHA-1 restriction."""
     from management.models.security import SecurityConfig
@@ -290,7 +292,10 @@ def effective_security_defaults(
         defaults[field] = value
 
     for field in (
-        'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca', 'allow_imported_private_keys',
+        'allow_ca_issuance',
+        'allow_self_signed_ca_creation',
+        'allow_self_signed_ca',
+        'allow_imported_private_keys',
     ):
         value = getattr(restrictions, field)
         if not _is_unset(value):
@@ -315,7 +320,8 @@ def effective_security_defaults(
                         else OnboardingProtocol
                     )
                     protocol_name = next(
-                        (member.name for member in protocol_type if member.value == protocol), str(protocol),
+                        (member.name for member in protocol_type if member.value == protocol),
+                        str(protocol),
                     )
                     _fail(
                         f'Protocol {protocol_name} is not permitted by security mode {mode}; '
@@ -324,7 +330,7 @@ def effective_security_defaults(
             defaults[field] = value
 
     if not _is_unset(restrictions.auto_gen_pki):
-        if restrictions.auto_gen_pki and not defaults['allow_auto_gen_pki']:
+        if restrictions.auto_gen_pki and not defaults['allow_self_signed_ca_creation']:
             _fail(
                 f'TP_SECURITY_AUTO_GEN_PKI=true is not permitted by security mode {mode}.',
             )
@@ -354,7 +360,8 @@ def synchronize_security_config() -> bool:
             _fail('Disable custom device secrets explicitly before applying a credential TTL.')
         validation_config = config or SecurityConfig(security_mode=mode)
         violations = validation_config.check_policy_transition(
-            cast('_SecurityModeDefaults', effective), mode,
+            cast('_SecurityModeDefaults', effective),
+            mode,
         )
         if violations:
             mode_name = SecurityConfig.SecurityModeChoices(mode).name
@@ -371,7 +378,7 @@ def synchronize_security_config() -> bool:
             config = SecurityConfig(pk=1, security_mode=mode)
         config.security_mode = mode
         config.apply_security_settings(save=False)
-        if effective['allow_auto_gen_pki'] is False and restrictions.auto_gen_pki is UNSET:
+        if effective['allow_self_signed_ca_creation'] is False and restrictions.auto_gen_pki is UNSET:
             effective['auto_gen_pki'] = False
         for field, value in effective.items():
             if (

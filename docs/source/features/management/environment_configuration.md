@@ -132,7 +132,7 @@ If `EMAIL_HOST` is not configured, Trustpoint uses Django's console email backen
 | `TP_SECURITY_MAX_CERT_VALIDITY_DAYS` | Integer / `null` | Maximum certificate validity period. |
 | `TP_SECURITY_MAX_CRL_VALIDITY_DAYS` | Integer / `null` | Maximum CRL validity period. |
 | `TP_SECURITY_ALLOW_CA_ISSUANCE` | Boolean | Allow issuance of CA certificates. |
-| `TP_SECURITY_ALLOW_AUTO_GEN_PKI` | Boolean | Allow use of the automatically generated PKI. |
+| `TP_SECURITY_ALLOW_AUTO_GEN_PKI` | Boolean | Allow local self-signed CA creation (`allow_self_signed_ca_creation`). |
 | `TP_SECURITY_ALLOW_SELF_SIGNED_CA` | Boolean | Allow importing self-signed CAs. |
 | `TP_SECURITY_ALLOW_IMPORTED_PRIVATE_KEYS` | Boolean | Allow importing existing private-key credentials. |
 | `TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS` | Comma-separated HMAC names | Restrict accepted CMP MACs, e.g. `HMAC_SHA256,HMAC_SHA384,HMAC_SHA512`. Empty disables shared-secret authentication. Lab / Custom permits any supported HMAC. |
