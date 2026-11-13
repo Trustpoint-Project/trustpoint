@@ -22,7 +22,9 @@ from django.views.generic.edit import FormView
 
 from management.forms import CertificateAuthenticationEnabledForm, ManagementCASelectionForm, PasswordPolicyForm
 from management.models import CertificateAuthenticationConfig, PasswordPolicy
+from management.models.certificate_authentication import default_user_certificate_profile
 from pki.services.management_ca import ManagementCAService
+from pki.services.user_client_certificate import user_client_certificate_request
 from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.permissions import AppPermissions
 
@@ -111,6 +113,18 @@ class CertificateAuthenticationConfigureView(
     context_page_name = 'user_authentication'
     http_method_names = ('get', 'post')
 
+    def get_initial(self) -> dict[str, Any]:
+        """Show the default profile saved for the selected management CA."""
+        initial = super().get_initial()
+        ca = ManagementCAService.get_issuing_ca()
+        config = CertificateAuthenticationConfig.objects.filter(issuing_ca=ca).first() if ca else None
+        initial['certificate_profile'] = (
+            config.certificate_profile_id
+            if config and config.certificate_profile_id
+            else default_user_certificate_profile()
+        )
+        return initial
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Show the selected CA and the management CAs available for selection."""
         context = super().get_context_data(**kwargs)
@@ -129,13 +143,22 @@ class CertificateAuthenticationConfigureView(
         if not self.request.user.has_perm(AppPermissions.MANAGE_CAS):
             raise PermissionDenied
         try:
-            selected_ca = ManagementCAService.select_issuing_ca(form.cleaned_data['selected_ca_id'])
+            with transaction.atomic():
+                selected_ca = ManagementCAService.select_issuing_ca(form.cleaned_data['selected_ca_id'])
+                profile = form.cleaned_data['certificate_profile']
+                if profile is not None:
+                    user_client_certificate_request(profile, selected_ca)
+                CertificateAuthenticationConfig.objects.filter(issuing_ca=selected_ca).update(
+                    certificate_profile=profile
+                )
         except ValidationError as exc:
             form.add_error(None, exc)
+        except ValueError as exc:
+            form.add_error('certificate_profile', str(exc))
         else:
             messages.success(
                 self.request,
-                _('Management CA saved: {name}.').format(name=selected_ca.unique_name),
+                _('Certificate authentication configuration saved.'),
             )
             return super().form_valid(form)
         return self.form_invalid(form)
