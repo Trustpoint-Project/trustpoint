@@ -239,7 +239,9 @@ class SecurityConfig(models.Model):
         help_text=_('Allow issuance of certificates with BasicConstraints ca=True.'),
     )
 
+    # Keep the column readable by the previous release.
     allow_self_signed_ca_creation = models.BooleanField(
+        db_column='allow_auto_gen_pki',
         default=False,
         help_text=_('Allow enabling local self-signed CA creation.'),
     )
