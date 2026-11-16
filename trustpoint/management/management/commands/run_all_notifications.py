@@ -49,6 +49,10 @@ class Command(BaseCommand):
             'check_for_not_permitted_ecc_curves',
             'check_gds_push_failures',
             'check_signer_key_validity',
+            'check_api_credential_validity',
+            'check_account_lockouts',
+            'check_workflow_failures',
+            'check_crypto_backend',
             'check_tls_certificate_validity',
         ]
 

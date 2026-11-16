@@ -7,10 +7,12 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.backends import ModelBackend
+from django.db import transaction
 from django.db.models import F
 from django.utils.translation import gettext
 
-from management.models import AccountSecurityConfig
+from management.models import AccountSecurityConfig, NotificationModel
+from management.notifications import notify_operational_issue
 
 from .models import TrustpointUser
 
@@ -43,18 +45,25 @@ class TrustpointModelBackend(ModelBackend):
             return user
         config = AccountSecurityConfig.get()
         if config.failed_login_attempts and user.is_active:
-            TrustpointUser.objects.filter(pk=user.pk).update(failed_login_attempts=F('failed_login_attempts') + 1)
-            user.refresh_from_db(fields=['failed_login_attempts', 'is_active'])
-            if user.failed_login_attempts >= config.failed_login_attempts:
-                user.is_active = False
-                user.blocked_by_failed_logins = True
-                user.save(update_fields=['is_active', 'blocked_by_failed_logins'])
-                if request is not None:
-                    messages.error(
-                        request,
-                        gettext(
-                            'This account has been blocked after too many failed login attempts. '
-                            'Contact an administrator to restore access.',
-                        ),
+            with transaction.atomic():
+                TrustpointUser.objects.filter(pk=user.pk).update(failed_login_attempts=F('failed_login_attempts') + 1)
+                user.refresh_from_db(fields=['failed_login_attempts', 'is_active'])
+                if user.failed_login_attempts >= config.failed_login_attempts:
+                    user.is_active = False
+                    user.blocked_by_failed_logins = True
+                    user.save(update_fields=['is_active', 'blocked_by_failed_logins'])
+                    notify_operational_issue(
+                        f'ACCOUNT_LOCKED_{user.pk}',
+                        NotificationModel.NotificationMessageType.ACCOUNT_LOCKED,
+                        NotificationModel.NotificationTypes.WARNING,
+                        {'username': user.username},
                     )
+                    if request is not None:
+                        messages.error(
+                            request,
+                            gettext(
+                                'This account has been blocked after too many failed login attempts. '
+                                'Contact an administrator to restore access.',
+                            ),
+                        )
         return None

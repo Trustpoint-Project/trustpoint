@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from management.models import NotificationModel, NotificationStatus
+from management.notifications import check_notification_cycle
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -17,6 +18,8 @@ def notification_alerts(request: HttpRequest) -> dict[str, Any]:
     """Provide counts of unread warning and critical notifications for the global header."""
     if not hasattr(request, 'user') or not request.user.is_authenticated:
         return {}
+
+    check_notification_cycle()
 
     unread_critical = NotificationModel.objects.filter(
         statuses__status=NotificationStatus.StatusChoices.NEW,
@@ -43,4 +46,3 @@ def ui_config(request: HttpRequest) -> dict[str, Any]:
     return {
         'is_simplified_mode': request.user.view_mode == 'simplified',
     }
-

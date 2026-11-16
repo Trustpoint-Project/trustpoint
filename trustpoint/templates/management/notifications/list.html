@@ -388,12 +388,14 @@
                                             {% trans 'Details' %}
                                         </a>
 
+                                        {% if notification.can_delete %}
                                         <a
                                             href="{% url 'management:notification_delete' notification.id %}"
                                             class="btn btn-sm btn-outline-secondary"
                                         >
                                             {% trans 'Delete' %}
                                         </a>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>

@@ -125,7 +125,7 @@ class CreateDbBackupTest(TestCase):
         mock_datetime.datetime.now.return_value = mock_now
         mock_datetime.UTC = datetime.UTC
 
-        filename = create_db_backup(self.backup_dir)
+        filename = create_db_backup()
 
         self.assertRegex(filename, r'^backup_2025-12-08_12-00-00_[0-9a-f]{32}\.dump\.gz$')
         mock_call_command.assert_called_once_with('trustpointbackup', filename=filename)
@@ -148,8 +148,8 @@ class CreateDbBackupTest(TestCase):
 
         mock_dbbackup.side_effect = save_dump
         with self.settings(BACKUP_FILE_PATH=self.backup_dir):
-            first = create_db_backup(self.backup_dir)
-            second = create_db_backup(self.backup_dir)
+            first = create_db_backup()
+            second = create_db_backup()
 
         self.assertNotEqual(first, second)
         self.assertEqual((self.backup_dir / first).read_bytes(), b'first snapshot')

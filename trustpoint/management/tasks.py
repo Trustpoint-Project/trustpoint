@@ -6,9 +6,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.core.management import call_command
-from django.core.management.base import CommandError
+from django.utils import timezone
 
 from management.models import NotificationConfig
 
@@ -26,39 +27,37 @@ def execute_all_notifications() -> None:
     based on the NotificationConfig settings.
 
     Raises:
-        CommandError: If any of the notification commands fail.
+        Exception: If the checks fail or the next check cannot be scheduled.
     """
     logger.info('Starting execution of all notifications via Django-Q2')
 
+    notification_config = NotificationConfig.get()
+    if notification_config.enabled and notification_config.notification_cycle_enabled:
+        # Move the expected next run before checking, so a healthy but slow cycle is not reported as overdue.
+        notification_config.last_notification_check_started_at = timezone.now() + timedelta(
+            hours=notification_config.notification_cycle_interval_hours
+        )
+        notification_config.save(update_fields=['last_notification_check_started_at'])
+
+    error: Exception | None = None
     try:
         call_command('run_all_notifications')
         logger.info('All notifications executed successfully via Django-Q2')
+    except Exception as exc:
+        logger.exception('Unexpected error while executing notifications')
+        error = exc
 
-        # Schedule the next notification check
-        # Explicitly fetch fresh data from DB to avoid stale cache in task context
-        notification_config = NotificationConfig.get()
-        notification_config.refresh_from_db()
-
-        logger.info(
-            'Notification config state: enabled=%s, cycle_enabled=%s',
+    # Always schedule the next check: one failing check must not stop all future notification checks.
+    notification_config.refresh_from_db()
+    if notification_config.enabled and notification_config.notification_cycle_enabled:
+        notification_config.schedule_next_notification_check()
+        logger.info('Next notification check scheduled successfully')
+    else:
+        logger.warning(
+            'Notifications are disabled (enabled=%s, cycle_enabled=%s), skipping rescheduling',
             notification_config.enabled,
-            notification_config.notification_cycle_enabled
+            notification_config.notification_cycle_enabled,
         )
 
-        if notification_config.enabled and notification_config.notification_cycle_enabled:
-            notification_config.schedule_next_notification_check()
-            logger.info('Next notification check scheduled successfully')
-        else:
-            logger.warning(
-                'Notifications are disabled (enabled=%s, cycle_enabled=%s), skipping rescheduling',
-                notification_config.enabled,
-                notification_config.notification_cycle_enabled
-            )
-
-    except CommandError:
-        logger.exception('CommandError while executing notifications')
-        raise
-    except Exception:
-        logger.exception('Unexpected error while executing notifications')
-        raise
-
+    if error is not None:
+        raise error
