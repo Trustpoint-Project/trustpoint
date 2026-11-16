@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.encoding import force_str
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django_q.models import Schedule
 from django_q.tasks import schedule
@@ -171,6 +172,16 @@ class NotificationModel(models.Model):
         VULNERABILITY = 'VULNERABILITY'
         CERT_EXPIRING = 'CERT_EXPIRING'
         CERT_EXPIRED = 'CERT_EXPIRED'
+        USER_CERT_EXPIRING = 'USER_CERT_EXPIRING'
+        USER_CERT_EXPIRED = 'USER_CERT_EXPIRED'
+        API_CREDENTIAL_EXPIRING = 'API_CRED_EXPIRING'
+        API_CREDENTIAL_EXPIRED = 'API_CRED_EXPIRED'
+        CRYPTO_BACKEND_UNAVAILABLE = 'CRYPTO_BACKEND_UNAVAILABLE'
+        ACCOUNT_LOCKED = 'ACCOUNT_LOCKED'
+        WORKFLOW_FAILED = 'WORKFLOW_FAILED'
+        WORKFLOW_APPROVAL_OVERDUE = 'WORKFLOW_APPROVAL_OVERDUE'
+        BACKUP_FAILED = 'BACKUP_FAILED'
+        NOTIFICATION_CHECK_OVERDUE = 'NOTIFICATION_CHECK_OVERDUE'
         ISSUING_CA_EXPIRING = 'CA_EXPIRING'
         ISSUING_CA_EXPIRED = 'CA_EXPIRED'
         DOMAIN_NO_ISSUING_CA = 'DOMAIN_NO_CA'
@@ -279,6 +290,78 @@ class NotificationModel(models.Model):
                 self.CERT_EXPIRED: NotificationMessage(
                     _('Certificate {common_name} has expired'),
                     _('The certificate {common_name} expired on {not_valid_after}.'),
+                ),
+                self.USER_CERT_EXPIRING: NotificationMessage(
+                    _('User client certificate {identifier} for {username} is expiring soon'),
+                    _(
+                        'The client certificate {identifier} for user {username} expires on {not_valid_after}. '
+                        'Create a replacement under Profile > Certificate Authentication before it expires.'
+                    ),
+                ),
+                self.USER_CERT_EXPIRED: NotificationMessage(
+                    _('User client certificate {identifier} for {username} has expired'),
+                    _(
+                        'The client certificate {identifier} for user {username} expired on {not_valid_after}. '
+                        'Create a replacement under Profile > Certificate Authentication to restore certificate login.'
+                    ),
+                ),
+                self.API_CREDENTIAL_EXPIRING: NotificationMessage(
+                    _('API credential for {username} is expiring soon'),
+                    _(
+                        'API credential #{credential_id} for service account {username} expires on {expires_at}. '
+                        'Create a replacement credential before expiration to avoid integration outages.'
+                    ),
+                ),
+                self.API_CREDENTIAL_EXPIRED: NotificationMessage(
+                    _('API credential for {username} has expired'),
+                    _(
+                        'API credential #{credential_id} for service account {username} expired on {expires_at}. '
+                        'Create a replacement credential to restore API access.'
+                    ),
+                ),
+                self.CRYPTO_BACKEND_UNAVAILABLE: NotificationMessage(
+                    _('Cryptographic backend {backend} is unavailable'),
+                    _(
+                        'The live capability check for cryptographic backend {backend} failed. '
+                        'Review the backend configuration and connectivity; signing operations may fail. '
+                        'After a token authentication failure, automatic login retries pause. '
+                        'Correct the configuration and mark this notification solved to allow another check.'
+                    ),
+                ),
+                self.ACCOUNT_LOCKED: NotificationMessage(
+                    _('User account {username} is locked'),
+                    _(
+                        'User account {username} was blocked after repeated failed login attempts. '
+                        'Review the account activity before restoring access.'
+                    ),
+                ),
+                self.WORKFLOW_FAILED: NotificationMessage(
+                    _('Workflow {workflow} failed'),
+                    _(
+                        'Workflow instance {instance_id} of {workflow} failed or timed out. '
+                        'Review the workflow execution details.'
+                    ),
+                ),
+                self.WORKFLOW_APPROVAL_OVERDUE: NotificationMessage(
+                    _('Workflow approval for {workflow} is overdue'),
+                    _(
+                        'Approval {approval_id} for workflow {workflow} passed its deadline on {expires_at}. '
+                        'Review the workflow approval queue.'
+                    ),
+                ),
+                self.BACKUP_FAILED: NotificationMessage(
+                    _('Database backup failed ({stage})'),
+                    _(
+                        'A database backup failed during {stage}. Review the application logs and backup settings. '
+                        'Ensure a usable backup is available.'
+                    ),
+                ),
+                self.NOTIFICATION_CHECK_OVERDUE: NotificationMessage(
+                    _('Scheduled notification checks are overdue'),
+                    _(
+                        'The expected notification cycle has not scheduled its next run in time. '
+                        'Check the Django-Q2 worker and notification settings; alerts may be out of date.'
+                    ),
                 ),
                 self.ISSUING_CA_EXPIRING: NotificationMessage(
                     _('Issuing CA {unique_name} is expiring soon'),
@@ -446,6 +529,15 @@ class NotificationModel(models.Model):
         return f'{self.get_notification_type_display()} - {message_text}'
 
     @property
+    def can_delete(self) -> bool:
+        """Keep the PIN retry pause until an operator explicitly solves the alert."""
+        return not (
+            self.event == 'CRYPTO_BACKEND_UNAVAILABLE'
+            and self.message_data.get('authentication_failed') is True
+            and not any(status.status == NotificationStatus.StatusChoices.SOLVED for status in self.statuses.all())
+        )
+
+    @property
     def short_translated(self) -> Any:
         """Returns the translated short description.
 
@@ -477,7 +569,7 @@ class NotificationModel(models.Model):
             message_string = NotificationModel.NotificationMessageType(self.message_type).get_message()
         except ValueError:
             return _('Guess we messed up. Type of this notification is %(type)s') % {'type': self.message_type}
-        return message_string.long.format(**self.message_data)
+        return format_html(message_string.long, **self.message_data) if self.message_data else message_string.long
 
 
 class WeakECCCurve(models.Model):

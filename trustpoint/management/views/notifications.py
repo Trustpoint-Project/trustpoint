@@ -10,14 +10,17 @@ from typing import TYPE_CHECKING, Any
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.management import CommandError, call_command
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils.decorators import method_decorator
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 
+from crypto.models import CryptoProviderProfileModel
 from home.filters import NotificationFilter
 from home.views import ERROR, SUCCESS
 from management.i18n import format_datetime
@@ -31,6 +34,7 @@ from trustpoint.views.base import SortableTableMixin, UserPermissionRequiredMixi
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
     from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
     from django.utils.safestring import SafeString
 
@@ -59,7 +63,7 @@ class NotificationsListView(
         if show_unread:
             qs = qs.filter(statuses__status=NotificationStatus.StatusChoices.NEW)
 
-        self.queryset = qs
+        self.queryset = qs.prefetch_related('statuses')
         return super().get_queryset()
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
@@ -116,7 +120,7 @@ class NotificationsListView(
             timezone_name=getattr(user, 'timezone', None),
         )
 
-        if record.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists():
+        if any(status.status == NotificationStatus.StatusChoices.NEW for status in record.statuses.all()):
             # noinspection PyDeprecation
             return format_html('{} <span class="badge bg-secondary">{}</span>', created_at_display, _('New'))
 
@@ -157,7 +161,9 @@ class NotificationDetailsView(PageContextMixin, LoggerMixin, DetailView[Notifica
 
         # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
         new_status, _created = NotificationStatus.objects.get_or_create(status='NEW')
-        solved_status, _created = NotificationStatus.objects.get_or_create(status='SOLVED')
+        solved_status, _created = NotificationStatus.objects.get_or_create(
+            status=NotificationStatus.StatusChoices.SOLVED
+        )
 
         context['is_read'] = new_status not in self.object.statuses.all()
         context['is_solved'] = solved_status in self.object.statuses.all()
@@ -186,7 +192,7 @@ class NotificationMarkSolvedView(UserPermissionRequiredMixin, LoggerMixin, Templ
     def post(self, _request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Save the solved status and return to notification details."""
         notification = get_object_or_404(NotificationModel, pk=kwargs['pk'])
-        solved_status, _ = NotificationStatus.objects.get_or_create(status='SOLVED')
+        solved_status, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.SOLVED)
         notification.statuses.add(solved_status)
         return redirect('management:notification_details', pk=notification.pk)
 
@@ -235,6 +241,7 @@ class RefreshNotificationsView(UserPermissionRequiredMixin, LoggerMixin, Templat
         return redirect('management:notifications')
 
 
+@method_decorator(transaction.atomic, name='dispatch')
 class NotificationDeleteView(UserPermissionRequiredMixin, LoggerMixin, DeleteView[NotificationModel, Any]):
     """View to delete a notification."""
 
@@ -246,6 +253,19 @@ class NotificationDeleteView(UserPermissionRequiredMixin, LoggerMixin, DeleteVie
 
     page_category = 'management'
     page_name = 'notifications'
+
+    def get_object(self, queryset: QuerySet[NotificationModel] | None = None) -> NotificationModel:
+        """Protect the persisted authentication pause on every deletion request."""
+        notification = super().get_object(queryset)
+        if notification.event == 'CRYPTO_BACKEND_UNAVAILABLE':
+            # Keep the probe's provider lock through validation and the actual deletion.
+            CryptoProviderProfileModel.objects.filter(active=True).select_for_update().first()
+            notification = super().get_object(queryset)
+        if not notification.can_delete:
+            raise PermissionDenied(
+                _('Correct the token authentication configuration and mark this alert solved before deleting it.')
+            )
+        return notification
 
     def delete(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Override delete method to add a success message.

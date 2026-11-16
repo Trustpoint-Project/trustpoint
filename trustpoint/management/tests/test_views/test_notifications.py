@@ -27,7 +27,7 @@ class NotificationsListViewTests(TestCase):
         """Test _render_created_at with NEW status."""
         notification = Mock()
         notification.created_at = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
-        notification.statuses.filter.return_value.exists.return_value = True
+        notification.statuses.all.return_value = [Mock(status=NotificationStatus.StatusChoices.NEW)]
 
         result = NotificationsListView._render_created_at(notification)  # noqa: SLF001
 
@@ -39,7 +39,7 @@ class NotificationsListViewTests(TestCase):
         """Test _render_created_at without NEW status."""
         notification = Mock()
         notification.created_at = datetime(2025, 1, 15, 10, 30, 0, tzinfo=UTC)
-        notification.statuses.filter.return_value.exists.return_value = False
+        notification.statuses.all.return_value = []
 
         result = NotificationsListView._render_created_at(notification)  # noqa: SLF001
 
@@ -126,7 +126,7 @@ class NotificationDetailsViewTests(TestCase):
 
         notification = Mock(spec=NotificationModel)
         notification.statuses.all.return_value = [solved_status]
-        notification.statuses.values_list.return_value = ['SOLVED']
+        notification.statuses.values_list.return_value = ['SOLV']
         notification.device = None
         notification.certificate = None
 

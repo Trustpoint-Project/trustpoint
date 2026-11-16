@@ -43,17 +43,19 @@ class Command(BaseCommand):
     def _check_certificate_validity(self) -> None:
         """Check for certificates that are expiring soon or have already expired.
 
-        Expiring certificates: Within the next 30 days.
+        Expiring certificates: Within the configured certificate warning period.
         Expired certificates: Already past their `not_valid_after` date.
         """
         config = NotificationConfig.get()
-        expiring_threshold = timezone.now() + timedelta(days=config.cert_expiry_warning_days)
         current_time = timezone.now()
+        expiring_threshold = current_time + timedelta(days=config.cert_expiry_warning_days)
 
         expiring_certificates = CertificateModel.objects.filter(
             not_valid_after__lte=expiring_threshold, not_valid_after__gt=current_time
         )
         expired_certificates = CertificateModel.objects.filter(not_valid_after__lte=current_time)
+        expiring_certificates = expiring_certificates.select_related('user_client_certificate__user')
+        expired_certificates = expired_certificates.select_related('user_client_certificate__user')
 
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
@@ -93,14 +95,24 @@ class Command(BaseCommand):
         """
         from pki.models import IssuedCredentialModel  # noqa: PLC0415
 
-        message_data = {'common_name': certificate.common_name,
-                        'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S')}
+        message_data = {
+            'common_name': certificate.common_name,
+            'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S'),
+        }
+        association = getattr(certificate, 'user_client_certificate', None)
+        if association is not None:
+            message_type = (
+                NotificationModel.NotificationMessageType.USER_CERT_EXPIRING
+                if message_type == NotificationModel.NotificationMessageType.CERT_EXPIRING
+                else NotificationModel.NotificationMessageType.USER_CERT_EXPIRED
+            )
+            message_data.update(
+                username=association.user.username,
+                identifier=association.identifier,
+            )
 
         issued_credential = (
-            IssuedCredentialModel.objects
-            .filter(credential__certificate=certificate)
-            .select_related('domain')
-            .first()
+            IssuedCredentialModel.objects.filter(credential__certificate=certificate).select_related('domain').first()
         )
 
         if issued_credential and issued_credential.domain:

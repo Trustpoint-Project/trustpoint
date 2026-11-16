@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Protocol, cast
 
 from pkcs11 import Mechanism
 
+from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.rest.capabilities import RestCapabilities
 from crypto.adapters.software.capabilities import SOFTWARE_CAPABILITIES, SoftwareCapabilities
@@ -113,7 +114,13 @@ class BackendCapabilityService:
         self._profile_repository = profile_repository or CryptoProviderProfileRepository()
         self._adapter_factory = adapter_factory or DefaultBackendAdapterFactory()
 
-    def active_report(self, *, refresh: bool = False, strict: bool = False) -> BackendCapabilityReport:
+    def active_report(
+        self,
+        *,
+        refresh: bool = False,
+        strict: bool = False,
+        authenticate: bool = False,
+    ) -> BackendCapabilityReport:
         """Return the normalized report for the configured instance backend."""
         try:
             profile = self._profile_repository.get_configured_profile()
@@ -129,7 +136,7 @@ class BackendCapabilityService:
             )
 
         try:
-            capabilities = self._load_capabilities(profile=profile, refresh=refresh)
+            capabilities = self._load_capabilities(profile=profile, refresh=refresh, authenticate=authenticate)
         except Exception as exc:
             if strict:
                 raise
@@ -171,11 +178,17 @@ class BackendCapabilityService:
         *,
         profile: CryptoProviderProfileModel,
         refresh: bool,
+        authenticate: bool,
     ) -> ProviderCapabilities | None:
         """Load persisted capabilities, or explicitly refresh them when requested."""
-        if refresh:
+        if refresh or authenticate:
             backend = self._build_refreshing_backend(profile)
             try:
+                if authenticate and isinstance(backend, Pkcs11Backend):
+                    backend.verify_availability()
+                    # verify_availability already probed the token; reuse that snapshot.
+                    if (capabilities := backend.current_capabilities()) is not None:
+                        return capabilities
                 return backend.refresh_capabilities()
             finally:
                 backend.close()
@@ -261,6 +274,11 @@ class BackendCapabilityService:
         )
 
 
-def get_active_backend_capability_report(*, refresh: bool = False, strict: bool = False) -> BackendCapabilityReport:
+def get_active_backend_capability_report(
+    *,
+    refresh: bool = False,
+    strict: bool = False,
+    authenticate: bool = False,
+) -> BackendCapabilityReport:
     """Convenience wrapper for callers that do not need to inject dependencies."""
-    return BackendCapabilityService().active_report(refresh=refresh, strict=strict)
+    return BackendCapabilityService().active_report(refresh=refresh, strict=strict, authenticate=authenticate)

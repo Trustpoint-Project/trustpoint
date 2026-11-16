@@ -44,6 +44,7 @@ from trustpoint_core.serializer import CredentialFileFormat, CredentialSerialize
 
 from crypto.domain.errors import CryptoError
 from management.models import CertificateAuthenticationConfig, PasswordPolicy
+from management.notifications import resolve_operational_issue
 from pki.models import CaModel, CertificateModel
 from pki.services.management_ca import ManagementCAService
 from pki.services.user_client_certificate import create_user_client_certificate
@@ -162,12 +163,14 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             if not request.user.has_perm(AppPermissions.MANAGE_USERS):
                 raise PermissionDenied
             if self.object.blocked_by_failed_logins:
-                self.object.is_active = True
-                self.object.failed_login_attempts = 0
-                self.object.blocked_by_failed_logins = False
-                self.object.save(
-                    update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
-                )
+                with transaction.atomic():
+                    self.object.is_active = True
+                    self.object.failed_login_attempts = 0
+                    self.object.blocked_by_failed_logins = False
+                    self.object.save(
+                        update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
+                    )
+                    resolve_operational_issue(f'ACCOUNT_LOCKED_{self.object.pk}')
                 messages.success(request, gettext('The user has been unblocked and can log in again.'))
             return self._redirect_to_profile()
 

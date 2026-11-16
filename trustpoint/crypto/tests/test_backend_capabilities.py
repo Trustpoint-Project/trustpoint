@@ -129,3 +129,69 @@ def test_missing_snapshot_does_not_use_software_defaults(backend_kind: BackendKi
     assert not report.capabilities_known
     assert not report.available
     assert not report.mldsa_variants
+
+
+def test_authenticated_report_rejects_a_token_with_an_incorrect_pin(monkeypatch):
+    from crypto.domain.errors import AuthenticationError
+    from crypto.tests.test_backend import _build_backend, FakeSession, FakeToken
+    from pkcs11.exceptions import PinIncorrect
+
+    backend = _build_backend(FakeSession())
+    open_session = Mock(side_effect=PinIncorrect())
+    monkeypatch.setattr(FakeToken, 'open', open_session)
+    repository = Mock()
+    repository.get_configured_profile.return_value = CryptoProviderProfileModel(name='HSM', backend_kind='pkcs11')
+    factory = Mock()
+    factory.build.return_value = backend
+    service = BackendCapabilityService(profile_repository=repository, adapter_factory=factory)
+    with pytest.raises(AuthenticationError):
+        service.active_report(refresh=True, strict=True, authenticate=True)
+    open_session.assert_called_once()
+    assert backend.current_capabilities() is None
+
+
+def test_authenticated_report_accepts_existing_token_login(monkeypatch):
+    from crypto.tests.test_backend import _build_backend, FakeSession, FakeToken
+    from pkcs11.exceptions import UserAlreadyLoggedIn
+
+    session = FakeSession()
+    backend = _build_backend(session)
+    calls = []
+
+    def open_session(self, *, rw, user_pin=None):
+        calls.append(user_pin)
+        if user_pin is not None:
+            raise UserAlreadyLoggedIn()
+        return session
+
+    monkeypatch.setattr(FakeToken, 'open', open_session)
+    repository = Mock()
+    repository.get_configured_profile.return_value = CryptoProviderProfileModel(name='HSM', backend_kind='pkcs11')
+    factory = Mock()
+    factory.build.return_value = backend
+    report = BackendCapabilityService(profile_repository=repository, adapter_factory=factory).active_report(
+        refresh=True,
+        strict=True,
+        authenticate=True,
+    )
+    assert report.available
+    assert calls == ['1234', None]
+    assert session.close_calls == 1
+
+
+@pytest.mark.parametrize(
+    'flag', ['USER_PIN_COUNT_LOW', 'USER_PIN_FINAL_TRY', 'USER_PIN_LOCKED', 'CKF_USER_PIN_FINAL_TRY']
+)
+def test_availability_check_does_not_attempt_pin_when_token_warns_of_lockout(monkeypatch, flag):
+    from crypto.domain.errors import AuthenticationError
+    from crypto.tests.test_backend import _build_backend, FakeSession, FakeToken
+
+    backend = _build_backend(FakeSession())
+    capabilities = backend.probe_capabilities()
+    monkeypatch.setattr(backend, 'probe_capabilities', lambda: replace(capabilities, token_flags=(flag,)))
+    open_session = Mock()
+    monkeypatch.setattr(FakeToken, 'open', open_session)
+    with pytest.raises(AuthenticationError):
+        backend.verify_availability()
+    open_session.assert_not_called()
+    backend.close()

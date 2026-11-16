@@ -15,7 +15,7 @@ from management.management.commands import execute_all_notifications, run_all_no
 
 @pytest.fixture
 def config(monkeypatch):
-    value = Mock(enabled=True)
+    value = Mock(enabled=True, notification_cycle_enabled=True, notification_cycle_interval_hours=0.0833)
     monkeypatch.setattr(run_all_notifications.NotificationConfig, 'get', lambda: value)
     return value
 
@@ -38,6 +38,10 @@ def test_runner_completes_supported_checks(config, monkeypatch):
     assert 'check_onboarding_failed_devices' not in names
     assert 'check_certificate_validity' in names
     assert 'check_tls_certificate_validity' in names
+    assert 'check_api_credential_validity' in names
+    assert 'check_crypto_backend' in names
+    assert 'check_account_lockouts' in names
+    assert 'check_workflow_failures' in names
     assert 'All notification checks completed successfully.' in output.getvalue()
 
 
@@ -77,5 +81,9 @@ def test_failure_reaches_outer_command_and_background_task(config, monkeypatch, 
             tasks.execute_all_notifications()
         else:
             call_command('execute_all_notifications', stdout=output)
-    config.schedule_next_notification_check.assert_not_called()
+    if scheduled:
+        # The background task keeps the cycle alive even when a check fails.
+        config.schedule_next_notification_check.assert_called_once_with()
+    else:
+        config.schedule_next_notification_check.assert_not_called()
     assert 'All notifications executed successfully' not in output.getvalue() + caplog.text

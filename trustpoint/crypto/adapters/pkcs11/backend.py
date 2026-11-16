@@ -28,6 +28,7 @@ from crypto.adapters.pkcs11.mechanisms import ec_parameters_for_curve, private_k
 from crypto.adapters.pkcs11.session_pool import Pkcs11SessionPool
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import (
+    AuthenticationError,
     CryptoError,
     KeyAlreadyExistsError,
     KeyNotFoundError,
@@ -125,6 +126,19 @@ class Pkcs11Backend(LoggerMixin):
                 session.close()
             except PKCS11Error as exc:
                 raise map_pkcs11_error(exc, operation='token authentication') from exc
+
+    def verify_availability(self) -> None:
+        """Check authenticated access without consuming a token's final PIN attempt."""
+        capabilities = self.probe_capabilities()
+        unsafe_flags = {'USER_PIN_COUNT_LOW', 'USER_PIN_FINAL_TRY', 'USER_PIN_LOCKED'}
+        if any(flag.removeprefix('CKF_') in unsafe_flags for flag in capabilities.token_flags):
+            msg = 'PKCS#11 authentication checks are paused because the token reports a PIN lockout risk.'
+            raise AuthenticationError(msg)
+        try:
+            with self._session_pool_for_token().session():
+                pass
+        except PKCS11Error as exc:
+            raise map_pkcs11_error(exc, operation='token authentication') from exc
 
     def close(self) -> None:
         """Close any pooled PKCS#11 sessions held by this adapter."""

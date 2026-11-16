@@ -29,7 +29,8 @@ from rest_framework.permissions import BasePermission
 
 from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
-from management.models import BackupOptions
+from management.models import BackupOptions, NotificationModel
+from management.notifications import notify_operational_issue, resolve_operational_issue
 from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin, UserPermissionRequiredMixin
@@ -79,22 +80,18 @@ def get_backup_file_data(filename: str) -> dict[str, Any]:
     }
 
 
-def create_db_backup(path: Path) -> str:
-    """Create a compressed database backup file in the given directory.
+def create_db_backup() -> str:
+    """Create a compressed database backup file in the configured directory.
 
-    The command `manage.py dbbackup -o <filename> -z` is used, producing a `.dump.gz` file under `path`.
-
-    Args:
-        path: Directory where backups should be stored.
+    The shared `trustpointbackup` command owns directory creation, locking and notifications.
 
     Returns:
         The filename of the created backup file.
 
     Raises:
-        OSError: If `path` cannot be created.
-        CalledProcessError: If the `dbbackup` command fails.
+        OSError: If the configured backup directory cannot be created.
+        CommandError: If the backup command fails.
     """
-    path.mkdir(parents=True, exist_ok=True)
     timestamp = dt.datetime.now(dt.UTC).strftime('%Y-%m-%d_%H-%M-%S')
     filename = f'backup_{timestamp}_{uuid4().hex}.dump.gz'
     call_command('trustpointbackup', filename=filename)
@@ -179,7 +176,7 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
     def _handle_create_local_backup(self, request: Any) -> HttpResponse:
         """Create a new backup file locally only."""
         try:
-            filename = create_db_backup(settings.BACKUP_FILE_PATH)
+            filename = create_db_backup()
             msg = f'Database backup created locally: {filename}'
             self.logger.info(msg)
             messages.success(request, msg)
@@ -192,7 +189,7 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
     def _handle_create_sftp_backup(self, request: Any) -> HttpResponse:
         """Create a new backup file and upload it via SFTP."""
         try:
-            filename = create_db_backup(settings.BACKUP_FILE_PATH)
+            filename = create_db_backup()
             msg = f'Database backup created: {filename}'
             self.logger.info(msg)
             messages.success(request, msg)
@@ -228,6 +225,12 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
             err_msg = f'Failed to create SFTP client: {exc}'
             self.logger.exception(err_msg)
             messages.error(request, err_msg)
+            notify_operational_issue(
+                'BACKUP_UPLOAD_FAILED',
+                NotificationModel.NotificationMessageType.BACKUP_FAILED,
+                NotificationModel.NotificationTypes.CRITICAL,
+                {'stage': 'SFTP backup upload'},
+            )
             return redirect(self.success_url)
 
         local_file = settings.BACKUP_FILE_PATH / filename
@@ -242,10 +245,17 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
             msg = f'Uploaded {filename} via SFTP to {remote_path}.'
             self.logger.info(msg)
             messages.success(request, msg)
+            resolve_operational_issue('BACKUP_UPLOAD_FAILED')
         except SftpError as exc:
             err_msg = f'Backup created locally; SFTP upload failed: {exc}'
             self.logger.exception(err_msg)
             messages.error(request, err_msg)
+            notify_operational_issue(
+                'BACKUP_UPLOAD_FAILED',
+                NotificationModel.NotificationMessageType.BACKUP_FAILED,
+                NotificationModel.NotificationTypes.CRITICAL,
+                {'stage': 'SFTP backup upload'},
+            )
 
         return redirect(self.success_url)
 

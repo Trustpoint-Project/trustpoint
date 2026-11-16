@@ -196,7 +196,7 @@ def test_notification_status_changes_require_post(manager):
     notifications.NotificationToggleReadView.as_view()(request(manager), pk=notification.pk)
     assert not notification.statuses.filter(status='NEW').exists()
     notifications.NotificationMarkSolvedView.as_view()(request(manager), pk=notification.pk)
-    assert notification.statuses.filter(status='SOLVED').exists()
+    assert notification.statuses.filter(status='SOLV').exists()
 
 
 def test_service_manager_rotates_and_revokes_with_app_permission(manager):
