@@ -34,7 +34,7 @@
                             <td>{{ credential.name }}</td>
                             <td><span class="badge {% if credential.status == 'ACTIVE' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ credential.get_status_display }}</span></td>
                             <td>{% if credential.is_usable %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</td>
-                            <td>{{ credential.get_curve_display }}</td>
+                            <td>{{ credential.get_curve_display|default:'—' }}</td>
                             <td>{{ credential.current_generation.generation_number|default:'—' }}</td>
                             <td>{% if credential.current_generation.credential.certificate %}{{ credential.current_generation.credential.certificate.not_valid_after|local_datetime }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
                             <td class="text-end">

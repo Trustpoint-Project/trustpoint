@@ -29,7 +29,6 @@ from util.encrypted_fields import EncryptedCharField
 
 EVIDENCE_SIGNING_NO_PEM = 'Traceability Credentials cannot store a private-key PEM.'
 EVIDENCE_SIGNING_NO_KEY = 'Traceability Credentials require a managed private key.'
-EVIDENCE_SIGNING_NO_CERTIFICATE = 'Traceability Credentials require a certificate.'
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -162,13 +161,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(exc_msg)
 
     def _clean_traceability_credential(self) -> None:
-        """Validate the storage boundary for an Traceability Credential."""
+        """Validate managed key storage, including credentials awaiting CSR completion."""
         if self.private_key:
             raise ValidationError(EVIDENCE_SIGNING_NO_PEM)
         if self.managed_private_key_id is None:
             raise ValidationError(EVIDENCE_SIGNING_NO_KEY)
-        if self.certificate_id is None:
-            raise ValidationError(EVIDENCE_SIGNING_NO_CERTIFICATE)
 
     @property
     def certificate_or_error(self) -> CertificateModel:

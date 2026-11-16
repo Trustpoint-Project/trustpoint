@@ -32,7 +32,12 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture(params=[TraceabilityCredentialModel.Curve.SECP256R1, TraceabilityCredentialModel.Curve.SECP384R1])
-def credential(settings: Any, request: pytest.FixtureRequest) -> TraceabilityCredentialModel:
+def traceability_curve(request: pytest.FixtureRequest):
+    return request.param
+
+
+@pytest.fixture
+def credential(settings: Any, traceability_management_ca) -> TraceabilityCredentialModel:
     """Create a software-backed signing identity and two audit events."""
     settings.DEVELOPMENT_ENV = True
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
@@ -40,8 +45,8 @@ def credential(settings: Any, request: pytest.FixtureRequest) -> TraceabilityCre
     settings.DOCKER_CONTAINER = False
     call_command('create_default_cert_profiles')
     credential = TraceabilityCredentialService.create(
+        management_ca=traceability_management_ca,
         name='audit-export',
-        curve=request.param,
     )
     for operation in (AuditLog.OperationType.CREDENTIAL_ISSUED, AuditLog.OperationType.CREDENTIAL_REVOKED):
         AuditLog.create_entry(operation, credential, 'Export target', details={'message': 'évidence'})

@@ -233,9 +233,9 @@ urlpatterns = [
         name='traceability_credential_create',
     ),
     path(
-        'traceability-credentials/create/certificate/',
-        traceability_signing.TraceabilityCredentialCertificateView.as_view(),
-        name='traceability_credential_certificate',
+        'traceability-credentials/create/<str:method>/',
+        traceability_signing.TraceabilityCredentialConfigureView.as_view(),
+        name='traceability_credential_configure',
     ),
     path(
         'traceability-credentials/<int:pk>/',
