@@ -1,0 +1,14 @@
+{
+    "type": "cert_profile",
+    "display_name": "User Client Certificate",
+    "credential_type": "application",
+    "subj": {
+        "cn": {"default": "trustpoint-client-certificate"}
+    },
+    "ext": {
+        "basic_constraints": {"ca": false, "critical": true},
+        "key_usage": {"digital_signature": true, "critical": true},
+        "extended_key_usage": {"usages": ["client_auth"]}
+    },
+    "validity": {"days": 365}
+}

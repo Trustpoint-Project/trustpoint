@@ -36,7 +36,22 @@ class TemplateVariableResolver(LoggerMixin):
         domain: DomainModel | None = None,
     ) -> dict[str, str]:
         """Build a mapping of template variable names to their resolved string values."""
-        variables: dict[str, str] = {}
+        variables: dict[str, str] = {
+            'device.id': '',
+            'device.rfc_4122_uuid': '',
+            'device.common_name': '',
+            'device.serial_number': '',
+            'device.device_type': '',
+            'device.ip_address': '',
+            'device.opc_server_port': '',
+            'domain.unique_name': '',
+            'domain.issuing_ca': '',
+            'domain.organization': '',
+            'domain.organization_unit': '',
+            'domain.country': '',
+            'domain.state': '',
+            'domain.locality': '',
+        }
 
         now = datetime.now(UTC)
         variables['time.now'] = now.isoformat()
@@ -49,7 +64,6 @@ class TemplateVariableResolver(LoggerMixin):
             variables['device.common_name'] = device.common_name
             variables['device.serial_number'] = device.serial_number
             variables['device.device_type'] = str(device.get_device_type_display())
-            # Optional fields are omitted when unset so the placeholder is left unresolved.
             if device.ip_address:
                 variables['device.ip_address'] = str(device.ip_address)
             if hasattr(device, 'opc_ua_gds_push_config') and device.opc_ua_gds_push_config.opc_server_port:
@@ -59,13 +73,6 @@ class TemplateVariableResolver(LoggerMixin):
             variables['domain.unique_name'] = domain.unique_name
             if domain.issuing_ca is not None:
                 variables['domain.issuing_ca'] = str(domain.issuing_ca.unique_name)
-            variables.update({
-                'domain.organization': '',
-                'domain.organization_unit': '',
-                'domain.country': '',
-                'domain.state': '',
-                'domain.locality': '',
-            })
             if domain.organization is not None:
                 variables['domain.organization'] = domain.organization.organization
                 variables['domain.organization_unit'] = domain.organization.organization_unit
@@ -118,9 +125,7 @@ class TemplateVariableResolver(LoggerMixin):
             return cls._resolve_string(obj, variables)
         if isinstance(obj, list):
             return [
-                cls._resolve_recursively(item, variables)
-                for item in obj
-                if not cls._resolves_to_empty(item, variables)
+                cls._resolve_recursively(item, variables) for item in obj if not cls._resolves_to_empty(item, variables)
             ]
         if isinstance(obj, dict):
             return {
@@ -143,9 +148,12 @@ class TemplateVariableResolver(LoggerMixin):
             return data
 
         resolved: dict[str, Any] = cls._resolve_recursively(data, variables)
-        resolve_crl_urls(resolved, context)
+        # Profile URL policies must be applied before resolving their resulting URL list.
+        if resolved.get('type') != 'cert_profile':
+            resolve_crl_urls(resolved, context)
         cls.logger.debug('Template variable substitution complete. Result: %s', resolved)
         return resolved
+
 
 def build_variable_map_from_models(
     device: DeviceModel | None = None,
@@ -180,8 +188,12 @@ def resolve_crl_urls(data: dict[str, Any], context: BaseRequestContext) -> None:
             raise ValueError(msg)
         ca = context.domain.get_issuing_ca_or_value_error()
         rollover = CaRolloverService.get_active_rollover(ca)
-        if (rollover and rollover.state == CaRolloverState.TRANSITION
-                and rollover.new_issuing_ca and rollover.new_issuing_ca.credential):
+        if (
+            rollover
+            and rollover.state == CaRolloverState.TRANSITION
+            and rollover.new_issuing_ca
+            and rollover.new_issuing_ca.credential
+        ):
             ca = rollover.new_issuing_ca
         variables['issuing_ca.id'] = str(ca.pk)
     if any(key.startswith('tls_certificate.') for key in keys):

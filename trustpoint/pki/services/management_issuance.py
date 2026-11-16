@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, cast, get_args
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import PublicKeyAlgorithmOid, SignatureSuite
 
@@ -25,6 +26,7 @@ from pki.util.x509 import _unwrap_mldsa_managed_key, validate_certificate_signin
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
+    from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
     from django.db.models import QuerySet
 
     from pki.models.cert_profile import CertificateProfileModel
@@ -81,31 +83,69 @@ def sign_certificate_request(
     issuing_ca: CaModel,
 ) -> tuple[x509.Certificate, list[x509.Certificate]]:
     """Sign a CSR with a local management CA and return the leaf plus issuer chain."""
-    if issuing_ca.credential is None:
-        msg = 'Management CA has no credential.'
-        raise ValueError(msg)
-    ca_credential = issuing_ca.credential
-    ca_cert = ca_credential.get_certificate()
-
     builder = x509.CertificateBuilder().subject_name(csr.subject).public_key(csr.public_key())
     for extension in csr.extensions:
         builder = builder.add_extension(extension.value, extension.critical)
 
-    builder = builder.issuer_name(ca_cert.subject)
-    builder = builder.serial_number(x509.random_serial_number())
-    builder = builder.not_valid_before(dt.datetime.now(dt.UTC) - dt.timedelta(hours=1))
-    builder = builder.not_valid_after(
-        dt.datetime.now(dt.UTC)
-        + JSONCertRequestConverter.validity_period_from_json(cert_profile.profile.get('validity', {}))
+    builder = JSONCertRequestConverter._validity_from_json(cert_profile.profile, builder)  # noqa: SLF001
+    return sign_certificate_builder(builder, issuing_ca)
+
+
+def sign_certificate_builder(
+    builder: x509.CertificateBuilder,
+    issuing_ca: CaModel,
+) -> tuple[x509.Certificate, list[x509.Certificate]]:
+    """Sign a prepared request, enforcing CA signing permissions and validity limits."""
+    if issuing_ca.credential is None:
+        raise ValidationError(_('Management CA has no credential.'))
+    ca_credential = issuing_ca.credential
+    ca_cert = issuing_ca.get_certificate()
+    if ca_cert is None:
+        raise ValidationError(_('The management CA has no certificate.'))
+    try:
+        constraints = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints).value
+        usage = ca_cert.extensions.get_extension_for_class(x509.KeyUsage).value
+    except x509.ExtensionNotFound as exc:
+        raise ValidationError(_('The management CA is missing required CA extensions.')) from exc
+    if not constraints.ca or not usage.key_cert_sign:
+        raise ValidationError(_('The management CA certificate does not permit certificate signing.'))
+    now = dt.datetime.now(dt.UTC)
+    if not ca_cert.not_valid_before_utc <= now < ca_cert.not_valid_after_utc:
+        raise ValidationError(_('The management CA certificate is not currently valid.'))
+    not_before, not_after = builder._not_valid_before, builder._not_valid_after  # noqa: SLF001
+    public_key = builder._public_key  # noqa: SLF001
+    if not_before is None or not_after is None or public_key is None:
+        raise ValidationError(_('The certificate request needs a public key and validity period.'))
+    not_before = max(not_before.replace(tzinfo=dt.UTC), ca_cert.not_valid_before_utc)
+    not_after = min(not_after.replace(tzinfo=dt.UTC), ca_cert.not_valid_after_utc)
+    if not_before > now or not_after <= now:
+        raise ValidationError(_('The certificate request must produce a currently valid certificate.'))
+    builder = (
+        x509.CertificateBuilder(
+            subject_name=builder._subject_name,  # noqa: SLF001
+            public_key=public_key,
+            extensions=builder._extensions,  # noqa: SLF001
+        )
+        .issuer_name(ca_cert.subject)
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
     )
+    try:
+        issuer_key_identifier = ca_cert.extensions.get_extension_for_class(x509.SubjectKeyIdentifier).value
+        authority_key_identifier = x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(issuer_key_identifier)
+    except x509.ExtensionNotFound:
+        authority_key_identifier = x509.AuthorityKeyIdentifier.from_issuer_public_key(
+            cast('CertificateIssuerPublicKeyTypes', ca_cert.public_key()),
+        )
 
     with contextlib.suppress(ValueError):
         builder = builder.add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_cert.public_key()),  # type: ignore[arg-type]
+            authority_key_identifier,
             critical=False,
         )
     with contextlib.suppress(ValueError):
-        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(csr.public_key()), critical=False)
+        builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
 
     issuer_key = _unwrap_mldsa_managed_key(ca_credential.get_private_key())
     issuer_key = validate_certificate_signing_private_key(issuer_key)
@@ -116,6 +156,7 @@ def sign_certificate_request(
         msg = f'Unsupported CA signature hash algorithm: {type(hash_algorithm)}'
         raise TypeError(msg)
     leaf = builder.sign(private_key=issuer_key, algorithm=hash_algorithm)
+    leaf.verify_directly_issued_by(ca_cert)
     return leaf, [ca_cert, *ca_credential.get_certificate_chain()]
 
 

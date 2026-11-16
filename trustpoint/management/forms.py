@@ -54,7 +54,7 @@ from pki.forms.credentials import (
 )
 from pki.forms.est_request import EstRequestFormMixin
 from pki.key_types import TLS_KEY_TYPE_CHOICES
-from pki.models import CaModel, CredentialModel
+from pki.models import CaModel, CertificateProfileModel, CredentialModel
 from pki.models.truststore import TruststoreModel
 from pki.services import credential_upload as uploads
 from pki.services.credential_upload import parse_pkcs12
@@ -1293,6 +1293,29 @@ class ManagementCASelectionForm(forms.Form):
     """Validate the management CA selected for certificate authentication."""
 
     selected_ca_id = forms.IntegerField(min_value=1)
+    certificate_profile = forms.ModelChoiceField(
+        queryset=CertificateProfileModel.objects.filter(
+            credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION,
+        ).order_by('display_name', 'unique_name'),
+        required=False,
+        empty_label=_('Default (User Client Certificate)'),
+        label=_('Default user certificate profile'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text=_(
+            'Controls subject defaults, extensions, and validity. UID, serialNumber, and unstructuredName '
+            'are always set from the user and certificate identifier. '
+            'The key algorithm and size or curve match the issuing management CA.'
+        ),
+    )
+
+    def clean_certificate_profile(self) -> CertificateProfileModel | None:
+        """Persist the installed default when no explicit profile is selected."""
+        return (
+            self.cleaned_data['certificate_profile']
+            or CertificateProfileModel.objects.filter(
+                unique_name='user_client',
+            ).first()
+        )
 
 
 class PasswordPolicyForm(forms.ModelForm[PasswordPolicy]):

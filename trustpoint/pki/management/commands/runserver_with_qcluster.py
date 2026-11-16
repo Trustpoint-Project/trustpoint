@@ -10,6 +10,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING, Any
 
+from django.conf import settings
 from django.core.management.commands.runserver import Command as RunServerCommand
 
 if TYPE_CHECKING:
@@ -31,7 +32,9 @@ class QClusterMixin:
         qcluster: subprocess.Popen[bytes] | None = None
         # The autoreloader re-runs handle() in a child with RUN_MAIN set; only the parent owns the qcluster.
         if not options.get('no_qcluster') and os.environ.get('RUN_MAIN') != 'true':
-            qcluster = subprocess.Popen([sys.executable, '-m', 'django', 'qcluster'])
+            qcluster = subprocess.Popen(  # noqa: S603 - fixed project command, no user input
+                [sys.executable, str(settings.BASE_DIR / 'manage.py'), 'qcluster']
+            )
         try:
             super().handle(*args, **options)  # type: ignore[misc]
         finally:

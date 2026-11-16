@@ -14,7 +14,7 @@ def test_shipped_device_profiles_expose_editable_crl_urls() -> None:
     paths = list((Path(__file__).parents[1] / 'default_certificate_profiles').glob('*.json'))
     assert paths
     for path in paths:
-        if path.stem == 'issuing_ca':
+        if path.stem in {'issuing_ca', 'user_client'}:
             continue
         profile = JSONProfileVerifier(json.loads(path.read_text())).get_profile()
         if profile['credential_type'] not in {'application', 'domain'}:

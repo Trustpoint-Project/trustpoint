@@ -717,7 +717,7 @@ class OwnerCredentialRequestCertManagementCaView(
                 _('Successfully issued DevOwnerID certificate for "{name}".').format(name=credential.common_name),
             )
             return redirect('devices:zero_touch_credentials-clm', pk=credential.pk)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
+        except (ValidationError, ValueError, KeyError, ProfileValidationError) as exc:
             messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
             return redirect(self.define_content_url_name, pk=credential.pk)
         except CertificateProfileModel.DoesNotExist:

@@ -7,7 +7,7 @@
     <div class="card-header">
         <h1 class="mb-1">{% trans 'Configure Certificate Authentication' %}</h1>
         <p class="mb-0 text-muted">
-            {% trans 'Choose the management CA that signs TLS client certificates for user authentication.' %}
+            {% trans 'Choose the management CA and default certificate profile for user TLS client certificates.' %}
         </p>
     </div>
 
@@ -118,6 +118,12 @@
                         {% trans 'Selecting a different CA disables certificate authentication until it is enabled again on the User Authentication page.' %}
                     </div>
                 </div>
+                <div class="mb-3">
+                    <label for="{{ form.certificate_profile.id_for_label }}" class="form-label">{{ form.certificate_profile.label }}</label>
+                    {{ form.certificate_profile }}
+                    {{ form.certificate_profile.errors }}
+                    <div class="form-text">{{ form.certificate_profile.help_text }}</div>
+                </div>
             </form>
             {% else %}
             <div class="alert alert-secondary" role="alert">
@@ -142,7 +148,7 @@
 
         {% if management_cas %}
         <button type="submit" form="management-ca-selection-form" class="btn btn-primary">
-            {% trans 'Save Management CA' %}
+            {% trans 'Save Configuration' %}
         </button>
         {% endif %}
     </div>

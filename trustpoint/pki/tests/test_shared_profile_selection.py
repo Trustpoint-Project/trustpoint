@@ -20,6 +20,7 @@ from pki.views.issuing_cas import IssuingCaDefineCertContentEstView
 )
 def test_profile_selection_preserves_defaults_and_request_precedence(view_type, default_name):
     """Views keep their own defaults, explicit GET/POST selection, and ordered fallback."""
+    CertificateProfileModel.objects.all().delete()
     view = view_type()
     factory = RequestFactory()
     assert view._resolve_cert_profile(factory.get('/')) is None
