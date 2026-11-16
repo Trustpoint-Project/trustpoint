@@ -4,6 +4,40 @@ The audit log records important state changes in Trustpoint. It is intended for 
 
 Access: **Management > Audit Log**
 
+## Traceability credentials
+
+Under **Management > Traceability Credentials**, configure a signing identity with
+an assignment method first, then its name and settings:
+
+- **Issue from Management CA**: select an existing active management CA or RA.
+  Local CAs issue directly; EST and CMP RAs use their saved enrollment settings.
+- **PKCS#12 file**: upload a certificate and private key in one container.
+- **Separate files**: upload the certificate, private key, and optional issuer chain.
+- **Generate CSR**: generate a managed key, download the CSR, then upload the
+  issued certificate and select an issuing CA trust store. The trust store must
+  contain the CA certificates needed to build the certificate path.
+
+CA issuance uses the selected management CA’s signing key curve (P-256 or P-384).
+Standalone CSR generation asks for the signing key curve.
+Imports take their curve from the first certificate; replacements must use the
+same curve. The selected method also controls **Request new credential**. Imported private
+keys require **Allow imported private keys** in Security Settings and use the
+configured crypto backend's import protection. Certificates must be currently
+valid, match the configured curve, have `CA=false` and digital-signature-only key
+usage. Extended Key Usage may be absent. When present, it must include
+`anyExtendedKeyUsage` (`2.5.29.37.0`); a certificate restricted to unrelated
+purposes such as TLS authentication or code signing cannot sign traceability
+records. This applies to imported certificates and issuance profiles alike.
+A dedicated traceability-signing EKU OID is not currently defined by Trustpoint.
+
+Only one traceability identity and one signing generation can be active.
+Requesting a replacement always requires a fresh key and certificate. The current
+generation continues signing until the replacement validates and activates;
+failed issuance or a pending CSR leaves it unchanged. A pending CSR can be
+cancelled before requesting another. **Retire credential** stops signing with the
+current generation, cancels any pending CSR, and retains history. A later request
+can activate a fresh generation of the same identity.
+
 ## Signed exports
 
 Apply the audit log filters, choose **Signed export**, and select an active
@@ -33,7 +67,7 @@ unpadded base64url string. The protected header contains:
 
 - `alg`: `ES256` for P-256 or `ES384` for P-384.
 - `cty`: `application/json`.
-- `x5c`: the self-signed generation certificate as a one-element array of
+- `x5c`: the generation certificate as a one-element array of
   standard Base64-encoded DER certificates, as defined in
   [RFC 7515 section 4.1.6](https://www.rfc-editor.org/rfc/rfc7515.html#section-4.1.6).
 
@@ -47,7 +81,7 @@ is `application/jose+json`. Extract ZIP downloads before verifying.
 
 The verifier supports this audit-export profile only: all header parameters
 must be protected, the certificate must match the independently pinned,
-self-signed generation certificate, and the algorithm must match its curve.
+generation certificate, and the algorithm must match its curve.
 Unprotected headers, unknown critical extensions, and unencoded payloads are
 not accepted. It does not build certificate paths to arbitrary CA trust stores.
 The previous custom export format is not supported; download a new export.

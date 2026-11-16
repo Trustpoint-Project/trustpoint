@@ -29,8 +29,12 @@
                     <div>{% if credential.is_usable %}{% trans 'Yes' %}{% else %}{% trans 'No' %}{% endif %}</div>
                 </div>
                 <div>
+                    <div>{% trans 'Assignment method' %}</div>
+                    <div>{{ credential.get_assignment_method_display }}{% if credential.management_ca %} — {{ credential.management_ca }}{% endif %}</div>
+                </div>
+                <div>
                     <div>{% trans 'Curve' %}</div>
-                    <div>{{ credential.get_curve_display }}</div>
+                    <div>{{ credential.get_curve_display|default:'—' }}</div>
                 </div>
                 <div>
                     <div>{% trans 'Created' %}</div>
@@ -87,13 +91,11 @@
     </div>
     <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
         <a class="btn btn-secondary" href="{% url 'management:traceability_credentials' %}">{% trans 'Back' %}</a>
-        {% if credential.status == 'ACTIVE' %}
         <div class="d-flex flex-wrap gap-2">
             <a class="btn btn-outline-secondary" href="{% url 'management:traceability_credential_edit' credential.pk %}">{% trans 'Edit description' %}</a>
-            <a class="btn btn-outline-danger" href="{% url 'management:traceability_credential_retire' credential.pk %}">{% trans 'Retire credential' %}</a>
-            <a class="btn btn-primary" href="{% url 'management:traceability_credential_rotate' credential.pk %}">{% trans 'Rotate key and certificate' %}</a>
+            {% if credential.status == 'ACTIVE' %}<a class="btn btn-outline-danger" href="{% url 'management:traceability_credential_retire' credential.pk %}">{% trans 'Retire credential' %}</a>{% endif %}
+            <a class="btn btn-primary" href="{% url 'management:traceability_credential_rotate' credential.pk %}">{% if credential.pending_csr %}{% trans 'Complete CSR' %}{% else %}{% trans 'Request new credential' %}{% endif %}</a>
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock content %}

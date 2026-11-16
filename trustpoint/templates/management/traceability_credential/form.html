@@ -11,20 +11,26 @@
     </div>
     <div class="card-body text-start">
         <div class="tp-card-centered-content">
-            <form id="traceability-credential-form" method="post" autocomplete="off">
+            <form id="traceability-credential-form" method="post" enctype="multipart/form-data" autocomplete="off">
                 {% csrf_token %}
                 <section>
                     <div class="mb-3">
                         <h2 class="h4 mb-1">{% trans 'Configuration' %}</h2>
                     </div>
                     <hr class="mb-4">
+                    {% if csr_pem %}
+                    <label class="form-label" for="traceability-csr">{% trans 'Certificate signing request' %}</label>
+                    <textarea id="traceability-csr" class="form-control font-monospace mb-3" rows="12" readonly>{{ csr_pem }}</textarea>
+                    <a class="btn btn-outline-primary mb-3" href="?download=1">{% trans 'Download CSR' %}</a>
+                    <button class="btn btn-outline-danger mb-3" type="submit" name="cancel_csr" value="1" formnovalidate>{% trans 'Cancel pending CSR' %}</button>
+                    {% endif %}
                     {{ form|crispy }}
                 </section>
             </form>
         </div>
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center">
-        <a class="btn btn-secondary" href="{% if credential %}{% url 'management:traceability_credential_detail' credential.pk %}{% else %}{% url 'management:traceability_credentials' %}{% endif %}">{% trans 'Cancel' %}</a>
+        <a class="btn btn-secondary" href="{% if select_assignment_method %}{% url 'management:traceability_credential_create' %}{% elif credential %}{% url 'management:traceability_credential_detail' credential.pk %}{% else %}{% url 'management:traceability_credentials' %}{% endif %}">{% if select_assignment_method %}{% trans 'Back to methods' %}{% else %}{% trans 'Cancel' %}{% endif %}</a>
         <button class="btn btn-primary" type="submit" form="traceability-credential-form">{{ submit_label }}</button>
     </div>
 </div>

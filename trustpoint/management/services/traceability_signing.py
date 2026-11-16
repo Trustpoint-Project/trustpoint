@@ -9,20 +9,23 @@ import datetime as dt
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+from uuid import uuid4
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from crypto.application.private_keys import ManagedECPrivateKey, generate_managed_signing_private_key
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.errors import CryptoError
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.public_keys import public_key_fingerprint_sha256
 from crypto.domain.specs import EcKeySpec
 from crypto.models import CryptoManagedKeyModel
 from management.models.traceability import (
@@ -31,32 +34,33 @@ from management.models.traceability import (
 )
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CredentialModel
+from pki.services.external_csr import build_external_csr, finalize_external_certificate
+from pki.services.management_issuance import (
+    available_management_cas,
+    key_type_for_management_ca,
+    sign_certificate_request,
+)
+from pki.services.tls_server_issuance import issue_tls_server_remote
+from pki.util.cert_req_converter import _eku_oid_from_str
+from pki.util.certificate_path import validate_issued_certificate_path
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from pki.models import CaModel
+    from pki.models.truststore import TruststoreModel
 
 type EvidenceDigest = hashes.SHA256 | hashes.SHA384
 
 
 UNSUPPORTED_CURVE = 'Unsupported Traceability Credential curve.'
-NAME_NOT_UNIQUE = 'Traceability Credential name must be unique.'
 EC_KEY_REQUIRED = 'Traceability Credentials require an EC backend key.'
 NOT_USABLE = 'Traceability Credential is not currently usable.'
 INVALID_TYPE = 'Invalid Traceability Credential type.'
+ONE_ACTIVE = 'Only one traceability credential can be active. Retire the current credential first.'
 ALREADY_RETIRED = 'Traceability Credential is already retired.'
 INVALID_PROFILE = 'The canonical Traceability Credential profile is missing or invalid.'
 INVALID_BASIC_CONSTRAINTS = 'Traceability Credential profile must set CA=false.'
 INVALID_KEY_USAGE = 'Traceability Credential profile must allow digitalSignature only.'
-
-
-@dataclass(frozen=True, slots=True)
-class TraceabilityCertificateData:
-    """Validated certificate values supplied by a profile-driven form."""
-
-    subject: x509.Name
-    not_valid_before: dt.datetime
-    not_valid_after: dt.datetime
-    certificate_builder: x509.CertificateBuilder | None = None
+INVALID_EXTENDED_KEY_USAGE = 'Extended Key Usage must permit traceability signing (anyExtendedKeyUsage).'
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,8 +139,21 @@ class TraceabilityCredentialService:
             raise ValidationError(INVALID_PROFILE)
         TraceabilityCredentialService._validate_profile_basic_constraints(extensions.get('basic_constraints'))
         TraceabilityCredentialService._validate_profile_key_usage(extensions.get('key_usage'))
-        if extensions.get('extended_key_usage') is not None:
-            raise ValidationError(INVALID_PROFILE)
+        eku = extensions.get('extended_key_usage')
+        if eku is not None:
+            if not isinstance(eku, dict) or not isinstance(eku.get('usages'), list):
+                raise ValidationError(INVALID_PROFILE)
+            try:
+                usage = x509.ExtendedKeyUsage([_eku_oid_from_str(value) for value in eku['usages']])
+            except (AttributeError, TypeError, ValueError) as error:
+                raise ValidationError(INVALID_PROFILE) from error
+            TraceabilityCredentialService._validate_extended_key_usage(usage)
+
+    @staticmethod
+    def _validate_extended_key_usage(usage: x509.ExtendedKeyUsage | None) -> None:
+        """Honor purpose restrictions; no dedicated traceability purpose OID is defined yet."""
+        if usage is not None and ExtendedKeyUsageOID.ANY_EXTENDED_KEY_USAGE not in usage:
+            raise ValidationError(INVALID_EXTENDED_KEY_USAGE)
 
     @staticmethod
     def _validate_profile_basic_constraints(basic_constraints: object) -> None:
@@ -163,111 +180,6 @@ class TraceabilityCredentialService:
             raise ValidationError(INVALID_KEY_USAGE)
 
     @staticmethod
-    def _apply_basic_constraints(
-        builder: x509.CertificateBuilder,
-        existing_extensions: Mapping[x509.ObjectIdentifier, object],
-    ) -> x509.CertificateBuilder:
-        """Validate or add the profile's CA=false BasicConstraints extension."""
-        extension = existing_extensions.get(ExtensionOID.BASIC_CONSTRAINTS)
-        if extension is None:
-            return builder.add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
-        if not isinstance(extension, x509.BasicConstraints) or extension.ca:
-            raise ValidationError(INVALID_BASIC_CONSTRAINTS)
-        return builder
-
-    @staticmethod
-    def _apply_key_usage(
-        builder: x509.CertificateBuilder,
-        existing_extensions: Mapping[x509.ObjectIdentifier, object],
-    ) -> x509.CertificateBuilder:
-        """Validate or add the profile's digitalSignature-only KeyUsage extension."""
-        extension = existing_extensions.get(ExtensionOID.KEY_USAGE)
-        if extension is None:
-            return builder.add_extension(
-                x509.KeyUsage(
-                    digital_signature=True,
-                    content_commitment=False,
-                    key_encipherment=False,
-                    data_encipherment=False,
-                    key_agreement=False,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False,
-                ),
-                critical=True,
-            )
-        if not isinstance(extension, x509.KeyUsage) or not extension.digital_signature:
-            raise ValidationError(INVALID_KEY_USAGE)
-        prohibited_usage = (
-            extension.content_commitment,
-            extension.key_encipherment,
-            extension.data_encipherment,
-            extension.key_agreement,
-            extension.key_cert_sign,
-            extension.crl_sign,
-        )
-        if any(prohibited_usage) or (
-            extension.key_agreement and any((extension.encipher_only, extension.decipher_only))
-        ):
-            raise ValidationError(INVALID_KEY_USAGE)
-        return builder
-
-    @classmethod
-    def _build_certificate(
-        cls,
-        *,
-        private_key: ManagedECPrivateKey,
-        certificate_data: TraceabilityCertificateData,
-        digest: EvidenceDigest,
-    ) -> x509.Certificate:
-        public_key = private_key.public_key()
-        builder = certificate_data.certificate_builder or x509.CertificateBuilder()
-        subject = certificate_data.subject
-        if certificate_data.certificate_builder is not None:
-            builder_subject = certificate_data.certificate_builder._subject_name  # noqa: SLF001
-            if builder_subject is not None:
-                subject = builder_subject
-        if certificate_data.certificate_builder is None:
-            builder = (
-                builder.subject_name(subject)
-                .not_valid_before(certificate_data.not_valid_before)
-                .not_valid_after(certificate_data.not_valid_after)
-            )
-        existing_extensions = {
-            extension.oid: extension.value
-            for extension in builder._extensions  # noqa: SLF001
-        }
-        extension_oids = set(existing_extensions)
-        builder = cls._apply_basic_constraints(builder, existing_extensions)
-        builder = cls._apply_key_usage(builder, existing_extensions)
-
-        if ExtensionOID.SUBJECT_KEY_IDENTIFIER not in extension_oids:
-            builder = builder.add_extension(x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False)
-        if ExtensionOID.AUTHORITY_KEY_IDENTIFIER not in extension_oids:
-            builder = builder.add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(public_key), critical=False
-            )
-        return (
-            builder.issuer_name(subject)
-            .serial_number(x509.random_serial_number())
-            .public_key(public_key)
-            .sign(private_key, digest)
-        )
-
-    @staticmethod
-    def _default_certificate_data(
-        name: str,
-        validity_days: int,
-    ) -> TraceabilityCertificateData:
-        now = dt.datetime.now(dt.UTC)
-        return TraceabilityCertificateData(
-            subject=x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)]),
-            not_valid_before=now - dt.timedelta(minutes=1),
-            not_valid_after=now + dt.timedelta(days=validity_days),
-        )
-
-    @staticmethod
     def _require_ec_key(private_key: object) -> ManagedECPrivateKey:
         """Require the configured backend to return an EC managed key."""
         if not isinstance(private_key, ManagedECPrivateKey):
@@ -280,54 +192,341 @@ class TraceabilityCredentialService:
         cls,
         *,
         name: str,
-        curve: TraceabilityCredentialModel.Curve,
+        management_ca: CaModel,
         description: str = '',
-        certificate_data: TraceabilityCertificateData | None = None,
     ) -> TraceabilityCredentialModel:
-        """Create generation one and its logical Traceability Credential."""
-        if TraceabilityCredentialModel.objects.filter(name=name).exists():
-            raise ValidationError(NAME_NOT_UNIQUE)
-        cls._validate_canonical_profile()
-        logical = TraceabilityCredentialModel(
+        """Configure and initially issue a traceability identity from a management CA."""
+        logical = cls.configure(
             name=name,
             description=description,
-            curve=curve,
+            management_ca=management_ca,
+            assignment_method=TraceabilityCredentialModel.AssignmentMethod.MANAGEMENT_CA,
         )
-        logical.full_clean(exclude=['current_generation', 'retired_at'])
-        curve_name, digest, _ = cls._curve_values(curve)
+        cls.request_credential(logical, content={'common_name': name})
+        logical.refresh_from_db()
+        return logical
+
+    @staticmethod
+    def _ensure_single_active(logical: TraceabilityCredentialModel) -> None:
+        active = TraceabilityCredentialModel.objects.filter(
+            status=TraceabilityCredentialModel.Status.ACTIVE,
+        ).exclude(pk=logical.pk)
+        if active.exists():
+            raise ValidationError(ONE_ACTIVE)
+
+    @classmethod
+    @transaction.atomic
+    def configure(
+        cls,
+        *,
+        name: str,
+        curve: str = '',
+        assignment_method: str,
+        description: str = '',
+        management_ca: CaModel | None = None,
+    ) -> TraceabilityCredentialModel:
+        """Persist an abstract identity before any key or certificate is assigned."""
+        if assignment_method not in TraceabilityCredentialModel.AssignmentMethod.values:
+            msg = 'Select a credential assignment method.'
+            raise ValidationError(msg)
+        if assignment_method == TraceabilityCredentialModel.AssignmentMethod.MANAGEMENT_CA:
+            curve = cls.management_ca_curve(management_ca)
+        logical = TraceabilityCredentialModel(
+            name=name,
+            curve=curve,
+            description=description,
+            assignment_method=assignment_method,
+            management_ca=management_ca,
+        )
+        logical.full_clean()
+        logical.save()
+        return logical
+
+    @staticmethod
+    def management_ca_curve(ca: CaModel | None) -> TraceabilityCredentialModel.Curve:
+        """Bind traceability keys to a supported management CA curve."""
+        if ca is None or not ca.is_management_ca or not ca.is_active:
+            message = 'Select an active management CA / RA.'
+            raise ValidationError(message)
+        curves = {
+            'ECC-SECP256R1': TraceabilityCredentialModel.Curve.SECP256R1,
+            'ECC-SECP384R1': TraceabilityCredentialModel.Curve.SECP384R1,
+        }
+        try:
+            key_type = key_type_for_management_ca(ca, [(key, key) for key in curves])
+        except ValidationError as error:
+            message = 'Select a management CA / RA with a supported P-256 or P-384 signing key.'
+            raise ValidationError(message) from error
+        return curves[key_type]
+
+    @classmethod
+    def _validate_certificate(cls, logical: TraceabilityCredentialModel, certificate: x509.Certificate) -> None:
+        """Reject unsuitable signing certificates and reuse of any historical key."""
+        public_key = certificate.public_key()
+        curves = {
+            TraceabilityCredentialModel.Curve.SECP256R1: 'secp256r1',
+            TraceabilityCredentialModel.Curve.SECP384R1: 'secp384r1',
+        }
+        if not isinstance(public_key, ec.EllipticCurvePublicKey) or public_key.curve.name not in curves.values():
+            raise ValidationError(UNSUPPORTED_CURVE)
+        if logical.curve and public_key.curve.name != curves[TraceabilityCredentialModel.Curve(logical.curve)]:
+            msg = 'The certificate key must match the configured traceability curve.'
+            raise ValidationError(msg)
+        now = dt.datetime.now(dt.UTC)
+        if not certificate.not_valid_before_utc <= now < certificate.not_valid_after_utc:
+            msg = 'The traceability certificate must be currently valid.'
+            raise ValidationError(msg)
+        try:
+            extensions = {extension.oid: extension.value for extension in certificate.extensions}
+            if ExtensionOID.BASIC_CONSTRAINTS not in extensions or ExtensionOID.KEY_USAGE not in extensions:
+                msg = 'The certificate requires BasicConstraints and KeyUsage extensions.'
+                raise ValidationError(msg)
+            constraints = extensions[ExtensionOID.BASIC_CONSTRAINTS]
+            usage = extensions[ExtensionOID.KEY_USAGE]
+            if constraints.ca:
+                raise ValidationError(INVALID_BASIC_CONSTRAINTS)
+            if not usage.digital_signature or any(
+                (
+                    usage.content_commitment,
+                    usage.key_encipherment,
+                    usage.data_encipherment,
+                    usage.key_agreement,
+                    usage.key_cert_sign,
+                    usage.crl_sign,
+                )
+            ):
+                raise ValidationError(INVALID_KEY_USAGE)
+            cls._validate_extended_key_usage(extensions.get(ExtensionOID.EXTENDED_KEY_USAGE))
+        except (ValueError, x509.DuplicateExtension) as error:
+            msg = 'Invalid traceability certificate extensions.'
+            raise ValidationError(msg) from error
+        # Include retired identities so configuring another cannot bypass key rotation.
+        if TraceabilityCredentialGenerationModel.objects.filter(
+            credential__managed_private_key__public_key_fingerprint_sha256=public_key_fingerprint_sha256(public_key),
+        ).exists():
+            message = 'A replacement traceability credential must use a new key and certificate.'
+            raise ValidationError(message)
+
+    @classmethod
+    def _activate(
+        cls,
+        logical: TraceabilityCredentialModel,
+        credential: CredentialModel,
+    ) -> TraceabilityCredentialGenerationModel:
+        """Atomically retire the previous generation only after the replacement is valid."""
+        cls._ensure_single_active(logical)
+        cls._validate_certificate(logical, credential.get_certificate())
+        credential.full_clean()
+        now = dt.datetime.now(dt.UTC)
+        number = (
+            logical.generations.order_by('-generation_number')
+            .values_list(
+                'generation_number',
+                flat=True,
+            )
+            .first()
+            or 0
+        ) + 1
+        try:
+            with transaction.atomic():
+                if logical.current_generation is not None:
+                    previous = logical.current_generation
+                    if previous.status == previous.Status.ACTIVE:
+                        previous.status = previous.Status.RETIRED
+                        previous.retired_at = now
+                        previous.save(update_fields=['status', 'retired_at'])
+                generation = TraceabilityCredentialGenerationModel.objects.create(
+                    traceability_credential=logical,
+                    credential=credential,
+                    generation_number=number,
+                    status=TraceabilityCredentialGenerationModel.Status.ACTIVE,
+                    activated_at=now,
+                )
+                if not logical.curve:
+                    public_key = cast('ec.EllipticCurvePublicKey', credential.get_certificate().public_key())
+                    logical.curve = (
+                        logical.Curve.SECP256R1
+                        if isinstance(public_key.curve, ec.SECP256R1)
+                        else logical.Curve.SECP384R1
+                    )
+                logical.current_generation = generation
+                logical.status = logical.Status.ACTIVE
+                logical.retired_at = None
+                logical.pending_credential = None
+                logical.pending_csr = ''
+                logical.save(
+                    update_fields=[
+                        'curve',
+                        'current_generation',
+                        'status',
+                        'retired_at',
+                        'pending_credential',
+                        'pending_csr',
+                        'updated_at',
+                    ]
+                )
+        except IntegrityError as error:
+            raise ValidationError(ONE_ACTIVE) from error
+        return generation
+
+    @classmethod
+    @transaction.atomic
+    def request_credential(
+        cls,
+        logical: TraceabilityCredentialModel,
+        *,
+        content: dict[str, Any],
+    ) -> TraceabilityCredentialGenerationModel | str:
+        """Generate a fresh managed key for CA issuance or a persisted external CSR."""
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=logical.pk)
+        method = logical.assignment_method
+        if method not in (logical.AssignmentMethod.MANAGEMENT_CA, logical.AssignmentMethod.CSR):
+            msg = 'Upload a new credential using the configured assignment method.'
+            raise ValidationError(msg)
+        if logical.pending_credential_id is not None:
+            msg = 'A CSR is already pending. Complete or cancel it before requesting another.'
+            raise ValidationError(msg)
+        cls._ensure_single_active(logical)
+        cls._validate_canonical_profile()
+        profile = CertificateProfileModel.objects.get(unique_name='traceability_credential')
+        ca = logical.management_ca
+        if method == logical.AssignmentMethod.MANAGEMENT_CA and (
+            ca is None or not available_management_cas().filter(pk=ca.pk).exists()
+        ):
+            msg = 'Select an active management CA / RA with a usable certificate.'
+            raise ValidationError(msg)
+        if method == logical.AssignmentMethod.MANAGEMENT_CA and cls.management_ca_curve(ca) != logical.curve:
+            message = 'The configured signing key curve no longer matches the management CA.'
+            raise ValidationError(message)
+        curve, _, _ = cls._curve_values(logical.curve)
         private_key = generate_managed_signing_private_key(
-            alias=f'traceability-signing:{name}:generation-1',
-            key_spec=EcKeySpec(curve=curve_name),
+            alias=f'traceability-signing:{logical.pk}:{uuid4().hex}',
+            key_spec=EcKeySpec(curve=curve),
         )
         try:
-            private_key = cls._require_ec_key(private_key)
-            cert = cls._build_certificate(
-                private_key=private_key,
-                certificate_data=certificate_data or cls._default_certificate_data(name, 365),
-                digest=digest,
-            )
-            managed_key = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
-            credential = CredentialModel.save_managed_key_credential(
-                certificate=cert,
-                certificate_chain=[],
-                credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
-                managed_key=managed_key,
-            )
-            now = dt.datetime.now(dt.UTC)
-            logical.save()
-            generation = TraceabilityCredentialGenerationModel.objects.create(
-                traceability_credential=logical,
-                credential=credential,
-                generation_number=1,
-                status=TraceabilityCredentialGenerationModel.Status.ACTIVE,
-                activated_at=now,
-            )
-            logical.current_generation = generation
-            logical.save(update_fields=['current_generation', 'updated_at'])
+            with transaction.atomic():
+                private_key = cls._require_ec_key(private_key)
+                credential = CredentialModel.save_managed_private_key_credential(
+                    credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
+                    managed_key=CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id),
+                )
+                csr = build_external_csr(credential, profile, content)
+                if method == logical.AssignmentMethod.CSR:
+                    logical.pending_credential = credential
+                    logical.pending_csr = csr.public_bytes(serialization.Encoding.PEM).decode('ascii')
+                    logical.save(update_fields=['pending_credential', 'pending_csr', 'updated_at'])
+                    return logical.pending_csr
+                ca = cast('CaModel', ca)
+                if ca.is_issuing_ca:
+                    certificate, chain = sign_certificate_request(csr, profile, ca)
+                    finalize_external_certificate(credential, certificate, [certificate, *chain])
+                else:
+                    issue_tls_server_remote(credential, profile, content, ca)
+                credential.refresh_from_db()
+                cls._validate_requested_identity(credential.get_certificate(), csr)
+                return cls._activate(logical, credential)
         except Exception:
             cls._cleanup_backend_key(private_key)
             raise
-        return logical
+
+    @classmethod
+    @transaction.atomic
+    def import_credential(
+        cls,
+        logical: TraceabilityCredentialModel,
+        *,
+        private_key: ec.EllipticCurvePrivateKey,
+        certificate: x509.Certificate,
+        chain: list[x509.Certificate],
+    ) -> TraceabilityCredentialGenerationModel:
+        """Import a fresh signing key through the configured backend and activate it."""
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=logical.pk)
+        if logical.assignment_method not in (logical.AssignmentMethod.PKCS12, logical.AssignmentMethod.SEPARATE_FILES):
+            msg = 'This identity is not configured for credential import.'
+            raise ValidationError(msg)
+        cls._ensure_single_active(logical)
+        cls._validate_certificate(logical, certificate)
+        if not isinstance(private_key, ec.EllipticCurvePrivateKey) or (
+            public_key_fingerprint_sha256(private_key.public_key())
+            != public_key_fingerprint_sha256(cast('ec.EllipticCurvePublicKey', certificate.public_key()))
+        ):
+            msg = 'The private key does not match the certificate.'
+            raise ValidationError(msg)
+        key_ref = TrustpointCryptoBackend().import_managed_private_key(
+            alias=f'traceability-import:{logical.pk}:{x509.random_serial_number()}',
+            private_key=private_key,
+            policy=KeyPolicy.managed_signing_key(signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH),
+        )
+        try:
+            with transaction.atomic():
+                credential = CredentialModel.save_managed_key_credential(
+                    certificate=certificate,
+                    certificate_chain=chain,
+                    credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
+                    managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
+                )
+                return cls._activate(logical, credential)
+        except Exception:
+            with suppress(CryptoError, RuntimeError, TypeError, ValueError):
+                TrustpointCryptoBackend().destroy_managed_key(key_ref)
+            raise
+
+    @staticmethod
+    def _validate_requested_identity(certificate: x509.Certificate, csr: x509.CertificateSigningRequest) -> None:
+        """Reject an issuer changing the requested subject or SAN identities."""
+        if certificate.subject != csr.subject:
+            message = 'The issued certificate subject does not match the request.'
+            raise ValidationError(message)
+
+        def sans(value: x509.Certificate | x509.CertificateSigningRequest) -> x509.SubjectAlternativeName | None:
+            try:
+                return value.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+            except x509.ExtensionNotFound:
+                return None
+
+        if sans(certificate) != sans(csr):
+            message = 'The issued certificate SANs do not match the request.'
+            raise ValidationError(message)
+
+    @classmethod
+    @transaction.atomic
+    def complete_csr(
+        cls,
+        logical: TraceabilityCredentialModel,
+        *,
+        certificate: x509.Certificate,
+        truststore: TruststoreModel,
+    ) -> TraceabilityCredentialGenerationModel:
+        """Validate the returned certificate against its persisted key, request, and CA anchors."""
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=logical.pk)
+        if logical.assignment_method != logical.AssignmentMethod.CSR or logical.pending_credential is None:
+            msg = 'There is no pending traceability CSR.'
+            raise ValidationError(msg)
+        csr = x509.load_pem_x509_csr(logical.pending_csr.encode('ascii'))
+        cls._validate_requested_identity(certificate, csr)
+        anchors = truststore.get_certificate_collection_serializer().as_crypto()
+        chain = validate_issued_certificate_path(certificate, list(anchors), [])
+        credential = logical.pending_credential
+        finalize_external_certificate(credential, certificate, chain)
+        credential.refresh_from_db()
+        return cls._activate(logical, credential)
+
+    @classmethod
+    @transaction.atomic
+    def cancel_csr(cls, logical: TraceabilityCredentialModel) -> None:
+        """Discard the pending request without changing the currently active generation."""
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=logical.pk)
+        pending = logical.pending_credential
+        if pending is None:
+            msg = 'There is no pending traceability CSR.'
+            raise ValidationError(msg)
+        key = pending.get_private_key()
+        logical.pending_credential = None
+        logical.pending_csr = ''
+        logical.save(update_fields=['pending_credential', 'pending_csr', 'updated_at'])
+        pending.delete()
+        # Destroy only after commit; a rolled-back cancellation must keep its pending key.
+        transaction.on_commit(lambda: cls._cleanup_backend_key(key))
 
     @staticmethod
     def _cleanup_backend_key(private_key: object) -> None:
@@ -372,65 +571,22 @@ class TraceabilityCredentialService:
         )
 
     @classmethod
-    @transaction.atomic
     def rotate(
         cls,
         *,
         traceability_credential: TraceabilityCredentialModel,
-        certificate_data: TraceabilityCertificateData | None = None,
     ) -> TraceabilityCredentialGenerationModel:
-        """Create and activate a fresh generation while retiring the previous one."""
-        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=traceability_credential.pk)
-        if logical.status != TraceabilityCredentialModel.Status.ACTIVE:
-            raise ValidationError(NOT_USABLE)
-        cls._validate_canonical_profile()
-        previous = logical.current_generation
-        if previous is None:
-            raise ValidationError(NOT_USABLE)
-        generation_number = (
-            logical.generations.order_by('-generation_number').values_list('generation_number', flat=True).first() or 0
-        ) + 1
-        curve_name, digest, _ = cls._curve_values(logical.curve)
-        private_key = generate_managed_signing_private_key(
-            alias=f'traceability-signing:{logical.name}:generation-{generation_number}',
-            key_spec=EcKeySpec(curve=curve_name),
-        )
-        try:
-            private_key = cls._require_ec_key(private_key)
-            cert = cls._build_certificate(
-                private_key=private_key,
-                certificate_data=certificate_data or cls._default_certificate_data(logical.name, 365),
-                digest=digest,
-            )
-            managed_key = CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
-            credential = CredentialModel.save_managed_key_credential(
-                certificate=cert,
-                certificate_chain=[],
-                credential_type=CredentialModel.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL,
-                managed_key=managed_key,
-            )
-            now = dt.datetime.now(dt.UTC)
-            previous.status = TraceabilityCredentialGenerationModel.Status.RETIRED
-            previous.retired_at = now
-            previous.save(update_fields=['status', 'retired_at'])
-            generation = TraceabilityCredentialGenerationModel.objects.create(
-                traceability_credential=logical,
-                credential=credential,
-                generation_number=generation_number,
-                status=TraceabilityCredentialGenerationModel.Status.ACTIVE,
-                activated_at=now,
-            )
-            logical.current_generation = generation
-            logical.save(update_fields=['current_generation', 'updated_at'])
-        except Exception:
-            cls._cleanup_backend_key(private_key)
-            raise
-        return generation
+        """Issue a fresh management CA generation using the saved configuration."""
+        if traceability_credential.assignment_method != TraceabilityCredentialModel.AssignmentMethod.MANAGEMENT_CA:
+            message = 'Request a CSR or upload a new credential using the configured assignment method.'
+            raise ValidationError(message)
+        result = cls.request_credential(traceability_credential, content={'common_name': traceability_credential.name})
+        return cast('TraceabilityCredentialGenerationModel', result)
 
     @staticmethod
     @transaction.atomic
     def retire(traceability_credential: TraceabilityCredentialModel) -> None:
-        """Retire a logical credential and its current generation irreversibly."""
+        """Stop signing with the current generation and cancel any pending CSR."""
         logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=traceability_credential.pk)
         if logical.status == TraceabilityCredentialModel.Status.RETIRED:
             raise ValidationError(ALREADY_RETIRED)
@@ -441,6 +597,8 @@ class TraceabilityCredentialService:
         generation.status = TraceabilityCredentialGenerationModel.Status.RETIRED
         generation.retired_at = now
         generation.save(update_fields=['status', 'retired_at'])
+        if logical.pending_credential_id is not None:
+            TraceabilityCredentialService.cancel_csr(logical)
         logical.status = TraceabilityCredentialModel.Status.RETIRED
         logical.retired_at = now
         logical.save(update_fields=['status', 'retired_at', 'updated_at'])

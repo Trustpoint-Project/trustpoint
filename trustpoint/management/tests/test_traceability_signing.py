@@ -23,7 +23,7 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def credential(settings: Any) -> TraceabilityCredentialModel:
+def credential(settings: Any, traceability_management_ca) -> TraceabilityCredentialModel:
     """Create a real signing credential using the development software backend."""
     settings.DEVELOPMENT_ENV = True
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
@@ -31,18 +31,20 @@ def credential(settings: Any) -> TraceabilityCredentialModel:
     settings.DOCKER_CONTAINER = False
     call_command('create_default_cert_profiles')
     return TraceabilityCredentialService.create(
+        management_ca=traceability_management_ca,
         name='audit-evidence',
-        curve=TraceabilityCredentialModel.Curve.SECP256R1,
     )
 
 
 def test_settings_form_accepts_credential_without_purposes() -> None:
     """Creating a signing identity requires no predefined consumer assignment."""
     form = TraceabilityCredentialSettingsForm(
+        assignment_method='CSR',
         data={
             'name': 'shared-evidence',
+            'assignment_method': 'CSR',
             'curve': TraceabilityCredentialModel.Curve.SECP256R1,
-        }
+        },
     )
     assert form.is_valid(), form.errors
 

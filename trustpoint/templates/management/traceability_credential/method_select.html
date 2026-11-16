@@ -1,0 +1,105 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'Create Traceability Credential' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Choose how to assign this signing identity its initial and replacement credentials.' %}
+        </p>
+    </div>
+
+    <div class="card-body">
+        <section class="mb-5">
+            <div class="mb-3">
+                <h2 class="h4 mb-1">{% trans 'Import or Request Credential' %}</h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Provide an existing credential or generate a CSR for an external PKI.' %}
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-4">
+                    <a href="{% url 'management:traceability_credential_configure' 'PKCS12' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <h3 class="h5 mb-2">{% trans 'PKCS#12 File' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Import the private key and traceability certificate from a single PKCS#12 container.' %}
+                                </p>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Import PKCS#12' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-lg-4">
+                    <a href="{% url 'management:traceability_credential_configure' 'SEPARATE_FILES' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <h3 class="h5 mb-2">{% trans 'Separate Files' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Import the private key and traceability certificate from separate files.' %}
+                                </p>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Import Files' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <div class="col-lg-4">
+                    <a href="{% url 'management:traceability_credential_configure' 'CSR' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <h3 class="h5 mb-2">{% trans 'Generate CSR' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Create a certificate signing request and upload the traceability certificate issued by an external PKI.' %}
+                                </p>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Generate CSR' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">{% trans 'Issue from Management CA' %}</h2>
+                <p class="text-muted mb-0">
+                    {% trans 'Generate a keypair and obtain the traceability certificate from a selected management CA.' %}
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <a href="{% url 'management:traceability_credential_configure' 'MANAGEMENT_CA' %}" class="text-decoration-none text-reset">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <h3 class="h5 mb-2">{% trans 'Issue from Management CA' %}</h3>
+                                <p class="text-muted">
+                                    {% trans 'Select a management CA. Internal CAs sign the certificate in Trustpoint; external CAs receive the request through their configured EST or CMP RA.' %}
+                                </p>
+                                <div class="mt-auto">
+                                    <span class="btn btn-primary">{% trans 'Select Management CA' %}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="card-footer">
+        <a href="{% url 'management:traceability_credentials' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+    </div>
+</div>
+{% endblock content %}

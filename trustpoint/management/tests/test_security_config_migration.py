@@ -29,12 +29,12 @@ def restore_post_migrate_data(django_db_setup: None, django_db_blocker: DjangoDb
         emit_post_migrate_signal(verbosity=0, interactive=False, db=connection.alias)
 
 
-@pytest.mark.parametrize('start', ['0004_tp_v1_0_1_dev0', '0005_rename_allow_self_signed_ca_creation'])
+@pytest.mark.parametrize('start', ['0004_traceability_credentials', '0005_rename_allow_self_signed_ca_creation'])
 def test_ca_creation_policy_preserves_values_and_legacy_column(start: str) -> None:
     """Upgrade from either field name without breaking old or new ORM readers."""
     executor = MigrationExecutor(connection)
     latest = executor.loader.graph.leaf_nodes()
-    legacy_target = [('management', '0004_tp_v1_0_1_dev0')]
+    legacy_target = [('management', '0004_traceability_credentials')]
     target = [('management', start)]
     try:
         executor.migrate(target)

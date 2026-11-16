@@ -28,13 +28,32 @@ class TraceabilityCredentialModel(models.Model):
     class Status(models.TextChoices):
         """Logical credential lifecycle states."""
 
+        UNASSIGNED = 'UNASSIGNED', _('Awaiting credential')
         ACTIVE = 'ACTIVE', _('Active')
         RETIRED = 'RETIRED', _('Retired')
 
+    class AssignmentMethod(models.TextChoices):
+        """How new signing generations are provisioned."""
+
+        MANAGEMENT_CA = 'MANAGEMENT_CA', _('Issue from Management CA')
+        PKCS12 = 'PKCS12', _('PKCS#12 file')
+        SEPARATE_FILES = 'SEPARATE_FILES', _('Separate files')
+        CSR = 'CSR', _('Generate CSR')
+
+    assignment_method = models.CharField(max_length=16, choices=AssignmentMethod.choices)
+    management_ca = models.ForeignKey('pki.CaModel', on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    pending_credential = models.OneToOneField(
+        'pki.CredentialModel',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    pending_csr = models.TextField(blank=True, default='')
     name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, default='')
-    curve = models.CharField(max_length=64, choices=Curve.choices)
-    status = models.CharField(max_length=8, choices=Status.choices, default=Status.ACTIVE)
+    curve = models.CharField(max_length=64, choices=Curve.choices, blank=True, default='')
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.UNASSIGNED)
     current_generation = models.ForeignKey(
         'management.TraceabilityCredentialGenerationModel',
         on_delete=models.PROTECT,
@@ -50,6 +69,13 @@ class TraceabilityCredentialModel(models.Model):
         """Model metadata."""
 
         ordering: ClassVar[list[str]] = ['-created_at']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['status'],
+                condition=models.Q(status='ACTIVE'),
+                name='traceability_one_active_credential',
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return the logical credential name."""
@@ -59,6 +85,20 @@ class TraceabilityCredentialModel(models.Model):
         """Defensively enforce immutable metadata and lifecycle invariants."""
         self._clean_metadata()
         self._clean_lifecycle()
+        if not self.curve and (
+            self.current_generation_id is not None
+            or self.assignment_method not in (self.AssignmentMethod.PKCS12, self.AssignmentMethod.SEPARATE_FILES)
+        ):
+            raise ValidationError({'curve': _('A signing key curve is required for generated credentials.')})
+        if self.assignment_method == self.AssignmentMethod.MANAGEMENT_CA:
+            if (
+                self.management_ca is None
+                or not self.management_ca.is_management_ca
+                or not self.management_ca.is_active
+            ):
+                raise ValidationError({'management_ca': _('Select an active management CA / RA.')})
+        elif self.management_ca_id is not None:
+            raise ValidationError({'management_ca': _('Only management CA assignment can select a CA.')})
 
     def _clean_metadata(self) -> None:
         """Validate required and immutable metadata."""
@@ -66,7 +106,7 @@ class TraceabilityCredentialModel(models.Model):
             raise ValidationError({'name': _('Name is required.')})
         if self.pk:
             previous = type(self).objects.get(pk=self.pk)
-            if self.name != previous.name or self.curve != previous.curve:
+            if self.name != previous.name or (previous.curve and self.curve != previous.curve):
                 raise ValidationError(_('Name and curve are immutable after creation.'))
 
     def _clean_lifecycle(self) -> None:
@@ -78,16 +118,14 @@ class TraceabilityCredentialModel(models.Model):
         if self.status == self.Status.RETIRED and self.retired_at is None:
             raise ValidationError({'retired_at': _('Retired credentials require a retirement timestamp.')})
 
-        previous = type(self).objects.get(pk=self.pk) if self.pk else None
-        if previous and previous.status == self.Status.RETIRED and self.status != self.Status.RETIRED:
-            raise ValidationError(_('A retired Traceability Credential cannot be reactivated.'))
-
     @property
     def is_usable(self) -> bool:
         """Return whether the current generation can sign now."""
         if self.status != self.Status.ACTIVE or self.current_generation is None:
             return False
         generation = self.current_generation
+        if generation.traceability_credential_id != self.pk:
+            return False
         if generation.status != TraceabilityCredentialGenerationModel.Status.ACTIVE:
             return False
         certificate = generation.credential.certificate
@@ -97,7 +135,7 @@ class TraceabilityCredentialModel(models.Model):
         return certificate.not_valid_before <= now <= certificate.not_valid_after
 
     def delete(self, *_args: object, **_kwargs: object) -> tuple[int, dict[str, int]]:
-        """Prevent deletion; retirement is the lifecycle end state."""
+        """Prevent deletion so historical signing identities remain available."""
         raise ValidationError(_('Traceability Credentials cannot be deleted.'))
 
 
@@ -135,7 +173,7 @@ class TraceabilityCredentialGenerationModel(models.Model):
                 name='traceability_signing_generation_number_unique',
             ),
             models.UniqueConstraint(
-                fields=['traceability_credential'],
+                fields=['status'],
                 condition=models.Q(status='ACTIVE'),
                 name='traceability_signing_one_active_generation',
             ),
@@ -150,7 +188,9 @@ class TraceabilityCredentialGenerationModel(models.Model):
         """Defensively enforce credential type and timestamp invariants."""
         credential_model = apps.get_model('pki', 'CredentialModel')
         if self.credential.credential_type != credential_model.CredentialTypeChoice.EVIDENCE_SIGNING_CREDENTIAL:
-            raise ValidationError({'credential': _('Credential must be an Traceability Credential.')})
+            raise ValidationError({'credential': _('Credential must be a Traceability Credential.')})
+        if self.credential.certificate_id is None:
+            raise ValidationError({'credential': _('Signing generations require a certificate.')})
         if self.status == self.Status.ACTIVE:
             if self.activated_at is None or self.retired_at is not None:
                 raise ValidationError(_('Active generations require activation and no retirement timestamp.'))

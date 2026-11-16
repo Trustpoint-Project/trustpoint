@@ -101,8 +101,7 @@ def verify_export(document: dict[str, Any], trusted_certificate_pem: bytes) -> d
         fingerprint = certificate.fingerprint(hashes.SHA256())
         if fingerprint != trusted.fingerprint(hashes.SHA256()):
             raise ValueError  # noqa: TRY301
-        # Traceability certificates are self-signed and trusted by exact certificate pinning.
-        certificate.verify_directly_issued_by(trusted)
+        # The exact independently pinned certificate establishes trust, regardless of its issuer.
         digest, algorithm = certificate_signature_algorithm(certificate)
         if header['alg'] != algorithm:
             raise ValueError  # noqa: TRY301
