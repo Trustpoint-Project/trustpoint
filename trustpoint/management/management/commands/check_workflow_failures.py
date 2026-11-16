@@ -50,6 +50,8 @@ class Command(BaseCommand):
             status__in=(Workflow2Approval.STATUS_PENDING, Workflow2Approval.STATUS_EXPIRED),
             instance__status__in=(Workflow2Instance.STATUS_AWAITING, Workflow2Instance.STATUS_TIMED_OUT),
         ).select_related('instance__definition'):
+            if approval.expires_at is None:
+                continue
             event = f'WORKFLOW_APPROVAL_OVERDUE_{approval.pk}'
             active_events.append(event)
             notify_operational_issue(
