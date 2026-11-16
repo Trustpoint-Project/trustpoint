@@ -47,13 +47,14 @@ def test_default_loader_preserves_customized_profile(unique_name: str) -> None:
 
 
 def test_default_loader_installs_user_client_profile() -> None:
-    """The standard loader stores the canonical user client policy as a default profile."""
+    """User authentication defaults must not become automatic device-domain profiles."""
+    CertificateProfileModel.objects.filter(unique_name='user_client').delete()
     call_command('create_default_cert_profiles')
     profile = CertificateProfileModel.objects.get(unique_name='user_client')
     definition = json.loads((Path(__file__).parents[1] / 'default_certificate_profiles/user_client.json').read_text())
 
     assert profile.profile == definition
-    assert profile.is_default
+    assert not profile.is_default
     assert profile.credential_type == CertificateProfileModel.ProfileCredentialType.APPLICATION
     CertProfilePydanticModel.model_validate(profile.profile)
 

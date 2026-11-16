@@ -78,7 +78,7 @@ def user_client_certificate_builder(
     if issuer is None:
         raise ValidationError(_('The management CA has no certificate.'))
     remaining_days = (issuer.not_valid_after_utc - now).days + 1
-    request = (
+    request: dict[str, Any] = (
         user_client_certificate_request(profile, issuing_ca)
         if profile is not None
         else {

@@ -120,6 +120,26 @@ def test_default_profile_migration_preserves_explicit_selection() -> None:
     assert default.profile == customized
 
 
+def test_domain_default_migration_preserves_user_authentication_policy() -> None:
+    """Correct the domain-default flag without replacing the user's saved authentication policy."""
+    profile = CertificateProfileModel.objects.get(unique_name='user_client')
+    customized = profile.profile
+    customized['validity']['days'] = 17
+    profile.profile_json = customized
+    profile.is_default = True
+    profile.save()
+    config = CertificateAuthenticationConfig.objects.create(issuing_ca=_management_ca('User Default Migration CA'))
+
+    migration = import_module('management.migrations.0009_user_profile_domain_default')
+    migration.remove_user_profile_domain_default(apps, SimpleNamespace(connection=connection))
+
+    profile.refresh_from_db()
+    config.refresh_from_db()
+    assert not profile.is_default
+    assert profile.profile == customized
+    assert config.certificate_profile == profile
+
+
 def _user_profile(*, validity_days: int = 2, **extensions) -> CertificateProfileModel:
     return CertificateProfileModel.objects.create(
         unique_name='custom_user_client',

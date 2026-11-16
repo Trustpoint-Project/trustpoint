@@ -1,3 +1,8 @@
+# Copyright (c) 2026 The Trustpoint Project Authors
+# SPDX-License-Identifier: MIT
+
+"""Set the default user certificate profile for existing management CA authentication configurations."""
+
 import django.db.models.deletion
 from django.db import migrations, models
 

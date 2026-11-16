@@ -42,7 +42,7 @@ class Command(BaseCommand):
                 continue
 
             # Set is_default based on profile name
-            is_default = unique_name != 'issuing_ca'
+            is_default = unique_name not in {'issuing_ca', 'user_client'}
 
             defaults = {
                 'profile_json': profile_json,
