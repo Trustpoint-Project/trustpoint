@@ -4,16 +4,49 @@
 """Tests for audit log views."""
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.test import RequestFactory, TestCase
+from django.core.exceptions import ValidationError
+from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from management.models.audit_log import AuditLog
-from management.views.audit_log import AuditLogListView
+from management.views.audit_log import AuditLogExportDownloadView, AuditLogListView
 
 User = get_user_model()
+
+
+class AuditLogExportRedirectTest(SimpleTestCase):
+    """Export errors return to a local page and retain encoded filters."""
+
+    def test_error_redirects_preserve_filters(self) -> None:
+        """URL-like input remains query data in every export error path."""
+        for valid, error in [(False, None), (True, ValidationError('Invalid export')), (True, RuntimeError())]:
+            with (
+                self.subTest(valid=valid, error=error),
+                patch('management.views.audit_log.AuditLogFilter') as selection,
+                patch('management.views.audit_log.AuditLog.objects'),
+                patch('management.views.audit_log.create_evidence_export', side_effect=error),
+                patch('management.views.audit_log.messages.error'),
+                patch.object(AuditLogExportDownloadView, 'logger'),
+            ):
+                selection.return_value.form.is_valid.return_value = valid
+                selection.return_value.filters = {}
+                request = RequestFactory().get('/', {
+                    'next': '//evil.example/',
+                    'target_object_id': 'https://evil.example/?x=1&y=2#fragment\r\nLocation: //evil.example/',
+                })
+
+                response = AuditLogExportDownloadView().get(request)
+
+                self.assertRedirects(
+                    response,
+                    f'{reverse("management:audit-log-export")}?{request.GET.urlencode()}',
+                    fetch_redirect_response=False,
+                )
 
 
 class AuditLogListViewTest(TestCase):
