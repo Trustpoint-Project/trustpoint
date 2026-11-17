@@ -35,7 +35,7 @@ from request.request_context import (
 from request.workflows2_handler import Workflow2CertificateRequestHandler, Workflow2HandleResult
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
-from workflows2.engine.adapters import WebhookResponse
+from workflows2.engine.adapters import RequestsWebhookAdapter, WebhookResponse
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.events.payloads import build_enrollment_request_snapshot
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Run
@@ -459,7 +459,9 @@ def test_cmp_webhook_delivers_to_local_http_receiver(enrollment_context):
                 worker_id='local-http-test',
                 heartbeat_enabled=False,
             )
-            worker.tick()
+            # Allow this test's loopback receiver; adapter tests cover destination rejection.
+            with patch.object(RequestsWebhookAdapter, '_reject_unsafe_target'):
+                worker.tick()
             assert received == [
                 {
                     'effective_subject_serial_number': 'SN123456',
