@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from django.core.exceptions import ValidationError
+
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
 from workflows2.compiler.yaml_format import dump_yaml_text, parse_yaml_text
@@ -151,5 +153,10 @@ class WorkflowDefinitionService:
         definition.yaml_text = res.formatted_yaml
         definition.ir_json = res.ir
         definition.ir_hash = self._extract_ir_hash(res.ir)
-        definition.save(update_fields=['name', 'enabled', 'trigger_on', 'yaml_text', 'ir_json', 'ir_hash'])
+        try:
+            definition.save(update_fields=['name', 'enabled', 'trigger_on', 'yaml_text', 'ir_json', 'ir_hash'])
+        except ValidationError as exc:
+            return None, CompileResult(
+                ok=False, ir=res.ir, error=' '.join(exc.messages), formatted_yaml=res.formatted_yaml
+            )
         return definition, res

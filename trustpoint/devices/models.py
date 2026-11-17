@@ -285,25 +285,25 @@ class OpcUaGdsPushConfig(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @transaction.atomic
     def schedule_next_gds_push_update(self) -> None:
-        """Schedule the next periodic GDS Push server certificate and trustlist update using Django-Q2.
-
-        Creates a one-off scheduled task in Django-Q2 that will execute at the calculated time
-        based on the configured renewal interval. Does nothing when periodic updates are disabled
-        or the device is not of type OPC UA GDS Push.
-        """
-        if not self.opc_gds_push_enable_periodic_update:
-            return
-        scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
-
-        schedule(
-            'devices.tasks.perform_gds_push_update',
-            self.device_id,
-            schedule_type='O',
-            next_run=scheduled_time,
-            name=f'gds_push_update_{self.device_id}_{scheduled_time.timestamp()}',
-        )
-
+        """Replace the device's pending update, removing legacy timestamp-named schedules."""
+        self.refresh_from_db(from_queryset=type(self).objects.select_for_update())
+        task_name = f'gds_push_update_{self.device_id}'
+        Schedule.objects.filter(models.Q(name=task_name) | models.Q(name__startswith=f'{task_name}_')).delete()
+        scheduled_time = None
+        if (
+            self.opc_gds_push_enable_periodic_update
+            and self.device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        ):
+            scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
+            schedule(
+                'devices.tasks.perform_gds_push_update',
+                self.device_id,
+                schedule_type='O',
+                next_run=scheduled_time,
+                name=task_name,
+            )
         self.opc_gds_push_last_update_scheduled_at = scheduled_time
         type(self).objects.filter(pk=self.pk).update(opc_gds_push_last_update_scheduled_at=scheduled_time)
 

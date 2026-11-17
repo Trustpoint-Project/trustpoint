@@ -48,10 +48,11 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
 
-class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the trustlist on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = DeviceModel
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
@@ -100,10 +101,11 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         )
 
 
-class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
     model = DeviceModel
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY

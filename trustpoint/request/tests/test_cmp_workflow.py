@@ -35,11 +35,14 @@ class TestCMPHelper(LoggerMixin):
         operation_str_long = 'certification'
         operation_str_short = 'cr'
         certtemplate_str = 'tls_server'
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as temp_socket:
+            temp_socket.bind(('127.0.0.1', 0))
+            port = temp_socket.getsockname()[1]
 
         cmp_factory = (CompositeCMPCommand('test_cmp', 'Test CMP command')
         .add_component(BasicCMPArgs(cmd=operation_str_short))
         .add_component(ServerConfig(
-            f'http://localhost:8443/.well-known/{protocol_str}/{operation_str_long}/{domain_str}/{certtemplate_str}/'))
+            f'http://localhost:{port}/.well-known/{protocol_str}/{operation_str_long}/{domain_str}/{certtemplate_str}/'))
         .add_component(SharedSecretAuth(f'{device.id}', f'pass:{device.no_onboarding_config.cmp_shared_secret}'))
         .add_component(
             CertificateRequest('/CN=Trustpoint-TlsServer-Credential/O=TestOrg/OU=TestOrgUnit',
@@ -52,7 +55,7 @@ class TestCMPHelper(LoggerMixin):
                           .add_component(RSAKeyGenerator(4096))
                           .add_component(KeyFileOutput()))
 
-        mock_server = CMPMockServer(cmp_factory, keygen_factory, 'localhost', 8443)
+        mock_server = CMPMockServer(cmp_factory, keygen_factory, 'localhost', port)
 
         request, cmp_message, path, headers, content_length = mock_server.run_test()
 

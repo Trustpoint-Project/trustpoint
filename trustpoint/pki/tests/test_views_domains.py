@@ -233,9 +233,52 @@ class TestDomainConfigView:
         context = view.get_context_data()
         
         assert 'profile_data' in context
-        assert 'certificates' in context
+        assert context['certificate_count'] == 0
         assert 'domain_options' in context
         assert profile.id in context['profile_data']
+
+    def test_config_certificate_count_uses_a_constant_number_of_queries(
+        self, rf, admin_user, issuing_ca_instance, django_assert_num_queries
+    ):
+        """Certificate history must not add a credential query for each entry."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        ca = issuing_ca_instance['issuing_ca']
+        domain = DomainModel.objects.create(unique_name='count-domain', issuing_ca=ca)
+        other_domain = DomainModel.objects.create(unique_name='other-domain', issuing_ca=ca)
+        profile = CertificateProfileModel.objects.create(unique_name='count-profile', profile_json='{}')
+
+        def context():
+            view = DomainConfigView()
+            view.request = rf.get('')
+            view.request.user = admin_user
+            view.kwargs = {'pk': domain.pk}
+            view.object = domain
+            view.object_list = view.get_queryset()
+            return view.get_context_data()
+
+        with CaptureQueriesContext(connection) as baseline:
+            assert context()['certificate_count'] == 0
+
+        for index, owner in enumerate([domain, domain, domain, other_domain]):
+            device = DeviceModel.objects.create(common_name=f'count-device-{index}', domain=owner)
+            certificate, _ = CertificateGenerator.create_ee(
+                issuing_ca_instance['priv_key'], issuing_ca_instance['cert'].subject, f'count-cert-{index}'
+            )
+            credential = CredentialModel.save_keyless_credential(
+                certificate, [], CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
+            )
+            IssuedCredentialModel.objects.create(
+                common_name=f'count-cert-{index}',
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                certificate_profile=profile,
+                credential=credential,
+                device=device,
+                domain=owner,
+            )
+        with django_assert_num_queries(len(baseline)):
+            assert context()['certificate_count'] == 3
 
     def test_config_view_context_contains_organizations(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that organization choices are available in context."""

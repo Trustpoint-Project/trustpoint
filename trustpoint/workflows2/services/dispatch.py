@@ -192,6 +192,7 @@ class WorkflowDispatchService:
         )
         return instances
 
+    @transaction.atomic
     def _emit_event_internal(
         self,
         *,
@@ -402,7 +403,11 @@ class WorkflowDispatchService:
         initial_vars: dict[str, Any] | None,
     ) -> list[Workflow2Definition]:
         """Return enabled definitions matching the trigger and source scope."""
-        qs = Workflow2Definition.objects.filter(enabled=True, trigger_on=on).order_by('created_at')
+        qs = (
+            Workflow2Definition.objects.select_for_update()
+            .filter(enabled=True, trigger_on=on)
+            .order_by('created_at', 'id')
+        )
         defs = list(qs)
 
         matched: list[Workflow2Definition] = []

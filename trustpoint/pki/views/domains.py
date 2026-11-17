@@ -219,12 +219,6 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context = super().get_context_data(**kwargs)
         domain: DomainModel = cast('DomainModel', self.get_object())
 
-        issued_credentials = domain.issued_credentials.all()
-
-        certificates = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
-        )
-
         context['profile_data'] = {
             profile.id: {'unique_name': profile.unique_name, 'alias': '', 'is_allowed': False}
             for profile in CertificateProfileModel.objects.all()
@@ -243,7 +237,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             domain.domain_credential_profile.id if domain.domain_credential_profile else None
         )
 
-        context['certificates'] = certificates
+        context['certificate_count'] = CertificateModel.objects.filter(
+            credential__issued_credential__domain=domain
+        ).count()
         context['domain_options'] = {}
         context['domain_help_texts'] = {}
         context['domain_verbose_name'] = {}
