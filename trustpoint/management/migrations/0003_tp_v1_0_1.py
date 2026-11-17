@@ -185,8 +185,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('contenttypes', '0002_remove_content_type_name'),
         ('management', '0002_initial'),
-        ('pki', '0004_add_traceability_credential_type'),
-        ('pki', '0006_self_signed_ca_type'),
+        ('pki', '0003_tp_v1_0_1'),
     ]
 
     operations = [

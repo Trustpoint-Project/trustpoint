@@ -24,7 +24,7 @@ matching original software KEK or HSM recovery material.
 
 Reusable CMP shared secrets and EST/REST passwords in no-onboarding
 configurations also use application-secret encryption. Migration
-``onboarding.0003_encrypt_no_onboarding_credentials`` encrypts existing values
+``onboarding.0003_tp_v1_0_1`` encrypts existing values
 and requires access to the installation's configured application-secret keys
 when nonempty credentials exist. A missing key stops the migration and rolls
 back its changes; an empty installation does not initialize key material.
