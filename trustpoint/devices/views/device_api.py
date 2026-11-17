@@ -32,6 +32,7 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
 @extend_schema(tags=['Device'])
 class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.
@@ -59,8 +60,14 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
             msg = 'No enrollment configuration is available.'
             raise serializers.ValidationError(msg)
         try:
-            secret = assign_secret(config, data['credential'], custom=data['action'] == 'custom',
-                                   value=data.get('value'), device=device, actor=request.user)
+            secret = assign_secret(
+                config,
+                data['credential'],
+                custom=data['action'] == 'custom',
+                value=data.get('value'),
+                device=device,
+                actor=request.user,
+            )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.messages) from exc
         return Response({'credential': data['credential'], 'value': secret}, headers={'Cache-Control': 'no-store'})
@@ -160,10 +167,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                     },
                 },
                 request_only=True,
-                description=(
-                    'Uses EST_USERNAME_PASSWORD (4) protocol. '
-                    'Password can be omitted for auto-generation.'
-                ),
+                description=('Uses EST_USERNAME_PASSWORD (4) protocol. Password can be omitted for auto-generation.'),
             ),
             OpenApiExample(
                 'Multiple PKI Protocols (Mixed Format)',
@@ -206,7 +210,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                 request_only=True,
                 description='OPC UA GDS Push device with all required OPC-specific fields.',
             ),
-        ]
+        ],
     )
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Create a new device, optionally with onboarding configuration."""
@@ -237,4 +241,3 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
         if hasattr(self, 'action') and self.action in self.action_descriptions:
             return self.action_descriptions[self.action]
         return super().get_view_description(html)
-

@@ -45,9 +45,9 @@ class Command(BaseCommand):
         )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
         notified_certificate_ids = set(
-            NotificationModel.objects.filter(
-                event='INSUFFICIENT_KEY_LENGTH', certificate__isnull=False
-            ).values_list('certificate_id', flat=True)
+            NotificationModel.objects.filter(event='INSUFFICIENT_KEY_LENGTH', certificate__isnull=False).values_list(
+                'certificate_id', flat=True
+            )
         )
 
         for cert in insufficient_key_certificates.iterator():

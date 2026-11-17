@@ -20,7 +20,12 @@ from devices.tasks import perform_gds_push_update
     ('action', 'permission', 'method', 'result'),
     [
         ('devices_update_trustlist', 'manage_devices', 'update_trustlist', (True, 'updated')),
-        ('devices_update_server_certificate', 'issue_certificates', 'update_server_certificate', (True, 'updated', b'cert')),
+        (
+            'devices_update_server_certificate',
+            'issue_certificates',
+            'update_server_certificate',
+            (True, 'updated', b'cert'),
+        ),
     ],
 )
 def test_gds_action_requires_permission(client, django_user_model, gds_device, action, permission, method, result):

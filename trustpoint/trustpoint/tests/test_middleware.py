@@ -19,6 +19,7 @@ from trustpoint.middleware import (
 
 User = get_user_model()
 
+
 @pytest.fixture
 def middleware():
     """Instantiate TrustpointLoginRequiredMiddleware with a mock response handler."""

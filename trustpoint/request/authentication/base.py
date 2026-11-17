@@ -32,11 +32,11 @@ class DevicePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
     def _authenticate_credentials(self, context: BaseRequestContext, username: str, password: str) -> None:
         """Authenticate an existing device with its current enrollment password."""
-        device = DeviceModel.objects.select_related(
-            'onboarding_config', 'no_onboarding_config'
-        ).filter(
-            common_name=username
-        ).first()
+        device = (
+            DeviceModel.objects.select_related('onboarding_config', 'no_onboarding_config')
+            .filter(common_name=username)
+            .first()
+        )
 
         if not device:
             self.logger.warning('Authentication failed: Unknown username %s', username)
@@ -200,19 +200,13 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
 
         cert = credential_model.certificate_or_error
 
-        if (
-            not cert.subjects_match(csr.subject) or
-            not cert.subjects_match(client_cert.subject)
-        ):
+        if not cert.subjects_match(csr.subject) or not cert.subjects_match(client_cert.subject):
             error_message = "CSR/client subject does not match the credential certificate's subject"
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
     def _validate_certificate_extensions(
-        self,
-        credential_cert: x509.Certificate,
-        client_cert: x509.Certificate,
-        csr: x509.CertificateSigningRequest
+        self, credential_cert: x509.Certificate, client_cert: x509.Certificate, csr: x509.CertificateSigningRequest
     ) -> None:
         """Validate that certificate extensions match between credential, client cert, and CSR."""
         try:
@@ -315,7 +309,6 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         if not isinstance(meta, dict):
             self.logger.debug('IP resolution skipped: META is not a dict')
             return None
-
 
         # Prefer the original client address when running behind a reverse proxy.
         real_ip = meta.get('HTTP_X_REAL_IP')
@@ -428,8 +421,9 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         """Authenticate the request using all registered components."""
         authentication_errors = []
 
-        self.logger.debug('Authentication components to try: %s',
-                          [component.__class__.__name__ for component in self.components])
+        self.logger.debug(
+            'Authentication components to try: %s', [component.__class__.__name__ for component in self.components]
+        )
         for component in self.components:
             try:
                 component.authenticate(context)

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Execute compiled Workflow 2 IR one step at a time."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -450,11 +451,7 @@ class WorkflowExecutor:
     @staticmethod
     def _capture_source(rule: dict[str, Any]) -> list[Any] | None:
         source = rule.get('source')
-        if not (
-            isinstance(source, list)
-            and len(source) >= CAPTURE_SOURCE_MIN_PARTS
-            and isinstance(source[0], str)
-        ):
+        if not (isinstance(source, list) and len(source) >= CAPTURE_SOURCE_MIN_PARTS and isinstance(source[0], str)):
             return None
         return source
 

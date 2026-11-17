@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Runtime adapters for workflow side effects."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -275,9 +276,7 @@ class RequestsWebhookAdapter:
             error_msg = 'Webhook URL has an invalid port.'
             raise ValueError(error_msg) from exc
         try:
-            addresses = {
-                str(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)
-            }
+            addresses = {str(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)}
         except socket.gaierror:
             # Let requests report the same DNS failure to the caller.
             return

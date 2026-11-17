@@ -58,14 +58,16 @@ def generate_empty_crl(
     actual_private_key = validate_certificate_signing_private_key(actual_private_key)
 
     # For ML-DSA keys, hash_algorithm must be None
-    is_mldsa = (
-        ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)
-    ) or (
-        mldsa is not None and isinstance(actual_private_key, (
-            mldsa.MLDSA44PrivateKey,
-            mldsa.MLDSA65PrivateKey,
-            mldsa.MLDSA87PrivateKey,
-        ))
+    is_mldsa = (ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)) or (
+        mldsa is not None
+        and isinstance(
+            actual_private_key,
+            (
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ),
+        )
     )
 
     # Set default hash algorithm only for non-ML-DSA keys

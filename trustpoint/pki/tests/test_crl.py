@@ -772,9 +772,7 @@ def test_crl_download_view_pkcs7_pem(issuing_ca_instance: dict[str, Any], authen
     assert response['Content-Type'] == 'application/x-pem-file'
     assert 'attachment' in response['Content-Disposition']
     assert '.p7c' in response['Content-Disposition']
-    body = ''.join(
-        line for line in response.content.decode('ascii').splitlines() if not line.startswith('-----')
-    )
+    body = ''.join(line for line in response.content.decode('ascii').splitlines() if not line.startswith('-----'))
     content = cms.ContentInfo.load(b64decode(body))
     assert content['content_type'].native == 'signed_data'
     assert len(content['content']['crls']) == 1

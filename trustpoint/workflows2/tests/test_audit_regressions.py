@@ -38,7 +38,9 @@ def test_definition_edits_are_rejected_until_instances_are_finished(definition, 
     instance.save(update_fields=['status'])
     changed_yaml = SIMPLE_YAML.replace('stop_now', 'new_step')
     updated, result = WorkflowDefinitionService().update_definition(
-        definition=definition, enabled=True, yaml_text=changed_yaml,
+        definition=definition,
+        enabled=True,
+        yaml_text=changed_yaml,
     )
     assert updated is None
     assert not result.ok
@@ -51,7 +53,9 @@ def test_definition_edits_are_rejected_until_instances_are_finished(definition, 
     instance.status = Workflow2Instance.STATUS_CANCELLED
     instance.save(update_fields=['status'])
     updated, result = WorkflowDefinitionService().update_definition(
-        definition=definition, enabled=True, yaml_text=changed_yaml,
+        definition=definition,
+        enabled=True,
+        yaml_text=changed_yaml,
     )
     assert result.ok
     assert updated.ir_json['workflow']['start'] == 'new_step'
@@ -85,7 +89,10 @@ def test_concurrent_dispatch_initializes_a_bundle_once(definition):
         try:
             with patch.object(service, 'get_or_create_run', side_effect=simultaneous_start):
                 instances = service.emit_event(
-                    on='device.created', event={}, source=EventSource(), idempotency_key='same-request',
+                    on='device.created',
+                    event={},
+                    source=EventSource(),
+                    idempotency_key='same-request',
                 )
             return [instance.pk for instance in instances]
         finally:
