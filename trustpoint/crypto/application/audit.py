@@ -102,6 +102,10 @@ def audit_crypto_backend_operation(  # noqa: PLR0913
         return
 
     try:
+        from management.services.audit_signing import checkpoint_signing_active  # noqa: PLC0415 - avoids an import cycle
+
+        if checkpoint_signing_active():
+            payload['audit_checkpoint_signing'] = True
         AuditLog.create_entry(
             operation_type=_operation_type(operation),
             target=target,
