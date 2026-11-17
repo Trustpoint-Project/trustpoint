@@ -19,12 +19,16 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import FormView, TemplateView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema
+from rest_framework import mixins, viewsets
+from rest_framework.permissions import BasePermission
 
 from crypto.domain.errors import CryptoError
 from management.filters.audit_log import AuditLogFilter
 from management.models.audit_log import AuditLog
 from management.models.audit_signing import AuditLogCheckpoint, AuditSigningConfig
 from management.models.traceability import TraceabilityCredentialModel
+from management.serializer.audit_log import AuditLogIngestSerializer
 from management.services.audit_integrity import AuditVerificationReport, verify_audit_chain
 from management.services.audit_log_export import create_evidence_export
 from management.services.audit_signing import create_checkpoint, sync_signing_schedule
@@ -284,3 +288,23 @@ class AuditLogVerifyView(UserPermissionRequiredMixin, PageContextMixin, LoggerMi
             'checkpoint_total': checkpoint_total,
             'checkpoint_history_limit': CHECKPOINT_HISTORY_LIMIT,
         }
+
+
+class CanAddAuditLog(BasePermission):
+    """Allow appending external entries only with the dedicated permission."""
+
+    def has_permission(self, request: Any, _view: Any) -> bool:
+        """Check the caller's append permission."""
+        return bool(
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.ADD_AUDIT_LOG)
+        )
+
+
+@extend_schema(tags=['Audit'])
+class AuditLogViewSet(mixins.CreateModelMixin, viewsets.GenericViewSet[AuditLog]):
+    """Append an external event to the tamper-evident audit chain."""
+
+    # shortcut: payload size and rate rely on global Django/DRF limits; add a cap and throttle if ingestion grows.
+    serializer_class = AuditLogIngestSerializer
+    permission_classes = (CanAddAuditLog,)
+    filter_backends = ()

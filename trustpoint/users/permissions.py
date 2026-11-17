@@ -65,5 +65,6 @@ class AppPermissions:
     # Monitoring and audit
     # -------------------------------------------------------------------------
     VIEW_AUDIT_LOG = f'{APP_LABEL}.view_audit_log'  # ok
+    ADD_AUDIT_LOG = f'{APP_LABEL}.add_audit_log'
     VIEW_SYSTEM_LOGS = f'{APP_LABEL}.view_system_logs'  # ok
     VIEW_METRICS = f'{APP_LABEL}.view_metrics'  # ok

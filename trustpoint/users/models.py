@@ -537,6 +537,7 @@ class AppPermission(models.Model):
             # Monitoring and audit
             # -----------------------------------------------------------------
             ('view_audit_log', _('Can view the audit log')),
+            ('add_audit_log', _('Can add external audit log entries')),
             ('view_system_logs', _('Can view system logs')),
             ('view_metrics', _('Can view system metrics')),
         ]
