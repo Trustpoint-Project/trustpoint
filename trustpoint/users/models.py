@@ -664,7 +664,6 @@ class ServiceAccountCredential(models.Model):
             last_used=self.last_used,
             usage_count=models.F('usage_count') + 1,
         )
-        self.refresh_from_db(fields=['usage_count'])
 
     @staticmethod
     def generate_client_id() -> str:

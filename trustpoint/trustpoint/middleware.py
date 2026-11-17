@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -308,9 +309,16 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 class Workflow2InlineDrainMiddleware(MiddlewareMixin):
     """Let the web process drain queued workflow jobs when inline execution is active."""
 
+    DRAIN_INTERVAL_SECONDS = 5
+
     def process_request(self, request: HttpRequest) -> None:
-        """Drain backlog opportunistically before handling the current request."""
-        del request
+        """Drain backlog opportunistically, at most once per interval for signed-in users."""
+        if not request.user.is_authenticated:
+            return
+        now = time.monotonic()
+        if now - getattr(self, '_last_drain_attempt', 0.0) < self.DRAIN_INTERVAL_SECONDS:
+            return
+        self._last_drain_attempt = now
         try:
             WorkflowDispatchService().drain_pending_jobs_if_inline()
         except Exception:

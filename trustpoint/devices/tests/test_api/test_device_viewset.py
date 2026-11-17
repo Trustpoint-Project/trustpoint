@@ -103,14 +103,14 @@ class TestDeviceViewSetList:
         """Devices present in the DB appear in the list response."""
         response = authenticated_client.get(reverse('device-list'))
         assert response.status_code == status.HTTP_200_OK
-        ids = [item['id'] for item in response.data]
+        ids = [item['id'] for item in response.data['results']]
         assert device.pk in ids
 
     def test_list_exposes_expected_fields(self, authenticated_client: APIClient, device: DeviceModel) -> None:
         """Each list item includes core device fields."""
         response = authenticated_client.get(reverse('device-list'))
         assert response.status_code == status.HTTP_200_OK
-        item = next(d for d in response.data if d['id'] == device.pk)
+        item = next(d for d in response.data['results'] if d['id'] == device.pk)
         for field in ('id', 'common_name', 'serial_number', 'device_type', 'created_at', 'rfc_4122_uuid'):
             assert field in item
 

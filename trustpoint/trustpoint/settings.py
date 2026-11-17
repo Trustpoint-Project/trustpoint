@@ -99,7 +99,7 @@ PUBLIC_PATHS = [
 
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-DOCKER_CONTAINER = False
+DOCKER_CONTAINER = os.getenv('TRUSTPOINT_CONTAINER', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 TRUSTPOINT_PHASE_BOOTSTRAP = 'bootstrap'
@@ -164,7 +164,6 @@ if TRUSTPOINT_IS_BOOTSTRAP:
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = not DOCKER_CONTAINER
-ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
 # Reverse proxy SSL header settings
@@ -416,8 +415,6 @@ if TRUSTPOINT_IS_BOOTSTRAP:
     LOGIN_REDIRECT_URL = 'setup_wizard:index'
 
 DJANGO_LOG_LEVEL = 'INFO'
-
-TAGGIT_CASE_INSENSITIVE = True
 
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
@@ -743,6 +740,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'PAGE_SIZE': 100,
 }
 
 SPECTACULAR_SETTINGS = {
@@ -755,12 +753,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False
-
-TASKS = {
-    'default': {
-        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
-    }
-}
 
 Q_CLUSTER = {
     'name': 'trustpoint',

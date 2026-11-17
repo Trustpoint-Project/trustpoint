@@ -24,6 +24,7 @@ from .eval import eval_condition, eval_expr, render_template
 from .types import ExecutionResult, RunStatus, StepRun
 
 OnStepRun = Callable[[StepRun], None]
+MAX_WEBHOOK_TIMEOUT_SECONDS = 300
 
 _TERMINAL_RUN_STATUSES = {
     'awaiting',
@@ -407,7 +408,7 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Invalid webhook.url')
         if not isinstance(headers, dict):
             raise StepExecutionError(step_id, 'Invalid webhook.headers')
-        if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
+        if not isinstance(timeout_seconds, int) or not 0 < timeout_seconds <= MAX_WEBHOOK_TIMEOUT_SECONDS:
             raise StepExecutionError(step_id, 'Invalid webhook.timeout_seconds')
         if capture is None:
             capture = []

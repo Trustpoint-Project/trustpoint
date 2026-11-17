@@ -24,6 +24,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
@@ -479,6 +480,7 @@ class CertificateViewSet(
     ).order_by('-created_at')
     serializer_class = CertificateSerializer
     permission_classes = (IsAuthenticated,)
+    pagination_class = PageNumberPagination
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']

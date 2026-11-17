@@ -13,7 +13,6 @@ from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from management.models.organization import OrganizationModel
-from users.permissions import AppPermissions
 
 from .models import BuiltinRole, GroupProfile, TrustpointUser, UserClientCertificate, is_last_admin_user
 
@@ -108,10 +107,8 @@ class TrustpointUserProfileForm(forms.ModelForm[TrustpointUser]):
         view_mode_field.choices = TrustpointUser.ViewModeChoices.choices
         theme_field.widget.attrs['data-theme-selector'] = 'true'
 
-        can_manage_users = bool(
-            self.user and self.user.is_authenticated and self.user.has_perm(AppPermissions.MANAGE_USERS)
-        )
-        if not can_manage_users:
+        can_assign_roles = bool(self.user and self.user.is_authenticated and self.user.is_superuser)
+        if not can_assign_roles:
             self.fields['role'].disabled = True
             self.fields['organization'].disabled = True
         elif is_last_admin_user(self.instance):

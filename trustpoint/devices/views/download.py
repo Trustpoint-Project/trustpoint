@@ -220,6 +220,10 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
                 as_attachment=True,
                 filename=f'trustpoint-{credential_type_name}-credential{file_format.file_extension}',
             )
+            response['Cache-Control'] = 'no-store'
+            if self.is_browser_download and hasattr(self, 'credential_download'):
+                # The URL token must not be usable for a second private-key download.
+                self.credential_download.consume_token()
 
             return cast('HttpResponse', response)
 

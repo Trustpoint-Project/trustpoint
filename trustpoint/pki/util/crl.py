@@ -152,7 +152,7 @@ def generate_crl_with_revoked_certs(
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(next_crl_number), critical=False)
 
-    crl_certificates = issuing_ca.revoked_certificates.all()
+    crl_certificates = issuing_ca.revoked_certificates.select_related('certificate')
 
     for cert in crl_certificates:
         revoked_cert = (

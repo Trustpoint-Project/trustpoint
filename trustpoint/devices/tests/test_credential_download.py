@@ -36,6 +36,19 @@ def test_token_invalidation(mock_models: dict[str, Any]) -> None:
         RemoteDeviceCredentialDownloadModel.objects.get(id=rcd.id)
 
 
+def test_consume_token_invalidates_download(mock_models: dict[str, Any]) -> None:
+    """A delivered credential token cannot be replayed."""
+    rcd = mock_models['remote_credential_download']
+    rcd.save()
+    assert rcd.check_otp(rcd.otp)
+    token = rcd.download_token
+    assert rcd.check_token(token)
+
+    rcd.consume_token()
+
+    assert not rcd.check_token(token)
+
+
 def test_otp_use_once(mock_models: dict[str, Any]) -> None:
     """Test that an OTP can only be used once."""
     rcd = mock_models['remote_credential_download']

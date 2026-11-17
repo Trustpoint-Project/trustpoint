@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from django.utils.translation import gettext_lazy as _
 from django_q.models import Schedule
 from django_q.tasks import schedule
@@ -382,7 +383,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
 
         if not self.otp or self.otp == '-':
             return False
-        matches = otp == self.otp
+        matches = constant_time_compare(otp, self.otp)
         if not matches:
             self.attempts += 1
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
@@ -412,4 +413,10 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             self.delete()
             return False
 
-        return token == self.download_token
+        return constant_time_compare(token, self.download_token)
+
+    def consume_token(self) -> None:
+        """Invalidate the download token after the credential has been delivered."""
+        self.download_token = ''
+        self.token_created_at = None
+        self.save(update_fields=['download_token', 'token_created_at'])

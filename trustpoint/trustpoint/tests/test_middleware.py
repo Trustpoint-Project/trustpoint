@@ -225,8 +225,25 @@ class TestWorkflow2InlineDrainMiddleware:
     """Test cases for Workflow2InlineDrainMiddleware."""
 
     def test_process_request_drains_backlog_opportunistically(self, workflow2_middleware, http_request):
-        """The middleware should invoke the inline drain helper on each request."""
+        """The middleware should invoke the inline drain helper for signed-in users."""
+        http_request.user = Mock(is_authenticated=True)
         with patch('trustpoint.middleware.WorkflowDispatchService') as mock_service:
+            workflow2_middleware.process_request(http_request)
+
+        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with()
+
+    def test_process_request_skips_anonymous_requests(self, workflow2_middleware, http_request):
+        """Public enrollment traffic must not trigger background workflow work."""
+        with patch('trustpoint.middleware.WorkflowDispatchService') as mock_service:
+            workflow2_middleware.process_request(http_request)
+
+        mock_service.return_value.drain_pending_jobs_if_inline.assert_not_called()
+
+    def test_process_request_throttles_repeat_checks(self, workflow2_middleware, http_request):
+        """Repeated requests must not pay the config and backlog queries every time."""
+        http_request.user = Mock(is_authenticated=True)
+        with patch('trustpoint.middleware.WorkflowDispatchService') as mock_service:
+            workflow2_middleware.process_request(http_request)
             workflow2_middleware.process_request(http_request)
 
         mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with()

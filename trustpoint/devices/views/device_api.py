@@ -11,6 +11,7 @@ from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -64,8 +65,9 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
             raise serializers.ValidationError(exc.messages) from exc
         return Response({'credential': data['credential'], 'value': secret}, headers={'Cache-Control': 'no-store'})
 
-    queryset = DeviceModel.objects.all()
+    queryset = DeviceModel.objects.all().order_by('pk')
     serializer_class = DeviceSerializer
+    pagination_class = PageNumberPagination
     action_descriptions: ClassVar[dict[str, str]] = {
         'list': 'Retrieve a list of all devices.',
         'retrieve': 'Retrieve a single device by id.',

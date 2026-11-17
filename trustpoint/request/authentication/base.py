@@ -8,6 +8,7 @@ from abc import ABC, abstractmethod
 from typing import Never
 
 from cryptography import x509
+from django.utils.crypto import constant_time_compare
 
 from devices.models import DeviceModel
 from devices.secrets import remember_secret
@@ -55,7 +56,7 @@ class DevicePasswordAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.warning('Authentication failed: Credential has expired for %s', username)
             self._raise_authentication_error()
 
-        if password != device_config.est_password:
+        if not constant_time_compare(password, device_config.est_password):
             self.logger.warning('Authentication failed: Invalid password for %s', username)
             self._raise_authentication_error()
 

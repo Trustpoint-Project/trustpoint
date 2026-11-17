@@ -49,11 +49,20 @@ def _mailpit_list_subjects() -> list[str]:
 
 
 def _build_mock_response(*, status_code: int, headers: dict[str, str], json_body=None, text_body: str = "OK"):
+    body = json.dumps(json_body).encode() if json_body is not None else text_body.encode()
+
     class _Response:
         def __init__(self) -> None:
             self.status_code = status_code
             self.headers = headers
             self.text = text_body
+
+        def iter_content(self, chunk_size: int = 1):
+            del chunk_size
+            yield body
+
+        def close(self) -> None:
+            return None
 
         def json(self):
             if json_body is None:
@@ -93,6 +102,20 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
             _, kwargs = request_mock.call_args
             self.assertEqual(kwargs["headers"].get("X-Test"), "1")
             self.assertEqual(kwargs["json"], {"hello": "world"})
+            self.assertFalse(kwargs["allow_redirects"])
+            self.assertTrue(kwargs["stream"])
+
+    def test_request_rejects_loopback_target(self) -> None:
+        adapter = RequestsWebhookAdapter(verify_tls=True)
+
+        with self.assertRaisesMessage(ValueError, "prohibited address"):
+            adapter.request(
+                method="GET",
+                url="http://127.0.0.1/hook",
+                headers={},
+                body=None,
+                timeout_seconds=5,
+            )
 
     def test_request_returns_non_200_and_preserves_status_code(self) -> None:
         with patch("requests.request") as request_mock:

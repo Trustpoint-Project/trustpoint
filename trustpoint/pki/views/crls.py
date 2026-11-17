@@ -24,6 +24,7 @@ from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
 from pki.util.crl import crl_to_pkcs7_der, crl_to_pkcs7_pem
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
@@ -41,7 +42,7 @@ class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
     model = CrlModel
     template_name = 'pki/crls/crls.html'
     context_object_name = 'crls'
-    paginate_by = None
+    paginate_by = UIConfig.paginate_by
     filterset_class = CrlFilter
 
     def get_export_config(self) -> ExportConfig:
