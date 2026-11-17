@@ -35,10 +35,13 @@ class AuditLogExportRedirectTest(SimpleTestCase):
             ):
                 selection.return_value.form.is_valid.return_value = valid
                 selection.return_value.filters = {}
-                request = RequestFactory().get('/', {
-                    'next': '//evil.example/',
-                    'target_object_id': 'https://evil.example/?x=1&y=2#fragment\r\nLocation: //evil.example/',
-                })
+                request = RequestFactory().get(
+                    '/',
+                    {
+                        'next': '//evil.example/',
+                        'target_object_id': 'https://evil.example/?x=1&y=2#fragment\r\nLocation: //evil.example/',
+                    },
+                )
 
                 response = AuditLogExportDownloadView().get(request)
 
