@@ -12,8 +12,19 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from management.models import NotificationConfig
+from management.services.audit_signing import maybe_sign_checkpoint
 
 logger = logging.getLogger(__name__)
+
+
+def sign_audit_checkpoint() -> None:
+    """Retry or time-based checkpoint signing; safe to run repeatedly.
+
+    This function is executed by Django-Q2 as a background task. The normal
+    trigger is the post-commit hook after audit events, so this task is the
+    safety net for low-traffic periods and earlier signing failures.
+    """
+    maybe_sign_checkpoint()
 
 
 def execute_all_notifications() -> None:

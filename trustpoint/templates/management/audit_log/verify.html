@@ -1,0 +1,125 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1 class="mb-1">{% trans 'Verify Audit Log Integrity' %}</h1>
+        <p class="mb-0 text-muted">
+            {% trans 'Check every audit event hash, sequence, checkpoint range and checkpoint signature.' %}
+        </p>
+    </div>
+
+    <div class="card-body text-start">
+        {% if verification_error %}
+            <div class="alert alert-danger" role="alert">{{ verification_error }}</div>
+        {% elif report %}
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'Verification result' %}</h2>
+                    <p class="mb-0 text-muted">
+                        {% trans 'Summary of the checks performed against the audit chain and retained checkpoints.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                {% if not report.ok %}
+                    <div class="alert alert-danger" role="alert">
+                        {% trans 'Integrity verification failed. Review the findings below.' %}
+                    </div>
+                {% elif report.findings %}
+                    <div class="alert alert-warning" role="alert">
+                        <strong>{% trans 'The audit hash chain is intact' %}</strong>,
+                        {% trans 'but checkpoint signing is incomplete. Review the warnings below.' %}
+                    </div>
+                {% else %}
+                    <div class="alert alert-success" role="alert">
+                        {% trans 'The audit chain and all retained checkpoint signatures are valid.' %}
+                    </div>
+                {% endif %}
+
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Events checked' %}</div>
+                        <div>{{ report.entries_checked }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Checkpoints checked' %}</div>
+                        <div>{{ report.checkpoints_checked }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Events after latest checkpoint' %}</div>
+                        <div>{{ report.unsigned_entries }}</div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mb-5">
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'Integrity findings' %}</h2>
+                    <p class="mb-0 text-muted">
+                        {% trans 'Warnings and errors reported by the audit chain verification.' %}
+                    </p>
+                </div>
+
+                <hr class="mb-4">
+
+                {% if report.findings %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{% trans 'Finding' %}</th>
+                                    <th scope="col">{% trans 'Sequence' %}</th>
+                                    <th scope="col">{% trans 'Details' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for finding in report.findings %}
+                                    <tr>
+                                        <td class="font-monospace">{{ finding.code }}</td>
+                                        <td>{{ finding.sequence|default:'—' }}</td>
+                                        <td>{{ finding.detail }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">{% trans 'No integrity findings were recorded.' %}</p>
+                {% endif %}
+            </section>
+
+            <section>
+                <div class="mb-3">
+                    <h2 class="h4 mb-1">{% trans 'Signed checkpoints' %}</h2>
+                    <p class="mb-0 text-muted">
+                        {% trans 'Checkpoints anchoring the audited chain, with links to their credential and certificate.' %}
+                    </p>
+                    {% if checkpoint_total > checkpoint_history_limit %}
+                        <p class="small text-muted mb-0 mt-1">
+                            {% trans 'Showing the latest' %} {{ checkpoint_history_limit }}
+                            {% trans 'of' %} {{ checkpoint_total }} {% trans 'checkpoints.' %}
+                        </p>
+                    {% endif %}
+                </div>
+
+                <hr class="mb-4">
+
+                {% include 'management/audit_log/includes/checkpoint_table.html' %}
+            </section>
+        {% endif %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <a class="btn btn-secondary" href="{% url 'management:audit-log' %}">{% trans 'Back' %}</a>
+        <div class="d-flex flex-wrap gap-2">
+            {% if perms.users.manage_security_configuration %}
+                <a class="btn btn-outline-secondary" href="{% url 'management:audit-log-signing' %}">{% trans 'Signing settings' %}</a>
+            {% endif %}
+            <a class="btn btn-primary" href="{% url 'management:audit-log-verify' %}">{% trans 'Verify again' %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

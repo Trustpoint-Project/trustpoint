@@ -464,7 +464,7 @@ def test_existing_statuses_and_escaped_names_are_migrated():
     from django.db import connection
     from management.models import NotificationStatus
 
-    migration = import_module('management.migrations.0012_normalize_notification_status_and_data')
+    migration = import_module('management.migrations.0003_tp_v1_0_1')
     legacy = NotificationStatus.objects.create(status='SOLVED')
     solved, _ = NotificationStatus.objects.get_or_create(status='SOLV')
     first = NotificationModel.objects.create(

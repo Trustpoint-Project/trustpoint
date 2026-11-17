@@ -5,16 +5,46 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+import datetime as dt
+import hashlib
+import random
+import time
+from typing import Any, ClassVar
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, OperationalError, connection, models, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
+from util.audit_log_export import canonical_json
+
 User = get_user_model()
+
+GENESIS_HASH = '0' * 64
+MAX_CHAIN_WRITE_ATTEMPTS = 5
+
+
+def _stored_text(value: object) -> str:
+    """Return the value as Django will store it in a character column."""
+    return '' if value is None else str(value)
+
+
+class AuditLogChainLock(models.Model):
+    """Singleton row used to serialize append operations on the audit chain."""
+
+    class Meta(TypedModelMeta):
+        """Model metadata."""
+
+        verbose_name = _('Audit Log Chain Lock')
+        verbose_name_plural = _('Audit Log Chain Lock')
+
+    def __str__(self) -> str:
+        """Return a stable display name."""
+        return 'Audit Log Chain Lock'
 
 
 class AuditLog(models.Model):
@@ -85,6 +115,8 @@ class AuditLog(models.Model):
         AGENT_PROFILE_UPDATED = 'AGENT_PROFILE_UPDATED', _('Agent Profile Updated')
         AGENT_PROFILE_DELETED = 'AGENT_PROFILE_DELETED', _('Agent Profile Deleted')
         SECURITY_CONFIG_CHANGED = 'SECURITY_CONFIG_CHANGED', _('Security Config Changed')
+        AUDIT_SIGNING_CONFIG_UPDATED = 'AUDIT_SIGNING_CONFIG_UPDATED', _('Audit Signing Configuration Updated')
+        AUDIT_CHECKPOINT_SIGNED = 'AUDIT_CHECKPOINT_SIGNED', _('Audit Checkpoint Signed')
         DEVICE_ADDED = 'DEVICE_ADDED', _('Device Added')
         DEVICE_DELETED = 'DEVICE_DELETED', _('Device Deleted')
         CA_CREATED = 'CA_CREATED', _('CA Created')
@@ -118,10 +150,13 @@ class AuditLog(models.Model):
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),
-        auto_now_add=True,
+        default=timezone.now,
         editable=False,
         db_index=True,
     )
+    sequence = models.PositiveBigIntegerField(unique=True, editable=False)
+    previous_hash = models.CharField(max_length=64, editable=False)
+    entry_hash = models.CharField(max_length=64, unique=True, editable=False)
     operation_type = models.CharField(
         verbose_name=_('Operation Type'),
         max_length=32,
@@ -132,7 +167,9 @@ class AuditLog(models.Model):
     target_content_type = models.ForeignKey(
         ContentType,
         verbose_name=_('Target Content Type'),
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         db_index=True,
     )
     target_object_id = models.CharField(
@@ -140,6 +177,7 @@ class AuditLog(models.Model):
         max_length=255,
         db_index=True,
     )
+    target_type = models.CharField(max_length=255, editable=False)
     target = GenericForeignKey('target_content_type', 'target_object_id')
 
     target_display = models.CharField(
@@ -160,6 +198,7 @@ class AuditLog(models.Model):
         related_name='audit_log_entries',
         help_text=_('The user who triggered the action. Null for system-triggered actions.'),
     )
+    actor_label = models.CharField(max_length=255, blank=True, default='', editable=False)
     details = models.JSONField(
         verbose_name=_('Details'),
         default=dict,
@@ -183,6 +222,96 @@ class AuditLog(models.Model):
     def __str__(self) -> str:
         """Return a human-readable summary of the audit log entry."""
         return f'[{self.timestamp}] {self.operation_type} - {self.target_display}'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Append new entries to the hash chain; leave updates detectable by verification."""
+        if not self._state.adding:
+            super().save(*args, **kwargs)
+            return
+        self.timestamp = self.timestamp or timezone.now()
+        self._prepare_chain_metadata()
+        self._append_to_chain()
+
+    def entry_payload(self) -> dict[str, Any]:
+        """Return the authoritative, hashable record of this audit event."""
+        timestamp = self.timestamp
+        if timezone.is_naive(timestamp):
+            timestamp = timezone.make_aware(timestamp, dt.UTC)
+        return {
+            'v': 1,
+            'sequence': self.sequence,
+            'previous_hash': _stored_text(self.previous_hash),
+            'timestamp': timestamp.astimezone(dt.UTC).isoformat(timespec='microseconds'),
+            'operation_type': _stored_text(self.operation_type),
+            'target_type': _stored_text(self.target_type),
+            'target_object_id': _stored_text(self.target_object_id),
+            'target_display': _stored_text(self.target_display),
+            'actor_label': _stored_text(self.actor_label),
+            'details': self.details or {},
+        }
+
+    def calculate_entry_hash(self) -> str:
+        """Return the SHA-256 hash of the canonical entry payload."""
+        return hashlib.sha256(canonical_json(self.entry_payload())).hexdigest()
+
+    def _prepare_chain_metadata(self) -> None:
+        """Capture immutable actor and target labels used by the hash."""
+        if not self.actor_label and self.actor_id is not None:
+            actor = self.actor
+            if actor is not None:
+                self.actor_label = actor.get_username()[:255]
+        if not self.target_type and self.target_content_type_id is not None:
+            content_type = self.target_content_type
+            if content_type is not None:
+                self.target_type = f'{content_type.app_label}.{content_type.model}'[:255]
+
+    def _append_to_chain(self) -> None:
+        """Serialize appends through a lock row, then insert after the current head."""
+        last_error: Exception | None = None
+        for attempt in range(MAX_CHAIN_WRITE_ATTEMPTS):
+            try:
+                with transaction.atomic():
+                    AuditLogChainLock.objects.select_for_update().get_or_create(pk=1)
+                    previous = type(self).objects.order_by('-sequence').only('sequence', 'entry_hash').first()
+                    self.sequence = previous.sequence + 1 if previous else 1
+                    self.previous_hash = previous.entry_hash if previous else GENESIS_HASH
+                    self.entry_hash = self.calculate_entry_hash()
+                    super().save(force_insert=True)
+            except IntegrityError as error:
+                last_error = error
+                self.pk = None
+                self._state.adding = True
+                time.sleep(random.uniform(0.005, 0.02) * (attempt + 1))  # noqa: S311 - retry jitter only
+            except OperationalError as error:
+                if connection.vendor != 'sqlite':
+                    raise
+                last_error = error
+                time.sleep(0.01 * (attempt + 1))
+            else:
+                self._schedule_checkpoint()
+                return
+        if last_error is not None:
+            raise last_error
+        message = 'Could not append the audit log entry.'
+        raise RuntimeError(message)
+
+    def _schedule_checkpoint(self) -> None:
+        """Schedule checkpoint evaluation after the surrounding transaction commits."""
+        try:
+            from management.services.audit_signing import (  # noqa: PLC0415 - avoids a model/service import cycle
+                checkpoint_signing_active,
+                maybe_sign_checkpoint,
+            )
+        except ImportError:  # pragma: no cover - permits isolated model imports before services load
+            return
+        if checkpoint_signing_active():
+            return
+        # shortcut: signing runs inline after commit; offload to Django-Q2 if signer latency matters.
+        transaction.on_commit(maybe_sign_checkpoint)
+
+    def delete(self, *_args: object, **_kwargs: object) -> tuple[int, dict[str, int]]:
+        """Prevent deletion so the hash chain and its history remain intact."""
+        raise ValidationError(_('Audit log entries cannot be deleted.'))
 
     @classmethod
     def create_entry(

@@ -1,0 +1,65 @@
+{% load i18n internationalization_tags %}
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">{% trans 'Signed at' %}</th>
+                <th scope="col">{% trans 'Coverage' %}</th>
+                <th scope="col">{% trans 'Events' %}</th>
+                <th scope="col">{% trans 'Credential / generation' %}</th>
+                <th scope="col">{% trans 'Algorithm' %}</th>
+                <th scope="col">{% trans 'Certificate' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for checkpoint in checkpoints %}
+                <tr>
+                    <td>{{ checkpoint.checkpoint_number }}</td>
+                    <td class="text-nowrap">{{ checkpoint.signed_at|local_datetime }}</td>
+                    <td>
+                        {% if checkpoint.last_sequence == 0 %}
+                            {% trans 'Genesis' %}
+                        {% else %}
+                            {{ checkpoint.first_sequence }}–{{ checkpoint.last_sequence }}
+                        {% endif %}
+                    </td>
+                    <td>{{ checkpoint.entry_count }}</td>
+                    <td>
+                        <a href="{% url 'management:traceability_credential_detail' checkpoint.traceability_credential_id %}">
+                            {{ checkpoint.traceability_credential.name }}
+                        </a>
+                        <div class="small text-muted">
+                            {% trans 'Generation' %} {{ checkpoint.traceability_generation.generation_number }}
+                        </div>
+                    </td>
+                    <td>{{ checkpoint.signature_algorithm }}</td>
+                    <td>
+                        {% with certificate=checkpoint.traceability_generation.credential.certificate %}
+                            {% if certificate %}
+                                <a href="{% url 'pki:certificate-detail' certificate.pk %}">
+                                    {% if certificate.common_name %}
+                                        {{ certificate.common_name }}
+                                    {% else %}
+                                        {{ checkpoint.certificate_fingerprint_sha256|truncatechars:24 }}
+                                    {% endif %}
+                                </a>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        {% endwith %}
+                        <div class="font-monospace small text-break" title="{{ checkpoint.certificate_fingerprint_sha256 }}">
+                            {{ checkpoint.certificate_fingerprint_sha256|truncatechars:24 }}
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        {% trans 'No signed checkpoints exist yet.' %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

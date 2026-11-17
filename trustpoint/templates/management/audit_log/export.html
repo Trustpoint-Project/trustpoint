@@ -1,45 +1,62 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
-{% block title %}{% trans 'Signed audit log export' %}{% endblock %}
+{% block title %}{% trans 'Audit evidence export' %}{% endblock %}
 
 {% block content %}
 <div class="card">
     <div class="card-header">
         <h1 class="mb-1">
-            {% trans 'Signed audit log export' %}
+            {% trans 'Audit evidence export' %}
         </h1>
         <p class="mb-0 text-muted">
-            {% trans 'Download a signed snapshot of the audit entries matching the current filters.' %}
+            {% trans 'Download audit events together with the signed checkpoints that anchor them.' %}
         </p>
     </div>
 
     <div class="card-body text-start">
-        <div class="tp-card-centered-content">
-            <form
-                id="audit-log-export-form"
-                method="post"
-                autocomplete="off"
-            >
-                {% csrf_token %}
+        <section>
+            <div class="mb-3">
+                <h2 class="h4 mb-1">{% trans 'Export scope' %}</h2>
+                <p class="mb-0 text-muted">
+                    {% trans 'The current audit log selection determines the contents and signature of the package.' %}
+                </p>
+            </div>
 
-                <section class="mb-5">
-                    <div class="mb-3">
-                        <h2 class="h4 mb-1">
-                            {% trans 'Export settings' %}
-                        </h2>
-                        <p class="mb-0 text-muted">
-                            {% trans 'Select a traceability credential to sign the snapshot. Exports are limited to 10,000 entries.' %}
-                        </p>
-                    </div>
+            <hr class="mb-4">
 
-                    <hr class="mb-4">
+            {% if scope == 'full' %}
+                <p class="mb-2">
+                    {% trans 'The package contains the complete audit chain through the latest signed checkpoint captured when downloading, together with its checkpoints and signing certificates. Newer events are left for a later export.' %}
+                </p>
+                <p class="text-muted mb-0">
+                    {% trans 'No additional snapshot signature is created; the checkpoint signatures protect the exported chain. If no signed checkpoint exists, all events are exported and offline verification fails until signing is configured.' %}
+                </p>
+            {% else %}
+                <p class="mb-2">
+                    {% trans 'The current selection is a filtered subset. The package contains the matching events, checkpoint context, and a snapshot signature made with the configured audit signing credential.' %}
+                </p>
+                <p class="text-muted mb-0">
+                    {% trans 'A filtered package can prove the integrity of the exported events, but cannot prove that no matching source events were omitted.' %}
+                </p>
+            {% endif %}
+        </section>
 
-                    {{ form|crispy }}
-                </section>
-            </form>
-
+        <div class="alert {% if scope == 'filtered' and not can_sign_filtered %}alert-warning{% elif scope == 'filtered' and not signing_available %}alert-warning{% else %}alert-info{% endif %} mt-4" role="alert">
+            <strong>{% trans 'Scope' %}:</strong>
+            {% if scope == 'full' %}{% trans 'Full chain' %}{% else %}{% trans 'Filtered subset' %}{% endif %}
+            <br>
+            {% if scope == 'filtered' %}
+                {% if not can_sign_filtered %}
+                    {% trans 'Filtered exports require permission to manage Traceability Credentials because they use the configured signing key.' %}
+                {% elif signing_available %}
+                    {% trans 'A snapshot signature will be created with the configured audit signing credential.' %}
+                {% else %}
+                    {% trans 'Filtered exports require a usable audit signing configuration. Configure audit signing before downloading this subset.' %}
+                {% endif %}
+            {% else %}
+                {% trans 'No signing credential selection is required for a full evidence package.' %}
+            {% endif %}
         </div>
     </div>
 
@@ -48,15 +65,20 @@
             href="{% url 'management:audit-log' %}?{{ request.GET.urlencode }}"
             class="btn btn-secondary"
         >
-            {% trans 'Cancel' %}
+            {% trans 'Back' %}
         </a>
-        <button
-            type="submit"
-            form="audit-log-export-form"
-            class="btn btn-primary"
-        >
-            {% trans 'Download signed export' %}
-        </button>
+        {% if scope == 'filtered' and not can_sign_filtered or scope == 'filtered' and not signing_available %}
+            <span class="btn btn-outline-secondary disabled" aria-disabled="true">
+                {% trans 'Download evidence package' %}
+            </span>
+        {% else %}
+            <a
+                href="{% url 'management:audit-log-export-download' %}?{{ request.GET.urlencode }}"
+                class="btn btn-outline-secondary"
+            >
+                {% trans 'Download evidence package' %}
+            </a>
+        {% endif %}
     </div>
 </div>
 {% endblock content %}

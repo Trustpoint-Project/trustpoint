@@ -216,6 +216,13 @@ urlpatterns = [
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
     path('audit-log/export/', audit_log.AuditLogExportView.as_view(), name='audit-log-export'),
+    path(
+        'audit-log/export/download/',
+        audit_log.AuditLogExportDownloadView.as_view(),
+        name='audit-log-export-download',
+    ),
+    path('audit-log/signing/', audit_log.AuditSigningConfigView.as_view(), name='audit-log-signing'),
+    path('audit-log/verify/', audit_log.AuditLogVerifyView.as_view(), name='audit-log-verify'),
     # Organization
     path('organization/', organization.OrganizationTableView.as_view(), name='organization'),
     path('organization/add/', organization.OrganizationCreateView.as_view(), name='add_organization'),

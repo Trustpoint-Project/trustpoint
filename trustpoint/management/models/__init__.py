@@ -5,7 +5,8 @@
 
 from management.models.account_security import AccountSecurityConfig
 from management.models.appversion import AppVersion
-from management.models.audit_log import AuditLog
+from management.models.audit_log import AuditLog, AuditLogChainLock
+from management.models.audit_signing import AuditLogCheckpoint, AuditSigningConfig
 from management.models.backup import BackupOptions
 from management.models.certificate_authentication import CertificateAuthenticationConfig
 from management.models.email import SmtpEmailConfig
@@ -33,6 +34,9 @@ __all__ = [
     'AccountSecurityConfig',
     'AppVersion',
     'AuditLog',
+    'AuditLogChainLock',
+    'AuditLogCheckpoint',
+    'AuditSigningConfig',
     'BackupOptions',
     'CertificateAuthenticationConfig',
     'LoggingConfig',

@@ -1,44 +1,40 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Signed audit snapshot and independent verification regression tests."""
+"""Checkpoint-anchored audit evidence export and offline verification tests."""
+
+from __future__ import annotations
 
 import copy
 import json
 import subprocess
 import sys
-from io import BytesIO
 from pathlib import Path
 from typing import Any
-from zipfile import ZipFile
 
 import pytest
-from cryptography import x509
-from jwt.api_jws import PyJWS
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db.models import QuerySet
 from django.test import Client
 from django.urls import reverse
 
-from management.models import AuditLog, LoggingConfig
+from management.models import AuditLog
+from management.models.audit_signing import AuditLogCheckpoint, AuditSigningConfig
 from management.models.traceability import TraceabilityCredentialModel
 from management.services import audit_log_export
+from management.services.audit_log_export import create_evidence_export
+from management.services.audit_signing import create_checkpoint
 from management.services.traceability_signing import TraceabilityCredentialService
-from util.audit_log_export import base64url_decode, base64url_encode, encode_json, load_json, verify_export
+from util.audit_log_export import EVIDENCE_FORMAT, _entry_hash, verify_evidence_package
 
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture(params=[TraceabilityCredentialModel.Curve.SECP256R1, TraceabilityCredentialModel.Curve.SECP384R1])
-def traceability_curve(request: pytest.FixtureRequest):
-    return request.param
-
-
 @pytest.fixture
 def credential(settings: Any, traceability_management_ca) -> TraceabilityCredentialModel:
-    """Create a software-backed signing identity and two audit events."""
     settings.DEVELOPMENT_ENV = True
     settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
     settings.TRUSTPOINT_IS_OPERATIONAL = True
@@ -48,268 +44,471 @@ def credential(settings: Any, traceability_management_ca) -> TraceabilityCredent
         management_ca=traceability_management_ca,
         name='audit-export',
     )
-    for operation in (AuditLog.OperationType.CREDENTIAL_ISSUED, AuditLog.OperationType.CREDENTIAL_REVOKED):
-        AuditLog.create_entry(operation, credential, 'Export target', details={'message': 'évidence'})
+    AuditLog.objects.all().delete()
     return credential
 
 
 @pytest.fixture
-def document(credential: TraceabilityCredentialModel) -> dict[str, Any]:
-    """Sign a snapshot of the seeded entries."""
-    return audit_log_export.create_signed_export(
-        AuditLog.objects.filter(target_display='Export target'), credential, {}
+def target():
+    return get_user_model().objects.create_user(username='export-target')
+
+
+def enable_signing(credential: TraceabilityCredentialModel, *, events: int = 100) -> None:
+    config = AuditSigningConfig.get()
+    config.enabled = True
+    config.traceability_credential = credential
+    config.checkpoint_event_interval = events
+    config.checkpoint_time_interval_minutes = None
+    config.full_clean()
+    config.save()
+
+
+def make_entry(target, operation: str = AuditLog.OperationType.CREDENTIAL_ISSUED):
+    return AuditLog.create_entry(
+        operation,
+        target,
+        'Export target',
+        details={'message': 'évidence'},
     )
 
 
-@pytest.fixture
 def trusted_certificate(credential: TraceabilityCredentialModel) -> bytes:
-    """Obtain the pinned certificate independently of the downloaded document."""
     assert credential.current_generation is not None
     return credential.current_generation.credential.get_certificate_serializer().as_pem()
 
 
-def test_export_verifies_offline_after_rotation_and_retirement(credential, document, tmp_path):
-    assert credential.current_generation is not None
-    trusted = credential.current_generation.credential.get_certificate_serializer().as_pem()
-    TraceabilityCredentialService.rotate(traceability_credential=credential)
-    TraceabilityCredentialService.retire(credential)
-    payload = verify_export(document, trusted)
-    assert payload['entry_count'] == 2
-    export_file, trusted_file = tmp_path / 'audit.json', tmp_path / 'trusted.pem'
+def full_export_with_checkpoint(credential, target) -> tuple[dict[str, Any], bytes]:
+    enable_signing(credential, events=100)
+    make_entry(target)
+    make_entry(target)
+    create_checkpoint()
+    return create_evidence_export(AuditLog.objects.all(), {}), trusted_certificate(credential)
+
+
+def test_full_export_has_no_snapshot_signature_and_verifies(credential, target):
+    document, trusted = full_export_with_checkpoint(credential, target)
+
+    assert document['format'] == EVIDENCE_FORMAT
+    assert document['snapshot_signature'] is None
+    assert document['evidence']['scope'] == 'full'
+    assert document['evidence']['complete_chain'] is True
+    assert document['evidence']['entry_count'] == 2
+    assert len(document['evidence']['checkpoints']) == 1
+    assert set(document['evidence']['checkpoints'][0]) == {'payload', 'signature'}
+    assert document['evidence']['checkpoints'][0]['payload']['checkpoint_number'] == 1
+    assert len(document['evidence']['certificates']) == 1
+
+    report = verify_evidence_package(document, [trusted])
+    assert report['ok']
+    assert report['entries_checked'] == 2
+    assert report['checkpoints_checked'] == 1
+    assert report['unsigned_entries'] == 0
+    assert not report['findings']
+
+
+@pytest.mark.parametrize('empty', [False, True])
+def test_full_export_stops_at_signed_checkpoint_after_commit(
+    credential, target, django_capture_on_commit_callbacks, *, empty: bool
+):
+    enable_signing(credential)
+    entry = None if empty else make_entry(target)
+    with django_capture_on_commit_callbacks(execute=True):
+        checkpoint = create_checkpoint()
+    assert checkpoint is not None
+    assert AuditLog.objects.filter(operation_type=AuditLog.OperationType.AUDIT_CHECKPOINT_SIGNED).exists()
+    make_entry(target)
+
+    document = create_evidence_export(AuditLog.objects.all(), {})
+
+    evidence = document['evidence']
+    assert [row['id'] for row in evidence['entries']] == ([] if entry is None else [entry.pk])
+    assert evidence['chain']['head_sequence'] == checkpoint.last_sequence
+    assert evidence['chain']['head_hash'] == checkpoint.head_hash
+    assert evidence['chain']['unsigned_entries'] == 0
+    report = verify_evidence_package(document, [trusted_certificate(credential)])
+    assert report['ok'], report['findings']
+
+
+@pytest.mark.parametrize('empty', [False, True])
+@pytest.mark.parametrize(
+    'field',
+    [
+        'entry_count',
+        'first_entry_id',
+        'last_entry_id',
+        'first_sequence',
+        'last_sequence',
+        'first_timestamp',
+        'last_timestamp',
+    ],
+)
+def test_full_export_rejects_incorrect_summary(
+    credential: TraceabilityCredentialModel, target: Any, *, empty: bool, field: str
+) -> None:
+    """Reject summary changes even when all event hashes and checkpoint signatures remain valid."""
+    enable_signing(credential)
+    if not empty:
+        make_entry(target)
+    create_checkpoint()
+    document = create_evidence_export(AuditLog.objects.all(), {})
+    trusted = trusted_certificate(credential)
+    assert verify_evidence_package(document, [trusted])['ok']
+    if field == 'entry_count':
+        document['evidence'][field] = 999
+    else:
+        document['evidence']['range'][field] = 'incorrect'
+
+    report = verify_evidence_package(document, [trusted])
+
+    assert not report['ok']
+    assert 'PACKAGE_MISMATCH' in {finding['code'] for finding in report['findings']}
+
+
+@pytest.mark.parametrize('scope', ['full', 'filtered'])
+@pytest.mark.parametrize('write_after', ['head', 'checkpoint'])
+def test_export_stays_consistent_when_events_arrive(
+    credential: TraceabilityCredentialModel,
+    target: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    scope: str,
+    write_after: str,
+) -> None:
+    """Keep one export boundary when writes arrive between its database reads."""
+    enable_signing(credential)
+    entry = make_entry(target)
+    create_checkpoint()
+    injected = False
+
+    def append_and_sign() -> None:
+        nonlocal injected
+        if not injected:
+            injected = True
+            make_entry(target)
+            create_checkpoint()
+
+    original_first = QuerySet.first
+    original_document = audit_log_export._checkpoint_document  # noqa: SLF001 - inject a write between export reads
+
+    def first(queryset: QuerySet[AuditLog]) -> AuditLog | None:
+        result = original_first(queryset)
+        if queryset.model is AuditLog:
+            append_and_sign()
+        return result
+
+    def checkpoint_document(checkpoint: Any) -> dict[str, Any]:
+        append_and_sign()
+        return original_document(checkpoint)
+
+    if write_after == 'head':
+        monkeypatch.setattr(QuerySet, 'first', first)
+    else:
+        monkeypatch.setattr(audit_log_export, '_checkpoint_document', checkpoint_document)
+    filters = {'target_object_id': str(target.pk)} if scope == 'filtered' else {}
+    document = create_evidence_export(AuditLog.objects.all(), filters)
+
+    assert injected
+    evidence = document['evidence']
+    assert evidence['chain']['head_sequence'] == entry.sequence
+    assert evidence['entry_count'] == 1
+    assert len(evidence['checkpoints']) == 1
+    report = verify_evidence_package(document, [trusted_certificate(credential)])
+    assert report['ok'], report['findings']
+
+
+@pytest.mark.parametrize('change', ['edit', 'remove', 'reorder', 'signature'])
+def test_full_export_tampering_is_detected(credential, target, change):
+    document, trusted = full_export_with_checkpoint(credential, target)
+    altered = copy.deepcopy(document)
+    if change == 'edit':
+        altered['evidence']['entries'][0]['details']['message'] = 'tampered'
+    elif change == 'remove':
+        altered['evidence']['entries'].pop()
+        altered['evidence']['chain']['head_sequence'] = altered['evidence']['entries'][-1]['sequence']
+        altered['evidence']['chain']['head_hash'] = altered['evidence']['entries'][-1]['entry_hash']
+    elif change == 'reorder':
+        altered['evidence']['entries'].reverse()
+    else:
+        altered['evidence']['checkpoints'][0]['signature'] = 'AAAA'
+
+    report = verify_evidence_package(altered, [trusted])
+    assert not report['ok']
+
+
+def test_untrusted_checkpoint_certificate_is_rejected(credential, target):
+    document, _trusted = full_export_with_checkpoint(credential, target)
+    new_generation = TraceabilityCredentialService.rotate(traceability_credential=credential)
+    report = verify_evidence_package(
+        document,
+        [new_generation.credential.get_certificate_serializer().as_pem()],
+    )
+    assert not report['ok']
+    assert 'UNTRUSTED_CERTIFICATE' in {finding['code'] for finding in report['findings']}
+
+
+def test_full_export_rejects_checkpoint_newer_than_truncated_head(credential, target):
+    enable_signing(credential)
+    make_entry(target)
+    second = make_entry(target)
+    create_checkpoint()
+    AuditLog.objects.filter(pk=second.pk).delete()
+
+    with pytest.raises(ValidationError, match='may be truncated'):
+        create_evidence_export(AuditLog.objects.all(), {})
+
+
+def test_full_export_without_signing_fails_verification(credential, target):
+    make_entry(target)
+    document = create_evidence_export(AuditLog.objects.all(), {})
+
+    assert document['snapshot_signature'] is None
+    report = verify_evidence_package(document)
+    assert not report['ok']
+    codes = {finding['code'] for finding in report['findings']}
+    assert codes == {'NO_SIGNED_CHECKPOINTS', 'UNSIGNED_EVENTS'}
+
+
+def test_full_export_rejects_fabricated_tail_after_checkpoint(credential, target):
+    """Events after the last signed checkpoint are unauthenticated and must fail verification."""
+    document, trusted = full_export_with_checkpoint(credential, target)
+    evidence = document['evidence']
+    last = evidence['entries'][-1]
+    forged = {
+        **last,
+        'id': last['id'] + 1,
+        'sequence': last['sequence'] + 1,
+        'previous_hash': last['entry_hash'],
+        'target_display': 'Forged event',
+    }
+    forged['entry_hash'] = _entry_hash(forged)
+    evidence['entries'].append(forged)
+    evidence['entry_count'] += 1
+    evidence['range']['last_entry_id'] = forged['id']
+    evidence['range']['last_sequence'] = forged['sequence']
+    evidence['chain']['head_sequence'] = forged['sequence']
+    evidence['chain']['head_hash'] = forged['entry_hash']
+    evidence['chain']['unsigned_entries'] += 1
+
+    report = verify_evidence_package(document, [trusted])
+    assert not report['ok']
+    assert 'UNSIGNED_EVENTS' in {finding['code'] for finding in report['findings']}
+
+
+def test_full_export_verifies_after_key_rotation(credential, target):
+    enable_signing(credential)
+    first_certificate = trusted_certificate(credential)
+    make_entry(target)
+    create_checkpoint()
+    new_generation = TraceabilityCredentialService.rotate(traceability_credential=credential)
+    second_certificate = new_generation.credential.get_certificate_serializer().as_pem()
+    make_entry(target)
+    create_checkpoint()
+
+    document = create_evidence_export(AuditLog.objects.all(), {})
+    assert len(document['evidence']['checkpoints']) == 2
+    assert len(document['evidence']['certificates']) == 2
+    report = verify_evidence_package(document, [first_certificate, second_certificate])
+    assert report['ok']
+    assert report['checkpoints_checked'] == 2
+
+    incomplete_trust = verify_evidence_package(document, [second_certificate])
+    assert not incomplete_trust['ok']
+    assert 'UNTRUSTED_CERTIFICATE' in {finding['code'] for finding in incomplete_trust['findings']}
+
+
+def test_filtered_export_is_snapshot_signed(credential, target):
+    enable_signing(credential)
+    make_entry(target)
+    other = get_user_model().objects.create_user(username='other-target')
+    AuditLog.create_entry(
+        AuditLog.OperationType.USER_CREATED,
+        other,
+        'Other target',
+        details={'message': 'other'},
+    )
+    create_checkpoint()
+    filters = {'operation_type': AuditLog.OperationType.CREDENTIAL_ISSUED}
+    document = create_evidence_export(
+        AuditLog.objects.filter(operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED),
+        filters,
+    )
+
+    assert document['evidence']['scope'] == 'filtered'
+    assert document['evidence']['complete_chain'] is False
+    assert document['snapshot_signature'] is not None
+    report = verify_evidence_package(document, [trusted_certificate(credential)])
+    assert report['ok']
+    assert report['complete_chain'] is False
+
+
+def test_filtered_export_lists_snapshot_signing_certificate_after_rotation(credential, target):
+    enable_signing(credential)
+    make_entry(target)
+    create_checkpoint()
+    first_certificate = trusted_certificate(credential)
+    new_generation = TraceabilityCredentialService.rotate(traceability_credential=credential)
+    second_certificate = new_generation.credential.get_certificate_serializer().as_pem()
+
+    document = create_evidence_export(AuditLog.objects.all(), {'target_object_id': str(target.pk)})
+
+    fingerprints = {certificate['fingerprint_sha256'] for certificate in document['evidence']['certificates']}
+    assert new_generation.credential.certificate_or_error.sha256_fingerprint.upper() in fingerprints
+    assert verify_evidence_package(document, [first_certificate, second_certificate])['ok']
+
+
+def test_filtered_export_requires_signing_configuration(credential, target):
+    make_entry(target)
+    with pytest.raises(ValidationError, match='require audit signing'):
+        create_evidence_export(AuditLog.objects.all(), {'operation_type': AuditLog.OperationType.CREDENTIAL_ISSUED})
+
+
+def test_filtered_snapshot_tampering_is_detected(credential, target):
+    enable_signing(credential)
+    make_entry(target)
+    make_entry(target)
+    create_checkpoint()
+    document = create_evidence_export(AuditLog.objects.all(), {'target_object_id': str(target.pk)})
+    altered = copy.deepcopy(document)
+    altered['evidence']['entries'][0]['target_display'] = 'tampered'
+
+    report = verify_evidence_package(altered, [trusted_certificate(credential)])
+    assert not report['ok']
+    codes = {finding['code'] for finding in report['findings']}
+    assert 'CHECKPOINT_PAYLOAD_MISMATCH' in codes or 'HASH_MISMATCH' in codes
+
+
+def test_filtered_snapshot_signature_tampering_is_detected(credential, target):
+    enable_signing(credential)
+    make_entry(target)
+    create_checkpoint()
+    document = create_evidence_export(
+        AuditLog.objects.all(), {'operation_type': AuditLog.OperationType.CREDENTIAL_ISSUED}
+    )
+    altered = copy.deepcopy(document)
+    altered['snapshot_signature']['signature'] = 'AAAA'
+
+    report = verify_evidence_package(altered, [trusted_certificate(credential)])
+    assert not report['ok']
+    assert 'INVALID_SNAPSHOT_SIGNATURE' in {finding['code'] for finding in report['findings']}
+
+
+def test_export_limit_is_enforced(credential, target, monkeypatch):
+    make_entry(target)
+    make_entry(target)
+    monkeypatch.setattr(audit_log_export, 'MAX_EXPORT_ENTRIES', 1)
+    with pytest.raises(ValidationError, match='Narrow the audit log filters'):
+        create_evidence_export(AuditLog.objects.all(), {})
+
+
+def test_checkpoint_limit_bounds_loaded_history(
+    credential: TraceabilityCredentialModel, target: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Stop loading historical checkpoint objects as soon as the export exceeds its limit."""
+    enable_signing(credential)
+    create_checkpoint()
+    for _ in range(2):
+        make_entry(target)
+        create_checkpoint()
+    monkeypatch.setattr(audit_log_export, 'MAX_EXPORT_CHECKPOINTS', 1)
+
+    loaded = []
+    original_from_db = AuditLogCheckpoint.from_db
+
+    def from_db(
+        _cls: type[AuditLogCheckpoint], db: str, field_names: list[str], values: list[Any], **kwargs: Any
+    ) -> AuditLogCheckpoint:
+        entry = original_from_db(db, field_names, values, **kwargs)
+        loaded.append(entry)
+        return entry
+
+    monkeypatch.setattr(AuditLogCheckpoint, 'from_db', classmethod(from_db))
+    with pytest.raises(ValidationError, match='limited to 1 checkpoints'):
+        create_evidence_export(AuditLog.objects.all(), {})
+
+    assert len(loaded) == audit_log_export.MAX_EXPORT_CHECKPOINTS + 1
+
+
+def test_export_view_requires_only_audit_view_permission(target):
+    make_entry(target)
+    user = get_user_model().objects.create_user(username='audit-reader')
+    user.user_permissions.add(Permission.objects.get(codename='view_audit_log'))
+    client = Client()
+    client.force_login(user)
+    page = client.get(reverse('management:audit-log-export'))
+    assert page.status_code == 200
+    assert b'Export scope' in page.content
+    response = client.get(reverse('management:audit-log-export-download'))
+    assert response.status_code == 200
+    assert response['Content-Type'] == 'application/json'
+    assert response['Content-Disposition'] == 'attachment; filename="trustpoint-audit-evidence.json"'
+    assert response['Cache-Control'] == 'no-store'
+    document = response.json()
+    assert document['format'] == EVIDENCE_FORMAT
+    assert document['evidence']['scope'] == 'full'
+
+
+def test_filtered_view_requires_traceability_permission(credential, target):
+    make_entry(target)
+    user = get_user_model().objects.create_user(username='filtered-reader')
+    user.user_permissions.add(Permission.objects.get(codename='view_audit_log'))
+    client = Client()
+    client.force_login(user)
+    response = client.get(reverse('management:audit-log-export-download') + '?operation_type=CREDENTIAL_ISSUED')
+    assert response.status_code == 403
+
+
+def test_filtered_view_rejects_unavailable_signing(credential, target):
+    make_entry(target)
+    user = get_user_model().objects.create_user(username='filtered-signer')
+    user.user_permissions.add(Permission.objects.get(codename='view_audit_log'))
+    user.user_permissions.add(Permission.objects.get(codename='manage_traceability_credentials'))
+    client = Client()
+    client.force_login(user)
+    response = client.get(
+        reverse('management:audit-log-export-download') + '?operation_type=CREDENTIAL_ISSUED',
+        follow=True,
+    )
+    assert response.status_code == 200
+    assert 'Filtered evidence exports require' in response.content.decode()
+
+
+def test_offline_verifier_command(credential, target, tmp_path):
+    document, trusted = full_export_with_checkpoint(credential, target)
+    export_file = tmp_path / 'evidence.json'
+    trusted_file = tmp_path / 'trusted.pem'
     export_file.write_text(json.dumps(document))
     trusted_file.write_bytes(trusted)
     verifier = Path(__file__).parents[2] / 'util' / 'audit_log_export.py'
     result = subprocess.run(
-        [sys.executable, '-I', str(verifier), str(export_file), '--trusted-certificate', str(trusted_file)],
+        [
+            sys.executable,
+            '-I',
+            str(verifier),
+            str(export_file),
+            '--trusted-certificate',
+            str(trusted_file),
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert 'Verified 2 entries' in result.stdout
-    altered_payload = load_json(base64url_decode(document['payload']))
-    altered_payload['entries'].reverse()
-    document['payload'] = base64url_encode(encode_json(altered_payload))
-    export_file.write_text(json.dumps(document))
+    assert 'Verified 2 entries and 1 checkpoints' in result.stdout
+
+    altered = copy.deepcopy(document)
+    altered['evidence']['entries'][0]['target_display'] = 'tampered'
+    export_file.write_text(json.dumps(altered))
     failed = subprocess.run(
-        [sys.executable, '-I', str(verifier), str(export_file), '--trusted-certificate', str(trusted_file)],
+        [
+            sys.executable,
+            '-I',
+            str(verifier),
+            str(export_file),
+            '--trusted-certificate',
+            str(trusted_file),
+        ],
         capture_output=True,
         text=True,
         check=False,
     )
     assert failed.returncode == 1
-    assert 'Verification failed' in failed.stderr
-
-
-@pytest.mark.parametrize('change', ['edit', 'remove', 'reorder', 'context', 'range', 'signer'])
-def test_tampering_invalidates_export(document, trusted_certificate, change):
-    altered = copy.deepcopy(document)
-    payload = load_json(base64url_decode(altered['payload']))
-    if change == 'edit':
-        payload['entries'][0]['details']['message'] = 'tampered'
-    elif change == 'remove':
-        payload['entries'].pop()
-        payload['entry_count'] -= 1
-    elif change == 'reorder':
-        payload['entries'].reverse()
-    elif change == 'context':
-        payload['context'] = 'other-context'
-    elif change == 'range':
-        payload['filters'] = {'operation_type': 'OTHER'}
-    else:
-        payload['signer']['generation_number'] += 1
-    altered['payload'] = base64url_encode(encode_json(payload))
-    with pytest.raises(ValueError, match='Invalid audit export'):
-        verify_export(altered, trusted_certificate)
-
-
-def test_embedded_certificate_does_not_establish_trust(credential, document):
-    new_generation = TraceabilityCredentialService.rotate(traceability_credential=credential)
-    with pytest.raises(ValueError, match='untrusted signing certificate'):
-        verify_export(document, new_generation.credential.get_certificate_serializer().as_pem())
-
-
-def test_export_interoperates_with_pyjwt(credential, document, trusted_certificate):
-    """An independent JOSE library verifies the export and produces exports we can verify."""
-    certificate = x509.load_pem_x509_certificate(trusted_certificate)
-    header = load_json(base64url_decode(document['protected']))
-    algorithm = header['alg']
-    assert algorithm in {'ES256', 'ES384'}
-    expected_size = 64 if algorithm == 'ES256' else 96
-    assert len(base64url_decode(document['signature'])) == expected_size
-    compact = '.'.join(document[name] for name in ('protected', 'payload', 'signature'))
-    verified = PyJWS().decode(compact, key=certificate.public_key(), algorithms=[algorithm])
-    assert load_json(verified) == verify_export(document, trusted_certificate)
-
-    assert credential.current_generation is not None
-    independent = PyJWS().encode(
-        verified,
-        key=credential.current_generation.credential.get_private_key(),
-        algorithm=algorithm,
-        headers={**header, 'typ': None},
-        sort_headers=False,
-    )
-    protected, payload, signature = independent.split('.')
-    assert verify_export(
-        {'protected': protected, 'payload': payload, 'signature': signature},
-        trusted_certificate,
-    ) == load_json(verified)
-
-
-@pytest.mark.parametrize('change', ['alg', 'crit', 'b64', 'padding', 'length', 'unprotected'])
-def test_invalid_jws_parameters_are_rejected(credential, document, trusted_certificate, change):
-    altered = copy.deepcopy(document)
-    header = load_json(base64url_decode(altered['protected']))
-    signing_algorithm = header['alg']
-    if change == 'alg':
-        header['alg'] = 'none'
-    elif change == 'crit':
-        header.update(crit=['unknown'], unknown=True)
-    elif change == 'b64':
-        header.update(b64=False, crit=['b64'])
-    elif change == 'padding':
-        altered['payload'] += '='
-    elif change == 'length':
-        altered['signature'] = base64url_encode(base64url_decode(altered['signature'])[:-1])
-    else:
-        altered['header'] = {'alg': 'none'}
-    if change in {'alg', 'crit', 'b64'}:
-        altered['protected'] = base64url_encode(encode_json(header))
-        assert credential.current_generation is not None
-        # Keep the EC signature valid so this test checks header policy rather than tampering.
-        signature = (
-            PyJWS()
-            .get_algorithm_by_name(signing_algorithm)
-            .sign(
-                f'{altered["protected"]}.{altered["payload"]}'.encode('ascii'),
-                credential.current_generation.credential.get_private_key(),
-            )
-        )
-        altered['signature'] = base64url_encode(signature)
-    with pytest.raises(ValueError, match='Invalid audit export'):
-        verify_export(altered, trusted_certificate)
-
-
-@pytest.mark.parametrize('value', ['Zg=', 'Zg\n', 'Zg+', 'Zg/', 'Z', 'Zh'])
-def test_base64url_rejects_invalid_encodings(value):
-    with pytest.raises(ValueError):
-        base64url_decode(value)
-
-
-@pytest.mark.parametrize(
-    'value',
-    [
-        '{"alg":"ES256","alg":"ES384"}',
-        '{"value":NaN}',
-        '{"value":Infinity}',
-        '{"alg":"ES256"}'.encode('utf-16'),
-    ],
-)
-def test_json_rejects_duplicate_members_and_non_json_numbers(value):
-    with pytest.raises(ValueError):
-        load_json(value)
-
-
-def test_snapshot_excludes_its_own_crypto_audit_events(credential):
-    LoggingConfig.objects.create(crypto_backend_audit_enabled=True)
-    before = list(AuditLog.objects.order_by('timestamp', 'pk').values_list('pk', flat=True))
-    document = audit_log_export.create_signed_export(AuditLog.objects.all(), credential, {})
-    assert [entry['id'] for entry in load_json(base64url_decode(document['payload']))['entries']] == before
-    assert AuditLog.objects.filter(operation_type=AuditLog.OperationType.CRYPTO_SIGN).exists()
-    assert AuditLog.objects.count() > len(before)
-
-
-def test_empty_snapshot_is_verifiable(credential, trusted_certificate):
-    document = audit_log_export.create_signed_export(AuditLog.objects.none(), credential, {})
-    assert verify_export(document, trusted_certificate)['entry_count'] == 0
-
-
-def test_export_limit_and_retired_credential_reject_download(credential, monkeypatch):
-    monkeypatch.setattr(audit_log_export, 'MAX_EXPORT_ENTRIES', 1)
-    with pytest.raises(ValidationError, match='Narrow the audit log filters'):
-        audit_log_export.create_signed_export(AuditLog.objects.all(), credential, {})
-    TraceabilityCredentialService.retire(credential)
-    with pytest.raises(ValidationError, match='not currently usable'):
-        audit_log_export.create_signed_export(AuditLog.objects.none(), credential, {})
-
-
-def test_export_view_preserves_filters_and_checks_permissions(credential, trusted_certificate):
-    user = get_user_model().objects.create_user(username='audit-reader')
-    user.user_permissions.add(Permission.objects.get(codename='view_audit_log'))
-    client = Client()
-    client.force_login(user)
-    url = reverse('management:audit-log-export') + '?operation_type=CREDENTIAL_ISSUED&page=4'
-    assert client.post(url, {'credential': credential.pk}).status_code == 403
-    user.user_permissions.add(Permission.objects.get(codename='manage_traceability_credentials'))
-    response = client.post(url, {'credential': credential.pk})
-    assert response.status_code == 200
-    document = response.json()
-    payload = verify_export(document, trusted_certificate)
-    assert payload['entry_count'] == 1
-    assert payload['filters'] == {'operation_type': 'CREDENTIAL_ISSUED'}
-    assert response['Content-Type'] == 'application/jose+json'
-    assert response['Cache-Control'] == 'no-store'
-    bad = client.post(
-        reverse('management:audit-log-export') + '?timestamp_after=invalid', {'credential': credential.pk}
-    )
-    assert bad.status_code == 200
-    assert 'Invalid audit log filters' in bad.content.decode()
-
-
-def test_signing_failure_does_not_download_unsigned_data(credential, monkeypatch):
-    user = get_user_model().objects.create_superuser(username='export-admin', password='test-password')
-    client = Client()
-    client.force_login(user)
-
-    def fail_signing(**kwargs):
-        raise RuntimeError('backend signing unavailable')
-
-    monkeypatch.setattr(TraceabilityCredentialService, 'sign', fail_signing)
-    response = client.post(reverse('management:audit-log-export'), {'credential': credential.pk})
-    assert response.status_code == 200
-    assert 'Content-Disposition' not in response
-    assert 'Could not sign the export' in response.content.decode()
-    assert 'backend signing unavailable' not in response.content.decode()
-
-
-@pytest.mark.parametrize('include_certificate', [False, True])
-def test_download_and_exact_signing_certificate(credential, trusted_certificate, monkeypatch, include_certificate):
-    user = get_user_model().objects.create_superuser(username='format-admin', password='test-password')
-    client = Client()
-    client.force_login(user)
-    url = reverse('management:audit-log-export')
-    page = client.get(url)
-    assert page.status_code == 200
-    assert 'name="format"' not in page.content.decode()
-    assert 'name="include_certificate"' in page.content.decode()
-
-    def sign_then_rotate(*args):
-        document = audit_log_export.create_signed_export(*args)
-        TraceabilityCredentialService.rotate(traceability_credential=credential)
-        return document
-
-    monkeypatch.setattr('management.views.audit_log.create_signed_export', sign_then_rotate)
-    response = client.post(
-        url,
-        {
-            'credential': credential.pk,
-            'include_certificate': include_certificate,
-        },
-    )
-    assert response.status_code == 200
-    assert response['Cache-Control'] == 'no-store'
-    filename = 'trustpoint-audit-log.json'
-    if include_certificate:
-        assert response['Content-Type'] == 'application/zip'
-        assert response['Content-Disposition'] == 'attachment; filename="trustpoint-audit-log.zip"'
-        with ZipFile(BytesIO(response.content)) as archive:
-            assert set(archive.namelist()) == {filename, 'signing-certificate.pem'}
-            assert archive.read('signing-certificate.pem') == trusted_certificate
-            content = archive.read(filename)
-    else:
-        assert response['Content-Type'] == 'application/jose+json'
-        assert response['Content-Disposition'] == f'attachment; filename="{filename}"'
-        content = response.content
-    document = load_json(content)
-    assert set(document) == {'payload', 'protected', 'signature'}
-    assert verify_export(document, trusted_certificate)['entry_count'] >= 2
+    assert 'HASH_MISMATCH' in failed.stdout
