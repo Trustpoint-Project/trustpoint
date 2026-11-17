@@ -9,6 +9,7 @@ from base64 import b64decode
 from typing import Any
 
 import pytest
+from asn1crypto import cms
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.contrib.auth import get_user_model
@@ -771,6 +772,12 @@ def test_crl_download_view_pkcs7_pem(issuing_ca_instance: dict[str, Any], authen
     assert response['Content-Type'] == 'application/x-pem-file'
     assert 'attachment' in response['Content-Disposition']
     assert '.p7c' in response['Content-Disposition']
+    body = ''.join(
+        line for line in response.content.decode('ascii').splitlines() if not line.startswith('-----')
+    )
+    content = cms.ContentInfo.load(b64decode(body))
+    assert content['content_type'].native == 'signed_data'
+    assert len(content['content']['crls']) == 1
 
 
 def test_crl_download_view_pkcs7_der(issuing_ca_instance: dict[str, Any], authenticated_client: Client) -> None:
@@ -786,6 +793,9 @@ def test_crl_download_view_pkcs7_der(issuing_ca_instance: dict[str, Any], authen
     assert response['Content-Type'] == 'application/pkcs7-mime'
     assert 'attachment' in response['Content-Disposition']
     assert '.p7c.der' in response['Content-Disposition']
+    content = cms.ContentInfo.load(response.content)
+    assert content['content_type'].native == 'signed_data'
+    assert len(content['content']['crls']) == 1
 
 
 def test_crl_download_view_invalid_format(issuing_ca_instance: dict[str, Any], authenticated_client: Client) -> None:

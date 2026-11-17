@@ -86,6 +86,23 @@ def test_authorized_browser_grant_allows_remote_private_key_download(
     assert certificate == credential.credential.certificate.get_certificate_serializer().as_crypto()
 
 
+def test_refreshing_otp_page_does_not_replace_a_live_otp(
+    download_client: Client,
+    tls_client_credential_instance: dict[str, Any],
+) -> None:
+    """A page refresh must keep the OTP that was already given to the device."""
+    credential = tls_client_credential_instance['issued_credential']
+    url = reverse('devices:devices_browser_otp_view', args=[credential.pk])
+    assert download_client.get(url).status_code == 200
+    first = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+
+    assert download_client.get(url).status_code == 200
+    second = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+
+    assert second.pk == first.pk
+    assert second.otp == first.otp
+
+
 def test_authorized_browser_grant_cancellation_invalidates_download(
     download_client: Client,
     remote_device_credential_download_instance: dict[str, Any],

@@ -8,11 +8,13 @@ from typing import Any
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import ContextDataMixin
 from users.permissions import AppPermissions
 
@@ -76,23 +78,27 @@ class DeviceListView(DiscoveryContextMixin, View):
 
         all_ports = DiscoveryPort.objects.all().order_by('port_number')
 
-        stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
-
         ot_ports = list(
             DiscoveryPort.objects.filter(
                 Q(description__icontains='OPC') | Q(description__icontains='MQTT')
             ).values_list('port_number', flat=True)
         )
+        risks = 0
+        industrial = 0
+        for ssl_info, open_ports in all_devs.values_list('ssl_info', 'open_ports'):
+            if ssl_info and ssl_info.get('is_self_signed'):
+                risks += 1
+            if any(port_number in ot_ports for port_number in open_ports):
+                industrial += 1
+        stats = {'total': all_devs.count(), 'risks': risks, 'industrial': industrial}
 
-        for d in all_devs:
-            if d.ssl_info and d.ssl_info.get('is_self_signed'):
-                stats['risks'] += 1
-            if any(p in ot_ports for p in d.open_ports):
-                stats['industrial'] += 1
-
+        paginator = Paginator(all_devs, UIConfig.paginate_by)
+        page_obj = paginator.get_page(request.GET.get('page'))
         state = ScanManager.get_state()
         context = self.get_context_data(
-            devices=all_devs,
+            devices=page_obj.object_list,
+            page_obj=page_obj,
+            is_paginated=page_obj.has_other_pages(),
             scan_ports=all_ports,
             scan_running=state['scan_running'],
             stop_pending=state['stop_pending'],

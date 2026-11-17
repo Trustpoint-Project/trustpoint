@@ -73,14 +73,16 @@ class AbstractBrowserOnboardingOTPView(
             raise Http404
         context = super().get_context_data(**kwargs)
 
-        try:
-            cdm = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential, device=device)
+        cdm = RemoteDeviceCredentialDownloadModel.objects.filter(
+            issued_credential_model=credential, device=device
+        ).first()
+        # A page refresh must not invalidate an OTP that was already handed to the device.
+        if cdm is not None and (not cdm.otp or cdm.otp == '-'):
             cdm.delete()
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
-            pass
-
-        cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
-        cdm.save()
+            cdm = None
+        if cdm is None:
+            cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
+            cdm.save()
 
         context.update(
             {

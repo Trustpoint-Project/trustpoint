@@ -35,6 +35,9 @@ temp.txt
 # Runtime credentials, uploads, backups, and generated TLS files.
 trustpoint/media/
 trustpoint/collected_static/
+# Test code is not part of the deployed application.
+trustpoint/**/tests/
+trustpoint/features/
 docker/trustpoint/nginx/tls/
 trustpoint/request/gds_push/asyncua-gds-push-test/state/
 ca_workspace/

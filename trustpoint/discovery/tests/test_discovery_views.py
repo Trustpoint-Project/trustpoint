@@ -67,6 +67,8 @@ class TestDiscoveryViews:
         assert response.context['end_ip'] == '192.168.1.254'
         assert response.context['page_category'] == 'tools'
         assert response.context['page_name'] == 'discovery'
+        assert response.context['page_obj'].paginator.count == 2
+        assert b'192.168.1.70' in response.content
 
     def test_start_scan_enqueues_background_job(self, authenticated_client) -> None:
         """The web process reserves a shared scan and queues work without starting a thread."""
@@ -96,6 +98,17 @@ class TestDiscoveryViews:
         """Invalid addresses and reversed ranges fail before reserving a scan."""
         with patch('discovery.services.async_task') as enqueue:
             response = authenticated_client.post(reverse('discovery:start_scan'), {'start_ip': start, 'end_ip': end})
+        assert response.status_code == 302
+        assert not DiscoveryScan.objects.filter(is_running=True).exists()
+        enqueue.assert_not_called()
+
+    def test_oversized_scan_range_is_not_queued(self, authenticated_client) -> None:
+        """A range larger than the cap is rejected before any address list is built."""
+        with patch('discovery.services.async_task') as enqueue:
+            response = authenticated_client.post(
+                reverse('discovery:start_scan'),
+                {'start_ip': '10.0.0.0', 'end_ip': '10.255.255.255'},
+            )
         assert response.status_code == 302
         assert not DiscoveryScan.objects.filter(is_running=True).exists()
         enqueue.assert_not_called()

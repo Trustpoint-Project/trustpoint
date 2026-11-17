@@ -526,7 +526,6 @@ MIDDLEWARE = [
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
-    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
@@ -595,11 +594,17 @@ AUTHENTICATION_BACKENDS = [
 
 # Only these direct peers may assert TLS client identity. They must overwrite the
 # SSL-Client-Cert, X-SSL-Client-Verify, and X-Forwarded-Proto request headers.
-CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = tuple(
+# Addresses may be single IPs or CIDR networks.
+TRUSTPOINT_TRUSTED_PROXY_IPS = tuple(
     address.strip()
-    for address in os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1').split(',')
+    for address in os.getenv(
+        'TRUSTPOINT_TRUSTED_PROXY_IPS',
+        os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1'),
+    ).split(',')
     if address.strip()
 )
+# Kept as an alias for existing deployments that used the older name.
+CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = TRUSTPOINT_TRUSTED_PROXY_IPS
 
 
 def _bootstrap_database_path() -> Path:

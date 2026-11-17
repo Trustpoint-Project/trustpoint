@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -44,51 +45,35 @@ def perform_gds_push_update(device_id: int) -> None:
         not hasattr(device, 'opc_ua_gds_push_config')
         or not device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
     ):
-        logger.info(
-            'Periodic GDS Push update disabled for device %s, skipping execution', device.common_name
-        )
+        logger.info('Periodic GDS Push update disabled for device %s, skipping execution', device.common_name)
         return
 
     service = GdsPushService(device=device)
 
     # Update trustlist
     try:
-        with transaction.atomic():
-            success, message = asyncio.run(service.update_trustlist())
-            if success:
-                logger.info(
-                    'Trustlist updated successfully for device %s: %s', device.common_name, message
-                )
-            else:
-                logger.warning(
-                    'Trustlist update failed for device %s: %s', device.common_name, message
-                )
+        success, message = asyncio.run(service.update_trustlist())
+        if success:
+            logger.info('Trustlist updated successfully for device %s: %s', device.common_name, message)
+        else:
+            logger.warning('Trustlist update failed for device %s: %s', device.common_name, message)
     except GdsPushError:
         logger.exception('GDS Push error during trustlist update for device %s', device.common_name)
     except Exception:
-        logger.exception(
-            'Unexpected error during trustlist update for device %s', device.common_name
-        )
+        logger.exception('Unexpected error during trustlist update for device %s', device.common_name)
         raise
 
     # Update server certificate
     try:
-        with transaction.atomic():
-            success, message, _certificate_bytes = asyncio.run(service.update_server_certificate())
-            if success:
-                logger.info(
-                    'Server certificate updated successfully for device %s: %s', device.common_name, message
-                )
-            else:
-                logger.warning(
-                    'Server certificate update failed for device %s: %s', device.common_name, message
-                )
+        success, message, _certificate_bytes = asyncio.run(service.update_server_certificate())
+        if success:
+            logger.info('Server certificate updated successfully for device %s: %s', device.common_name, message)
+        else:
+            logger.warning('Server certificate update failed for device %s: %s', device.common_name, message)
     except GdsPushError:
         logger.exception('GDS Push error during server certificate update for device %s', device.common_name)
     except Exception:
-        logger.exception(
-            'Unexpected error during server certificate update for device %s', device.common_name
-        )
+        logger.exception('Unexpected error during server certificate update for device %s', device.common_name)
         raise
 
     # Schedule the next run
@@ -109,13 +94,21 @@ def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
             or not device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
         ):
             return
-        next_run = device.opc_ua_gds_push_config.opc_gds_push_domain_credential_next_renewal_at
+        config = device.opc_ua_gds_push_config
+        next_run = config.opc_gds_push_domain_credential_next_renewal_at
         if next_run is not None and next_run > timezone.now():
             # A queued task may belong to settings that have since been replaced.
             return
-        try:
+        # Reserve this cycle before releasing the row lock so two workers cannot renew twice.
+        config.opc_gds_push_domain_credential_next_renewal_at = timezone.now() + timedelta(
+            hours=config.opc_gds_push_domain_credential_renewal_interval
+        )
+        config.save(update_fields=['opc_gds_push_domain_credential_next_renewal_at'])
+
+    try:
+        with transaction.atomic():
             replacement = renew_gds_push_domain_credential(device)
-            logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
-        except Exception:
-            logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
-        device.opc_ua_gds_push_config.schedule_next_gds_push_domain_credential_renewal()
+        logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
+    except Exception:
+        logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
+    config.schedule_next_gds_push_domain_credential_renewal()

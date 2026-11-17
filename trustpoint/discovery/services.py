@@ -16,6 +16,7 @@ from django_q.tasks import async_task
 from discovery.models import DiscoveryScan
 
 SCAN_TIMEOUT_SECONDS = Conf.TIMEOUT if Conf.TIMEOUT and Conf.TIMEOUT > 0 else 120
+MAX_SCAN_HOSTS = 4096
 
 
 class ScanManager:
@@ -38,6 +39,9 @@ class ScanManager:
         start, end = IPv4Address(start_ip), IPv4Address(end_ip)
         if start > end:
             msg = 'The end address must not precede the start address.'
+            raise ValueError(msg)
+        if int(end) - int(start) + 1 > MAX_SCAN_HOSTS:
+            msg = f'A scan may cover at most {MAX_SCAN_HOSTS} addresses. Narrow the range.'
             raise ValueError(msg)
         cls._expire_crashed_scan()
         DiscoveryScan.objects.get_or_create(pk=1)

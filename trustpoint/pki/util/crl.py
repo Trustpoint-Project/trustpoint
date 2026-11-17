@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 from typing import TYPE_CHECKING, get_args
 
+from asn1crypto import cms
+from asn1crypto import crl as asn1_crl
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.utils import timezone
@@ -85,6 +88,30 @@ def generate_empty_crl(
 
     crl = crl_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)
     return crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
+
+
+def crl_to_pkcs7_der(crl: CertificateRevocationList) -> bytes:
+    """Wrap a signed CRL in a degenerate PKCS#7 SignedData container."""
+    signed_data = cms.SignedData(
+        {
+            'version': 'v1',
+            'digest_algorithms': [],
+            'encap_content_info': {'content_type': 'data'},
+            'crls': [
+                cms.RevocationInfoChoice(
+                    {'crl': asn1_crl.CertificateList.load(crl.public_bytes(serialization.Encoding.DER))}
+                )
+            ],
+            'signer_infos': [],
+        }
+    )
+    return bytes(cms.ContentInfo({'content_type': 'signed_data', 'content': signed_data}).dump())
+
+
+def crl_to_pkcs7_pem(crl: CertificateRevocationList) -> bytes:
+    """Return the PKCS#7 wrapper in PEM form."""
+    body = base64.encodebytes(crl_to_pkcs7_der(crl)).decode('ascii')
+    return f'-----BEGIN PKCS7-----\n{body}-----END PKCS7-----\n'.encode('ascii')
 
 
 def generate_crl_with_revoked_certs(

@@ -22,6 +22,7 @@ from django.views.generic.edit import FormView
 
 from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
+from pki.util.crl import crl_to_pkcs7_der, crl_to_pkcs7_pem
 from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
@@ -218,25 +219,15 @@ class CrlDownloadView(CrlContextMixin, CrlObjectMixin):
                 )
                 return HttpResponseRedirect(self.success_url)
         elif file_format in ['pkcs7_pem', 'pkcs7_der']:
+            crypto_crl = crl_model.get_crl_as_crypto()
             if file_format == 'pkcs7_pem':
-                file_bytes = crl_model.crl_pem.encode()
+                file_bytes = crl_to_pkcs7_pem(crypto_crl)
                 mime_type = 'application/x-pem-file'
                 file_extension = '.p7c'
             else:
-                pem_lines = [
-                    line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')
-                ]
-                b64data = ''.join(pem_lines)
-                try:
-                    file_bytes = binascii.a2b_base64(b64data)
-                    mime_type = 'application/pkcs7-mime'
-                    file_extension = '.p7c.der'
-                except (binascii.Error, ValueError) as exc:
-                    messages.error(
-                        request,
-                        _('Failed to convert CRL to PKCS#7 DER: %s') % str(exc),
-                    )
-                    return HttpResponseRedirect(self.success_url)
+                file_bytes = crl_to_pkcs7_der(crypto_crl)
+                mime_type = 'application/pkcs7-mime'
+                file_extension = '.p7c.der'
         else:
             raise Http404
 

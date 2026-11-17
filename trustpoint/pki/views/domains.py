@@ -493,14 +493,15 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
 
 
 class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
-    """View to list certificates issued by a specific Issuing CA for a Domain."""
+    """View to list certificates issued to devices in a specific domain."""
 
     model = CertificateModel
     template_name = 'pki/domains/issued_certificates.html'
     context_object_name = 'issued_certificates'
+    paginate_by = UIConfig.paginate_by
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
-        """Return only certificates associated with the domain's issued credentials."""
+        """Return only the primary certificates of this domain's issued credentials."""
         domain: DomainModel = self.get_domain()
         if domain.issuing_ca is None:
             msg = 'Domain has no issuing CA configured.'
@@ -508,9 +509,11 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         if domain.issuing_ca.credential is None:
             msg = 'Issuing CA has no credential configured.'
             raise Http404(msg)
-        # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
-        return CertificateModel.objects.filter(
-            issuer_public_bytes=domain.issuing_ca.credential.certificate_or_error.subject_public_bytes
+        return (
+            CertificateModel.objects.select_related('revoked_certificate')
+            .filter(credential_set__issued_credential__device__domain=domain)
+            .distinct()
+            .order_by('common_name')
         )
 
     def get_domain(self) -> DomainModel:

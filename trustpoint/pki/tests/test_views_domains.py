@@ -17,10 +17,15 @@ from management.models.organization import OrganizationModel
 from pki.models import (
     DomainModel,
     CaModel,
+    CertificateModel,
+    CredentialModel,
     DevIdRegistration,
+    IssuedCredentialModel,
     TruststoreModel,
     CertificateProfileModel,
 )
+from devices.models import DeviceModel
+from pki.util.x509 import CertificateGenerator
 from pki.views.domains import (
     DomainTableView,
     DomainCreateView,
@@ -780,6 +785,51 @@ class TestIssuedCertificatesView:
         
         assert 'domain' in context
         assert context['domain'].id == domain.id
+
+    def test_issued_certificates_are_limited_to_the_requested_domain(
+        self, rf: RequestFactory, admin_user, issuing_ca_instance
+    ):
+        """Certificates from another domain on the same CA must not be listed."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        ca_cert = issuing_ca_instance['cert']
+        ca_key = issuing_ca_instance['priv_key']
+        domain_a = DomainModel.objects.create(unique_name='domain-a', issuing_ca=issuing_ca)
+        domain_b = DomainModel.objects.create(unique_name='domain-b', issuing_ca=issuing_ca)
+        profile = CertificateProfileModel.objects.create(
+            unique_name='issued-cert-view-test',
+            credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION,
+            profile_json='{}',
+        )
+        cert_a, _ = CertificateGenerator.create_ee(ca_key, ca_cert.subject, 'device-a')
+        cert_b, _ = CertificateGenerator.create_ee(ca_key, ca_cert.subject, 'device-b')
+        records = {}
+        for name, domain, certificate in (
+            ('device-a', domain_a, cert_a),
+            ('device-b', domain_b, cert_b),
+        ):
+            device = DeviceModel.objects.create(common_name=name, serial_number=name, domain=domain)
+            credential = CredentialModel.objects.create(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+                certificate=CertificateModel.save_certificate(certificate),
+            )
+            records[name] = IssuedCredentialModel.objects.create(
+                common_name=name,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                certificate_profile=profile,
+                credential=credential,
+                device=device,
+                domain=domain,
+            )
+
+        request = rf.get('')
+        request.user = admin_user
+        view = IssuedCertificatesView()
+        view.request = request
+        view.kwargs = {'pk': domain_a.pk}
+
+        certificates = list(view.get_queryset())
+
+        assert [cert.pk for cert in certificates] == [records['device-a'].credential.certificate.pk]
 
 
 @pytest.mark.django_db

@@ -41,6 +41,11 @@ class Command(BaseCommand):
 
         not_permitted_certificates = CertificateModel.objects.all()
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
+        notified_certificate_ids = set(
+            NotificationModel.objects.filter(
+                event='WEAK_SIGNATURE_ALGORITHM', certificate__isnull=False
+            ).values_list('certificate_id', flat=True)
+        )
 
         for cert in not_permitted_certificates.iterator():
             failures = evaluate_signature(policy, stored_signature_facts(cert))
@@ -48,7 +53,7 @@ class Command(BaseCommand):
                 PolicyViolationCode.SIGNATURE_BLOCKED, PolicyViolationCode.SIGNATURE_HASH_BLOCKED,
             ) for failure in failures):
                 continue
-            if not NotificationModel.objects.filter(event='WEAK_SIGNATURE_ALGORITHM', certificate=cert).exists():
+            if cert.pk not in notified_certificate_ids:
                 try:
                     algorithm_name = cert.signature_algorithm
                 except ValueError:
@@ -65,3 +70,4 @@ class Command(BaseCommand):
                     message_data=message_data,
                 )
                 notification.statuses.add(new_status)
+                notified_certificate_ids.add(cert.pk)

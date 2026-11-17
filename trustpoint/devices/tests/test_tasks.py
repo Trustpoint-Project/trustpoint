@@ -216,8 +216,8 @@ class TestPerformGdsPushUpdate:
                     # Verify that DeviceModel.objects.get was called with the device ID
                     mock_get.assert_called_with(pk=device.pk)
 
-    def test_atomic_transaction_for_trustlist_update(self, mock_models):
-        """Test that trustlist update is wrapped in atomic transaction."""
+    def test_network_updates_run_outside_atomic_transaction(self, mock_models):
+        """Slow device I/O must not hold a database transaction open."""
         device = mock_models['device']
         config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
         device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
@@ -232,14 +232,11 @@ class TestPerformGdsPushUpdate:
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.transaction.atomic') as mock_atomic:
-                mock_atomic.return_value.__enter__ = Mock()
-                mock_atomic.return_value.__exit__ = Mock(return_value=None)
                 with patch.object(device, 'refresh_from_db'):
                     with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
                         perform_gds_push_update(device.pk)
 
-                        # Atomic should be called at least once
-                        assert mock_atomic.call_count >= 2
+                        assert mock_atomic.call_count == 0
 
     def test_logging_on_success(self, mock_models, caplog):
         """Test that success is logged properly."""

@@ -44,11 +44,16 @@ class Command(BaseCommand):
             spki_algorithm_oid=PublicKeyAlgorithmOid.RSA.dotted_string,
         )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
+        notified_certificate_ids = set(
+            NotificationModel.objects.filter(
+                event='INSUFFICIENT_KEY_LENGTH', certificate__isnull=False
+            ).values_list('certificate_id', flat=True)
+        )
 
         for cert in insufficient_key_certificates.iterator():
             if not evaluate_public_key(policy, stored_public_key_facts(cert)):
                 continue
-            if not NotificationModel.objects.filter(event='INSUFFICIENT_KEY_LENGTH', certificate=cert).exists():
+            if cert.pk not in notified_certificate_ids:
                 message_data = {'common_name': cert.common_name, 'spki_key_size': cert.spki_key_size}
 
                 notification = NotificationModel.objects.create(
@@ -61,3 +66,4 @@ class Command(BaseCommand):
                     message_data=message_data,
                 )
                 notification.statuses.add(new_status)
+                notified_certificate_ids.add(cert.pk)
