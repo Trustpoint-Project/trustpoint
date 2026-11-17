@@ -235,9 +235,7 @@ def test_schedule_uses_existing_checkpoint_deadline(
 
     sync_signing_schedule(enabled=True, time_interval_minutes=30)
 
-    assert Schedule.objects.get(name=SCHEDULE_NAME).next_run == max(
-        now, checkpoint.signed_at + timedelta(minutes=30)
-    )
+    assert Schedule.objects.get(name=SCHEDULE_NAME).next_run == max(now, checkpoint.signed_at + timedelta(minutes=30))
 
 
 def test_tampered_checkpoint_signature_is_detected(credential, target):

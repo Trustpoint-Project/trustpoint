@@ -17,6 +17,7 @@ from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
 
 from aoki.views import AokiServiceMixin
+from crypto.local_development import ensure_local_software_backends
 from pki.models import CertificateModel
 from pki.models.credential import IDevIDReferenceModel
 
@@ -54,6 +55,9 @@ def restore_post_migrate_data(django_db_setup, django_db_blocker):
 
 @pytest.mark.parametrize('pinned_certificate', [False, True])
 def test_fold_preserves_renewals_with_different_owner_and_credential_ids(pinned_certificate):
+    # Seed the software backends while the current schema (and audit table) is still present;
+    # lazy seeding after the rollback would write an audit entry the old schema cannot store.
+    ensure_local_software_backends()
     executor = MigrationExecutor(connection)
     executor.migrate(OLD)
     apps = executor.loader.project_state(OLD).apps

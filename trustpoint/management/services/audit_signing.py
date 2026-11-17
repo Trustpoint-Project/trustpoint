@@ -147,9 +147,7 @@ def _sign_checkpoint(  # noqa: C901, PLR0915 - keep checkpoint writes in one tra
             raise ValidationError(message)
         # Lock before reading the generation. Rotation also locks this row, so the
         # metadata in the signed payload always names the key that creates the signature.
-        logical = TraceabilityCredentialModel.objects.select_for_update().get(
-            pk=config.traceability_credential_id
-        )
+        logical = TraceabilityCredentialModel.objects.select_for_update().get(pk=config.traceability_credential_id)
         _validate_config(config, logical)
         latest = AuditLogCheckpoint.objects.select_for_update().order_by('-checkpoint_number').first()
         head = _chain_head()

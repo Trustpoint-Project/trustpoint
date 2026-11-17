@@ -190,8 +190,7 @@ def verify_audit_chain() -> AuditVerificationReport:
         due_by_count = business_unsigned_entries >= config.checkpoint_event_interval
         due_by_time = bool(
             config.checkpoint_time_interval_minutes
-            and timezone.now() - last_checkpoint.signed_at
-            >= timedelta(minutes=config.checkpoint_time_interval_minutes)
+            and timezone.now() - last_checkpoint.signed_at >= timedelta(minutes=config.checkpoint_time_interval_minutes)
         )
         if due_by_count or due_by_time:
             findings.append(

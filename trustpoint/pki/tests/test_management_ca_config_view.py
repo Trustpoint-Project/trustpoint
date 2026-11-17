@@ -109,7 +109,7 @@ def test_default_profile_migration_preserves_explicit_selection() -> None:
         certificate_profile=_user_profile(),
     )
 
-    migration = import_module('management.migrations.0008_default_user_certificate_profile')
+    migration = import_module('management.migrations.0003_tp_v1_0_1')
     migration.install_default_user_profile(apps, SimpleNamespace(connection=connection))
 
     unconfigured.refresh_from_db()
@@ -130,7 +130,7 @@ def test_domain_default_migration_preserves_user_authentication_policy() -> None
     profile.save()
     config = CertificateAuthenticationConfig.objects.create(issuing_ca=_management_ca('User Default Migration CA'))
 
-    migration = import_module('management.migrations.0009_user_profile_domain_default')
+    migration = import_module('management.migrations.0003_tp_v1_0_1')
     migration.remove_user_profile_domain_default(apps, SimpleNamespace(connection=connection))
 
     profile.refresh_from_db()
