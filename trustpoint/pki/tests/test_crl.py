@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from base64 import b64decode
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -20,7 +21,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 from pki.models import CrlModel
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.crl import generate_crl_with_revoked_certs
 from pki.util.x509 import CertificateGenerator
@@ -673,8 +676,6 @@ def test_crl_detail_view_with_revoked_certificates(
     certificate = credential_instance['credential'].certificate
 
     # Revoke the certificate by creating a RevokedCertificateModel
-    from pki.models.certificate import RevokedCertificateModel
-
     RevokedCertificateModel.objects.create(
         certificate=certificate, ca=issuing_ca, revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED
     )
@@ -695,6 +696,25 @@ def test_crl_detail_view_with_revoked_certificates(
     assert 'serial_number_hex' in revoked_cert
     assert 'revocation_date' in revoked_cert
     assert 'certificate_id' in revoked_cert
+
+
+@pytest.mark.django_db
+def test_crl_omits_revoked_certificates_that_have_already_expired(
+    issuing_ca_instance: dict[str, Any], credential_instance: dict[str, Any]
+) -> None:
+    """Expired revocations stay in the database but no longer bloat every new CRL."""
+    issuing_ca = issuing_ca_instance['issuing_ca']
+    certificate = credential_instance['credential'].certificate
+    RevokedCertificateModel.objects.create(
+        certificate=certificate,
+        ca=issuing_ca,
+        revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED,
+    )
+    CertificateModel.objects.filter(pk=certificate.pk).update(not_valid_after=timezone.now() - timedelta(days=1))
+
+    crl = generate_crl_with_revoked_certs(issuing_ca)
+
+    assert not crl.get_revoked_certificate_by_serial_number(int(certificate.serial_number, 16))
 
 
 def test_crl_detail_view_not_found(authenticated_client: Client) -> None:

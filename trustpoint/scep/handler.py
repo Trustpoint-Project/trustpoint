@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from onboarding.models import ScepEnrollmentModelMixin
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
 _CLOCK_SKEW = dt.timedelta(days=1)
+_MAX_SCEP_TRANSACTIONS = 64
 _ACCEPTED_CSR_HASHES = (hashes.SHA256, hashes.SHA384, hashes.SHA512)
 _GENERIC_FAILURE_TEXT = 'The request could not be processed.'
 _INVALID_AUTHORIZATION = 'The enrollment authorization is not valid.'
@@ -294,6 +295,8 @@ class ScepPkiOperationHandler(LoggerMixin):
                 'digest': request_digest,
                 'cert_sha256': ctx.issued_certificate.fingerprint(hashes.SHA256()).hex().upper(),
             }
+            # Replay protection only needs recent transaction IDs. Keep the JSON bounded.
+            transactions = dict(list(transactions.items())[-_MAX_SCEP_TRANSACTIONS:])
             locked.scep_transactions = transactions
             update_fields = ['scep_transactions']
             if ctx.operation == 'pkcsreq':

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -46,24 +47,34 @@ class WorkerTests(TestCase):
         """Only old done jobs are removed; recent history stays available."""
         ir = compile_workflow_yaml(YAML_OK)
         definition = Workflow2Definition.objects.create(
-            name="Worker test",
+            name='Worker test',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=YAML_OK,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
-        inst = runtime.create_instance(definition=definition, event={"device": {"common_name": "dev1"}})
-        old_job = Workflow2Job.objects.create(instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_DONE)
-        new_job = Workflow2Job.objects.create(instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_DONE)
+        inst = runtime.create_instance(definition=definition, event={'device': {'common_name': 'dev1'}})
+        old_job = Workflow2Job.objects.create(
+            instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_DONE
+        )
+        new_job = Workflow2Job.objects.create(
+            instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_DONE
+        )
         Workflow2Job.objects.filter(pk=old_job.pk).update(
             updated_at=timezone.now() - timedelta(days=JOB_RETENTION_DAYS + 1)
         )
 
-        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
-        worker_module._last_purge_at = 0.0
-        worker._purge_old_jobs()
+        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id='test-worker')
+        with (
+            patch.object(worker_module, '_last_purge_at', None),
+            patch.object(worker_module.time, 'monotonic', return_value=10.0),
+        ):
+            worker._purge_old_jobs()
+            with patch.object(Workflow2Job.objects, 'filter') as job_filter:
+                worker._purge_old_jobs()
+            job_filter.assert_not_called()
 
         self.assertFalse(Workflow2Job.objects.filter(pk=old_job.pk).exists())
         self.assertTrue(Workflow2Job.objects.filter(pk=new_job.pk).exists())
@@ -71,17 +82,17 @@ class WorkerTests(TestCase):
     def test_worker_claims_and_runs_job(self) -> None:
         ir = compile_workflow_yaml(YAML_OK)
         d = Workflow2Definition.objects.create(
-            name="Worker test",
+            name='Worker test',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=YAML_OK,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
 
         ex = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=ex)
-        inst = runtime.create_instance(definition=d, event={"device": {"common_name": "dev1"}})
+        inst = runtime.create_instance(definition=d, event={'device': {'common_name': 'dev1'}})
 
         job = Workflow2Job.objects.create(
             instance=inst,
@@ -90,7 +101,7 @@ class WorkerTests(TestCase):
             run_after=timezone.now() - timedelta(seconds=1),
         )
 
-        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
+        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id='test-worker')
         stats = worker.tick()
 
         job.refresh_from_db()
@@ -103,19 +114,19 @@ class WorkerTests(TestCase):
     def test_worker_skips_terminal_instance(self) -> None:
         ir = compile_workflow_yaml(YAML_OK)
         d = Workflow2Definition.objects.create(
-            name="Worker test",
+            name='Worker test',
             enabled=True,
-            trigger_on=ir["trigger"]["on"],
+            trigger_on=ir['trigger']['on'],
             yaml_text=YAML_OK,
             ir_json=ir,
-            ir_hash=ir["meta"]["ir_hash"],
+            ir_hash=ir['meta']['ir_hash'],
         )
 
         ex = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=ex)
-        inst = runtime.create_instance(definition=d, event={"device": {"common_name": "dev1"}})
+        inst = runtime.create_instance(definition=d, event={'device': {'common_name': 'dev1'}})
         inst.status = Workflow2Instance.STATUS_FINISHED
-        inst.save(update_fields=["status", "updated_at"])
+        inst.save(update_fields=['status', 'updated_at'])
 
         job = Workflow2Job.objects.create(
             instance=inst,
@@ -124,7 +135,7 @@ class WorkerTests(TestCase):
             run_after=timezone.now() - timedelta(seconds=1),
         )
 
-        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
+        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id='test-worker')
         stats = worker.tick()
 
         job.refresh_from_db()

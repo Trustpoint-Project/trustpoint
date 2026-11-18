@@ -24,6 +24,9 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture(autouse=True)
 def config():
+    from management import context_processors
+
+    context_processors._cycle_check_state['last'] = 0.0
     config = NotificationConfig.get()
     config.enabled = True
     config.cert_expiry_warning_days = 7

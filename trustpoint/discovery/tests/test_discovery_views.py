@@ -150,6 +150,17 @@ class TestDiscoveryViews:
         assert response.status_code == 302
         assert DiscoveryPort.objects.count() == 0
 
+    @pytest.mark.parametrize('port_number', ['0', '65536'])
+    def test_add_port_rejects_out_of_range_port(self, authenticated_client, port_number: str) -> None:
+        """Ports outside 1-65535 must not be saved; an invalid port breaks socket scans."""
+        response = authenticated_client.post(
+            reverse('discovery:add_port'),
+            {'port_number': port_number, 'description': 'bad'},
+        )
+
+        assert response.status_code == 302
+        assert DiscoveryPort.objects.count() == 0
+
     @pytest.mark.parametrize('existing_port', [True, False])
     def test_delete_port_requires_discovery_permission(self, client, existing_port) -> None:
         """Unauthorized users receive 403 before lookup and cannot change scan coverage."""

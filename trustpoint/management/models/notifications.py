@@ -661,8 +661,15 @@ class NotificationConfig(models.Model):
 
     @classmethod
     def get(cls) -> NotificationConfig:
-        """Ensure there's always one settings object to use."""
-        return cls.objects.first() or cls.objects.create()
+        """Return the fixed singleton row, preserving an existing older row."""
+        config = cls.objects.filter(pk=1).first()
+        if config is not None:
+            return config
+        existing = cls.objects.order_by('pk').first()
+        if existing is not None:
+            return existing
+        config, _created = cls.objects.get_or_create(pk=1)
+        return config
 
     @property
     def next_notification_check_scheduled_at(self) -> datetime | None:

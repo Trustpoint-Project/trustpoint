@@ -17,7 +17,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -189,13 +189,24 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
+class CanReadSignedMessages(BasePermission):
+    """Allow signer managers to read stored signatures."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Reuse the signer-management permission for the signing history."""
+        return bool(
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_SIGNER)
+        )
+
+
 @extend_schema(tags=['Signer'])
 class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
     """ViewSet for SignedMessage operations."""
 
     queryset = SignedMessageModel.objects.all().order_by('-created_at')
     serializer_class = SignedMessageSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (CanReadSignedMessages,)
     filterset_fields: ClassVar[list[str]] = ['signer']
 
     @extend_schema(

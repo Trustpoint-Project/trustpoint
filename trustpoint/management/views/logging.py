@@ -121,7 +121,13 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView):  # type: ignore[type-arg,misc]
+class LoggingFilesTableView(
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    SortableTableFromListMixin,
+    ListView,
+):  # type: ignore[type-arg,misc]
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
@@ -130,6 +136,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     context_object_name = 'log_files'
     default_sort_param = 'updated_at'
     paginate_by = None
+    permission_required = AppPermissions.VIEW_SYSTEM_LOGS
 
     page_category = 'management'
     page_name = 'logging'

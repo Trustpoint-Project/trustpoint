@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Mechanical job rows are kept only long enough to debug recent runs.
 JOB_RETENTION_DAYS = 30
 JOB_PURGE_INTERVAL_SECONDS = 3600
-_last_purge_at = 0.0
+_last_purge_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -107,8 +107,8 @@ class Workflow2DbWorker:
 
             _ok, made_next, did_skip = self._process_job(job)
             processed += 1
-            created_next += (1 if made_next else 0)
-            skipped += (1 if did_skip else 0)
+            created_next += 1 if made_next else 0
+            skipped += 1 if did_skip else 0
 
         return WorkerStats(
             claimed=claimed,
@@ -122,7 +122,7 @@ class Workflow2DbWorker:
         """Delete finished job rows past the retention window, at most once per interval."""
         global _last_purge_at  # noqa: PLW0603 - one throttle per process, not per worker instance
         now = time.monotonic()
-        if now - _last_purge_at < JOB_PURGE_INTERVAL_SECONDS:
+        if _last_purge_at is not None and now - _last_purge_at < JOB_PURGE_INTERVAL_SECONDS:
             return
         _last_purge_at = now
         cutoff = timezone.now() - timedelta(days=JOB_RETENTION_DAYS)

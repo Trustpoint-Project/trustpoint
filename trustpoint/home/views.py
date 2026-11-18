@@ -804,16 +804,20 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         cert_counts_by_issuing_ca = []
         try:
-            issuing_cas = list(
-                CaModel.objects.filter(credential__isnull=False, credential__certificate__isnull=False)
+            issuing_cas = [
+                (issuing_ca.unique_name, credential.certificate_id)
+                for issuing_ca in CaModel.objects.filter(
+                    credential__isnull=False, credential__certificate__isnull=False
+                )
                 .exclude(
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
                 .select_related('credential')
                 .order_by('unique_name')
-            )
+                if (credential := issuing_ca.credential) is not None and credential.certificate_id is not None
+            ]
             # Count all issuers at once instead of running one count per CA.
-            ca_certificate_ids = {issuing_ca.credential.certificate_id for issuing_ca in issuing_cas}
+            ca_certificate_ids = {certificate_id for _, certificate_id in issuing_cas}
             counts = {
                 row['issuer_id']: row['cert_count']
                 for row in self._apply_created_at_date_range(
@@ -832,10 +836,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             cert_counts_by_issuing_ca = [
                 {
-                    'ca_name': issuing_ca.unique_name,
-                    'cert_count': counts.get(issuing_ca.credential.certificate_id, 0),
+                    'ca_name': ca_name,
+                    'cert_count': counts.get(certificate_id, 0),
                 }
-                for issuing_ca in issuing_cas
+                for ca_name, certificate_id in issuing_cas
             ]
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'

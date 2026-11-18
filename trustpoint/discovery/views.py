@@ -9,6 +9,7 @@ from typing import Any
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import connection
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -84,14 +85,25 @@ class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
                 Q(description__icontains='OPC') | Q(description__icontains='MQTT')
             ).values_list('port_number', flat=True)
         )
-        risks = 0
-        industrial = 0
-        for ssl_info, open_ports in all_devs.values_list('ssl_info', 'open_ports'):
-            if ssl_info and ssl_info.get('is_self_signed'):
-                risks += 1
-            if any(port_number in ot_ports for port_number in open_ports):
-                industrial += 1
-        stats = {'total': all_devs.count(), 'risks': risks, 'industrial': industrial}
+        industrial_filter = Q()
+        for port_number in ot_ports:
+            industrial_filter |= Q(open_ports__contains=[port_number])
+        if ot_ports and connection.features.supports_json_field_contains:
+            industrial = all_devs.filter(industrial_filter).distinct().count()
+        elif ot_ports:
+            # SQLite only: JSON membership is not queryable, so keep the old scan.
+            industrial = sum(
+                1
+                for open_ports in all_devs.values_list('open_ports', flat=True)
+                if any(port_number in open_ports for port_number in ot_ports)
+            )
+        else:
+            industrial = 0
+        stats = {
+            'total': all_devs.count(),
+            'risks': all_devs.filter(ssl_info__is_self_signed=True).count(),
+            'industrial': industrial,
+        }
 
         paginator = Paginator(all_devs, UIConfig.paginate_by)
         page_obj = paginator.get_page(request.GET.get('page'))
@@ -171,10 +183,14 @@ class AddPortView(View):
         if port_str and desc:
             try:
                 port_int = int(port_str)
-                DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
-                messages.success(request, f'Port {port_int} added to scan configuration.')
             except ValueError:
-                messages.error(request, 'Invalid port number. Please enter a valid integer.')
+                messages.error(request, 'Invalid port number. Enter a value between 1 and 65535.')
+            else:
+                if not DiscoveryPort.MIN_PORT <= port_int <= DiscoveryPort.MAX_PORT:
+                    messages.error(request, 'Invalid port number. Enter a value between 1 and 65535.')
+                else:
+                    DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
+                    messages.success(request, f'Port {port_int} added to scan configuration.')
 
         referer = request.META.get('HTTP_REFERER', '')
         if 'port-config' in referer:

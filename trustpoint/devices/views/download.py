@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.http.request import HttpRequest
 from django.shortcuts import redirect
@@ -250,6 +251,22 @@ class DeviceBrowserCredentialDownloadView(
     """View to download a password protected domain or app credential in the desired format from a remote client."""
 
     is_browser_download = True
+
+    @transaction.atomic
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Serialize token validation and the private-key response for one-time delivery."""
+        token = request.GET.get('token', '')
+        locked = (
+            RemoteDeviceCredentialDownloadModel.objects.select_for_update()
+            .filter(pk=self.credential_download.pk)
+            .first()
+        )
+        if locked is None or not locked.check_token(token):
+            messages.warning(request, 'Invalid download token.')
+            return redirect('devices:browser_login')
+
+        self.credential_download = locked
+        return super().post(request, *args, **kwargs)
 
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------

@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django_q.conf import Conf
 from django_q.tasks import async_task
@@ -26,9 +27,12 @@ class ScanManager:
     def _expire_crashed_scan() -> None:
         # Django-Q kills timed-out workers; allow its termination buffer before releasing ownership.
         cutoff = timezone.now() - timedelta(seconds=SCAN_TIMEOUT_SECONDS + 10)
-        DiscoveryScan.objects.filter(pk=1, is_running=True, started_at__lte=cutoff).update(
+        DiscoveryScan.objects.filter(pk=1, is_running=True).filter(
+            Q(started_at__lte=cutoff) | Q(started_at__isnull=True, claimed_at__lte=cutoff)
+        ).update(
             is_running=False,
             stop_pending=False,
+            claimed_at=None,
             started_at=None,
         )
 
@@ -50,6 +54,7 @@ class ScanManager:
             scan_id=scan_id,
             is_running=True,
             stop_pending=False,
+            claimed_at=timezone.now(),
             started_at=None,
             start_ip=str(start),
             end_ip=str(end),

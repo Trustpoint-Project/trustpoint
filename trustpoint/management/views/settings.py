@@ -356,10 +356,15 @@ class SettingsFormViewMixin[
         return context
 
 
-class SettingsTabView(TemplateView):
+class SettingsTabView(UserPermissionRequiredMixin, TemplateView):
     """Main settings view with tab interface."""
 
     template_name = 'management/settings.html'
+    permission_required = AppPermissions.MANAGE_SYSTEM_CONFIGURATION
+
+    def has_permission(self) -> bool:
+        """Allow system administrators and security-only administrators."""
+        return super().has_permission() or self.request.user.has_perm(AppPermissions.MANAGE_SECURITY_CONFIGURATION)
 
     @staticmethod
     def _get_unbound_settings_form(view: FormView[Any]) -> Any:

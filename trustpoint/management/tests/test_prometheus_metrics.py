@@ -34,13 +34,9 @@ def test_endpoint_requires_the_configured_bearer_token(enabled_metrics: None) ->
     factory = RequestFactory()
     assert prometheus_metrics_view(factory.get('/prometheus/metrics')).status_code == 401
     assert (
-        prometheus_metrics_view(
-            factory.get('/prometheus/metrics', HTTP_AUTHORIZATION='Bearer wrong-token')
-        ).status_code
+        prometheus_metrics_view(factory.get('/prometheus/metrics', HTTP_AUTHORIZATION='Bearer wrong-token')).status_code
         == 401
     )
 
-    response = prometheus_metrics_view(
-        factory.get('/prometheus/metrics', HTTP_AUTHORIZATION=f'Bearer {TOKEN}')
-    )
+    response = prometheus_metrics_view(factory.get('/prometheus/metrics', HTTP_AUTHORIZATION=f'Bearer {TOKEN}'))
     assert response.status_code == 200

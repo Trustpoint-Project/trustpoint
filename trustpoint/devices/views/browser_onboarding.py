@@ -76,8 +76,9 @@ class AbstractBrowserOnboardingOTPView(
         cdm = RemoteDeviceCredentialDownloadModel.objects.filter(
             issued_credential_model=credential, device=device
         ).first()
-        # A page refresh must not invalidate an OTP that was already handed to the device.
-        if cdm is not None and (not cdm.otp or cdm.otp == '-'):
+        # A consumed OTP still owns a live download token. Keep the grant until
+        # the device uses the token or an operator explicitly cancels it.
+        if cdm is not None and not cdm.otp:
             cdm.delete()
             cdm = None
         if cdm is None:

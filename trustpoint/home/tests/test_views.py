@@ -315,6 +315,8 @@ class DashboardChartsAndCountsViewTests(TestCase):
             ca_filter.return_value.exclude.return_value.select_related.return_value.order_by.return_value = [
                 first_ca,
                 second_ca,
+                SimpleNamespace(unique_name='no-credential', credential=None),
+                SimpleNamespace(unique_name='no-certificate', credential=SimpleNamespace(certificate_id=None)),
             ]
             cert_filter.return_value.exclude.return_value.filter.return_value.values.return_value.annotate.return_value = [
                 {'issuer_id': 1, 'cert_count': 3},
@@ -326,7 +328,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
             {'ca_name': 'first', 'cert_count': 3},
             {'ca_name': 'second', 'cert_count': 0},
         ]
-        cert_filter.assert_called_once()
+        cert_filter.assert_called_once_with(issuer_id__in={1, 2})
 
     def test_get_cert_counts_by_profile(self) -> None:
         """Test get_cert_counts_by_profile method."""

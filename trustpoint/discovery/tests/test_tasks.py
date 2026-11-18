@@ -49,6 +49,19 @@ def test_enqueue_failure_rolls_back_reservation():
     assert not DiscoveryScan.objects.filter(is_running=True).exists()
 
 
+def test_queued_scan_expires_when_worker_never_starts():
+    """A lost queue entry must not block discovery forever."""
+    claim_age = timedelta(seconds=SCAN_TIMEOUT_SECONDS + 11)
+    DiscoveryScan.objects.create(
+        pk=1,
+        is_running=True,
+        claimed_at=timezone.now() - claim_age,
+        started_at=None,
+    )
+
+    assert ScanManager.get_state()['scan_running'] is False
+
+
 def test_cancel_queued_scan_does_not_cancel_newer_scan(queued_scan):
     ScanManager.request_stop()
     assert not ScanManager.get_state()['scan_running']

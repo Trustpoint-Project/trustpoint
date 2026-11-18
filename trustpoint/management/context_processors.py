@@ -5,7 +5,10 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
+
+from django.db.models import Count, Q
 
 from management.models import NotificationModel, NotificationStatus
 from management.notifications import check_notification_cycle
@@ -13,23 +16,33 @@ from management.notifications import check_notification_cycle
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
+_CYCLE_CHECK_INTERVAL_SECONDS = 60
+_cycle_check_state = {'last': 0.0}
+
 
 def notification_alerts(request: HttpRequest) -> dict[str, Any]:
     """Provide counts of unread warning and critical notifications for the global header."""
     if not hasattr(request, 'user') or not request.user.is_authenticated:
         return {}
 
-    check_notification_cycle()
+    now = time.monotonic()
+    if now - _cycle_check_state['last'] >= _CYCLE_CHECK_INTERVAL_SECONDS:
+        _cycle_check_state['last'] = now
+        check_notification_cycle()
 
-    unread_critical = NotificationModel.objects.filter(
+    counts = NotificationModel.objects.filter(
         statuses__status=NotificationStatus.StatusChoices.NEW,
-        notification_type=NotificationModel.NotificationTypes.CRITICAL,
-    ).count()
+        notification_type__in=[
+            NotificationModel.NotificationTypes.CRITICAL,
+            NotificationModel.NotificationTypes.WARNING,
+        ],
+    ).aggregate(
+        critical=Count('pk', filter=Q(notification_type=NotificationModel.NotificationTypes.CRITICAL), distinct=True),
+        warning=Count('pk', filter=Q(notification_type=NotificationModel.NotificationTypes.WARNING), distinct=True),
+    )
 
-    unread_warning = NotificationModel.objects.filter(
-        statuses__status=NotificationStatus.StatusChoices.NEW,
-        notification_type=NotificationModel.NotificationTypes.WARNING,
-    ).count()
+    unread_critical = counts['critical']
+    unread_warning = counts['warning']
 
     return {
         'notification_alert_critical_count': unread_critical,
