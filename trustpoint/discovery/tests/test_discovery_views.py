@@ -33,6 +33,14 @@ def authenticated_client(client):
 class TestDiscoveryViews:
     """Tests for discovery request handlers."""
 
+    def test_inventory_requires_discovery_permission(self, client) -> None:
+        """Users without the discovery permission must not read the scanned inventory."""
+        user = get_user_model().objects.create_user(username='discovery-reader', password='testpass123')  # noqa: S106
+        client.force_login(user)
+
+        assert client.get(reverse('discovery:device_list')).status_code == 403
+        assert client.get(reverse('discovery:export_csv')).status_code == 403
+
     def test_device_list_renders_stats_and_scan_state(self, authenticated_client) -> None:
         """The dashboard should expose device risk totals, OT totals, and scan state."""
         DiscoveryPort.objects.create(port_number=1883, description='MQTT broker')

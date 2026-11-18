@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from devices.domain_credential_renewal import renew_gds_push_domain_credential
 from devices.models import DeviceModel, OpcUaGdsPushConfig
+from onboarding.enums import OnboardingStatus
 from request.gds_push import GdsPushError, GdsPushService
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,43 @@ def perform_gds_push_update(device_id: int) -> None:
             opc_gds_push_last_update_scheduled_at=config.opc_gds_push_last_update_scheduled_at,
         ).update(opc_gds_push_last_update_scheduled_at=next_run)
         raise
+
+
+def update_gds_push_trustlist(device_id: int) -> None:
+    """Push the current trustlist to one OPC UA GDS Push device from a background job."""
+    device = DeviceModel.objects.filter(pk=device_id).first()
+    if device is None:
+        logger.info('Device %s was deleted; skipping trustlist update', device_id)
+        return
+    try:
+        success, message = asyncio.run(GdsPushService(device=device).update_trustlist())
+    except Exception:
+        logger.exception('Trustlist update failed for device %s', device.common_name)
+        return
+    if success:
+        logger.info('Trustlist updated for device %s: %s', device.common_name, message)
+    else:
+        logger.warning('Trustlist update rejected for device %s: %s', device.common_name, message)
+
+
+def update_gds_push_server_certificate(device_id: int) -> None:
+    """Push a server certificate to one OPC UA GDS Push device from a background job."""
+    device = DeviceModel.objects.filter(pk=device_id).first()
+    if device is None:
+        logger.info('Device %s was deleted; skipping server certificate update', device_id)
+        return
+    try:
+        success, message, certificate_bytes = asyncio.run(GdsPushService(device=device).update_server_certificate())
+    except Exception:
+        logger.exception('Server certificate update failed for device %s', device.common_name)
+        return
+    if not success or not certificate_bytes:
+        logger.warning('Server certificate update rejected for device %s: %s', device.common_name, message)
+        return
+    logger.info('Server certificate updated for device %s: %s', device.common_name, message)
+    if device.onboarding_config is not None:
+        device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+        device.onboarding_config.save(update_fields=['onboarding_status'])
 
 
 def perform_gds_push_domain_credential_renewal(device_id: int) -> None:

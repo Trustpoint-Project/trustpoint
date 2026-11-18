@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
 from trustpoint.settings import UIConfig
-from trustpoint.views.base import ContextDataMixin
+from trustpoint.views.base import ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 from .models import DiscoveredDevice, DiscoveryPort
@@ -29,10 +29,11 @@ class DiscoveryContextMixin(ContextDataMixin):
     context_page_name = 'discovery'
 
 
-class DeviceListView(DiscoveryContextMixin, View):
+class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Display the asset discovery dashboard with scan results and port config."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:
         """Apply filters to the device queryset and return filtered queryset and active status."""
@@ -227,10 +228,11 @@ class ClearDevicesView(View):
         return redirect('discovery:device_list')
 
 
-class DeviceDetailView(DiscoveryContextMixin, View):
+class DeviceDetailView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Show detail view for a discovered device."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest, device_id: int) -> HttpResponse:
         """Render details for a single discovered device."""
@@ -239,10 +241,11 @@ class DeviceDetailView(DiscoveryContextMixin, View):
         return render(request, 'discovery/device_detail.html', context)
 
 
-class ExportCsvView(DiscoveryContextMixin, View):
+class ExportCsvView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Export the current discovery inventory to a CSV file."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest) -> HttpResponse:  # noqa: ARG002
         """Return inventory rows as a downloadable CSV."""

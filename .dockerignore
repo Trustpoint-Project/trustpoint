@@ -38,6 +38,8 @@ trustpoint/collected_static/
 # Test code is not part of the deployed application.
 trustpoint/**/tests/
 trustpoint/features/
+# Test-only OPC UA peer harness started by pytest.
+trustpoint/request/gds_push/asyncua-gds-push-test/
 docker/trustpoint/nginx/tls/
 trustpoint/request/gds_push/asyncua-gds-push-test/state/
 ca_workspace/

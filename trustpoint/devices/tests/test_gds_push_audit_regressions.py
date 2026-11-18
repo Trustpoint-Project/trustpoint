@@ -17,29 +17,27 @@ from devices.tasks import perform_gds_push_update
 
 
 @pytest.mark.parametrize(
-    ('action', 'permission', 'method', 'result'),
+    ('action', 'permission', 'task'),
     [
-        ('devices_update_trustlist', 'manage_devices', 'update_trustlist', (True, 'updated')),
+        ('devices_update_trustlist', 'manage_devices', 'devices.tasks.update_gds_push_trustlist'),
         (
             'devices_update_server_certificate',
             'issue_certificates',
-            'update_server_certificate',
-            (True, 'updated', b'cert'),
+            'devices.tasks.update_gds_push_server_certificate',
         ),
     ],
 )
-def test_gds_action_requires_permission(client, django_user_model, gds_device, action, permission, method, result):
+def test_gds_action_requires_permission(client, django_user_model, gds_device, action, permission, task):
     user = django_user_model.objects.create_user(username='gds-reader', password='test-password')
     user.role.permissions.clear()
     client.force_login(user)
     url = reverse(f'devices:{action}', kwargs={'pk': gds_device.pk})
-    with patch('devices.views.gds_push.GdsPushService') as service:
-        setattr(service.return_value, method, AsyncMock(return_value=result))
+    with patch('devices.views.gds_push.async_task') as enqueue:
         assert client.post(url).status_code == 403
-        service.assert_not_called()
+        enqueue.assert_not_called()
         user.role.permissions.add(Permission.objects.get(codename=permission))
         assert client.post(url).status_code == 302
-        service.assert_called_once()
+        enqueue.assert_called_once_with(task, gds_device.pk)
 
 
 @pytest.fixture

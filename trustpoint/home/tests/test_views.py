@@ -4,6 +4,7 @@
 """Test cases for home app views."""
 
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from devices.models import DeviceModel
@@ -301,6 +302,31 @@ class DashboardChartsAndCountsViewTests(TestCase):
             result = self.view.get_cert_counts_by_issuing_ca(start_date)
 
         assert isinstance(result, list)
+
+    def test_get_cert_counts_by_issuing_ca_groups_counts_in_one_query(self) -> None:
+        """All CA counts come from one grouped query and CAs without certificates get zero."""
+        first_ca = SimpleNamespace(unique_name='first', credential=SimpleNamespace(certificate_id=1))
+        second_ca = SimpleNamespace(unique_name='second', credential=SimpleNamespace(certificate_id=2))
+
+        with (
+            patch('home.views.CaModel.objects.filter') as ca_filter,
+            patch('home.views.CertificateModel.objects.filter') as cert_filter,
+        ):
+            ca_filter.return_value.exclude.return_value.select_related.return_value.order_by.return_value = [
+                first_ca,
+                second_ca,
+            ]
+            cert_filter.return_value.exclude.return_value.filter.return_value.values.return_value.annotate.return_value = [
+                {'issuer_id': 1, 'cert_count': 3},
+            ]
+
+            result = self.view.get_cert_counts_by_issuing_ca(None)
+
+        assert result == [
+            {'ca_name': 'first', 'cert_count': 3},
+            {'ca_name': 'second', 'cert_count': 0},
+        ]
+        cert_filter.assert_called_once()
 
     def test_get_cert_counts_by_profile(self) -> None:
         """Test get_cert_counts_by_profile method."""

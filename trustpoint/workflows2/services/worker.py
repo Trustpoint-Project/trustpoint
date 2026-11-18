@@ -63,11 +63,9 @@ class Workflow2DbWorker:
         # "database is locked". For inline drain we also disable it explicitly.
         self.heartbeat_enabled = bool(heartbeat_enabled) and (connection.vendor != 'sqlite')
 
-    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread:
+    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread | None:
         if not self.heartbeat_enabled:
-            t = threading.Thread(target=lambda: None, daemon=True)
-            t.start()
-            return t
+            return None
 
         # renew at half the lease; never less than 1s
         interval = max(1.0, self.lease_seconds / 2)
@@ -268,7 +266,8 @@ class Workflow2DbWorker:
             return True, created_next, skipped
         finally:
             stop_evt.set()
-            hb_thread.join(timeout=1.0)
+            if hb_thread is not None:
+                hb_thread.join(timeout=1.0)
 
     @transaction.atomic
     def _mark_done(self, job: Workflow2Job) -> None:

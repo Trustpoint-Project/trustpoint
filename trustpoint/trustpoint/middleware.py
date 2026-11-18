@@ -310,6 +310,8 @@ class Workflow2InlineDrainMiddleware(MiddlewareMixin):
     """Let the web process drain queued workflow jobs when inline execution is active."""
 
     DRAIN_INTERVAL_SECONDS = 5
+    # Keep a page request responsive; the worker (or the next request) handles the rest.
+    MAX_TICKS_PER_REQUEST = 5
 
     def process_request(self, request: HttpRequest) -> None:
         """Drain backlog opportunistically, at most once per interval for signed-in users."""
@@ -320,6 +322,9 @@ class Workflow2InlineDrainMiddleware(MiddlewareMixin):
             return
         self._last_drain_attempt = now
         try:
-            WorkflowDispatchService().drain_pending_jobs_if_inline()
+            WorkflowDispatchService().drain_pending_jobs_if_inline(
+                max_ticks=self.MAX_TICKS_PER_REQUEST,
+                raise_on_limit=False,
+            )
         except Exception:
             logger.exception('Failed to drain queued Workflow jobs inline.')

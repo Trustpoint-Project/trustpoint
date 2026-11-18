@@ -198,6 +198,9 @@ workflow2Folder/
 
 .env
 
+# Legacy local signing key, never load or commit it
+trustpoint/trustpoint/dev_secret_key.txt
+
 trustpoint/request/gds_push/asyncua-gds-push-test/state/*
 
 # Local Docker Compose credentials

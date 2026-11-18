@@ -540,6 +540,8 @@ TEMPLATE_CONTEXT_PROCESSORS = [
     'django.contrib.messages.context_processors.messages',
     'trustpoint.settings.app_version',
     'management.context_processors.notification_alerts',
+    'management.context_processors.ui_config',
+    'workflows2.context_processors.waiting_counts',
 ]
 
 BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS = [

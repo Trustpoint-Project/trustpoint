@@ -804,27 +804,36 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         cert_counts_by_issuing_ca = []
         try:
-            issuing_cas = (
-                CaModel.objects.filter(credential__isnull=False)
+            issuing_cas = list(
+                CaModel.objects.filter(credential__isnull=False, credential__certificate__isnull=False)
                 .exclude(
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
+                .select_related('credential')
                 .order_by('unique_name')
             )
+            # Count all issuers at once instead of running one count per CA.
+            ca_certificate_ids = {issuing_ca.credential.certificate_id for issuing_ca in issuing_cas}
+            counts = {
+                row['issuer_id']: row['cert_count']
+                for row in self._apply_created_at_date_range(
+                    CertificateModel.objects.filter(issuer_id__in=ca_certificate_ids)
+                    .exclude(pk__in=ca_certificate_ids)
+                    .filter(
+                        Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
+                        credential_set__issued_credential__isnull=False,
+                    ),
+                    start_date,
+                    end_date,
+                )
+                .values('issuer_id')
+                .annotate(cert_count=Count('pk', distinct=True))
+            }
 
             cert_counts_by_issuing_ca = [
                 {
                     'ca_name': issuing_ca.unique_name,
-                    'cert_count': self._apply_created_at_date_range(
-                        issuing_ca.get_issued_certificates().filter(
-                            Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
-                            credential_set__issued_credential__isnull=False,
-                        ),
-                        start_date,
-                        end_date,
-                    )
-                    .distinct()
-                    .count(),
+                    'cert_count': counts.get(issuing_ca.credential.certificate_id, 0),
                 }
                 for issuing_ca in issuing_cas
             ]

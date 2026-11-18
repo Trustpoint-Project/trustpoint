@@ -33,6 +33,16 @@ if TYPE_CHECKING:
 
 RCT = TypeVar('RCT', bound='BaseRequestContext')
 
+_SECRET_FIELD_NAMES = frozenset(
+    {
+        'est_password',
+        'est_client_key_pem',
+        'cmp_shared_secret',
+        'rest_password',
+        'private_key',
+    }
+)
+
 
 class ManualIssuanceMethod(IntEnum):
     """Origin of a credential issued through the manual workflow."""
@@ -123,8 +133,11 @@ class BaseRequestContext(LoggerMixin):
             setattr(self, field.name, None)
 
     def __str__(self) -> str:
-        """String representation showing all context fields."""
-        field_summary = ', '.join(f'{field.name}={getattr(self, field.name)}' for field in fields(self))
+        """String representation showing all context fields, with credentials masked."""
+        field_summary = ', '.join(
+            f'{field.name}={"***" if field.name in _SECRET_FIELD_NAMES else getattr(self, field.name)}'
+            for field in fields(self)
+        )
         return f'{self.__class__.__name__}({field_summary})'
 
     def __repr__(self) -> str:

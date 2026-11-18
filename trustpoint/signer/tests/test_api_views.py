@@ -262,6 +262,19 @@ class TestSignerViewSet:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert 'hash_value' in response.data
 
+    def test_sign_hash_wrong_digest_length_is_rejected(self, authenticated_client, sample_signer):
+        """A digest that does not match the signer's hash algorithm must not be signed."""
+        response = authenticated_client.post(
+            '/api/signers/sign/',
+            {'signer_id': sample_signer.pk, 'hash_value': 'aa'},
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'hash_value' in response.data
+        assert '32 bytes' in str(response.data['hash_value'])
+        assert not SignedMessageModel.objects.filter(signer=sample_signer).exists()
+
     def test_sign_hash_missing_signer_id(self, authenticated_client):
         """Test sign_hash with missing signer_id."""
         url = '/api/signers/sign/'

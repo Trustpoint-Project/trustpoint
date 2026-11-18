@@ -9,6 +9,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
+from django.core.exceptions import PermissionDenied
 from django.test import RequestFactory
 from django.urls import reverse
 from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer
@@ -44,16 +45,18 @@ def app_secret_config():
 def sample_signer(app_secret_config):
     """Create a sample signer for testing."""
     from datetime import datetime, timedelta, timezone as dt_timezone
-    
+
     # Generate RSA key
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    
+
     # Create certificate
-    subject = issuer = x509.Name([
-        x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'Test Signer'),
-        x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Test Organization'),
-    ])
-    
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'Test Signer'),
+            x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Test Organization'),
+        ]
+    )
+
     cert = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -82,7 +85,7 @@ def sample_signer(app_secret_config):
         )
         .sign(private_key, SHA256())
     )
-    
+
     # Create credential serializer
     pk_serializer = PrivateKeySerializer(private_key)
     cert_serializer = CertificateSerializer(cert)
@@ -90,7 +93,7 @@ def sample_signer(app_secret_config):
         private_key_serializer=pk_serializer,
         certificate_serializer=cert_serializer,
     )
-    
+
     return SignerModel.create_new_signer('test-signer', cred_serializer)
 
 
@@ -124,7 +127,7 @@ class TestSignerTableView:
         request = request_factory.get(reverse('signer:signer_list'))
         view = SignerTableView.as_view()
         response = view(request)
-        
+
         assert response.status_code == 200
 
 
@@ -152,6 +155,8 @@ class TestSignerAddMethodSelectView:
         response = view.form_valid(form)
         assert response.status_code == 302
         assert 'file-import' in response.url or 'file_import' in response.url
+
+
 @pytest.mark.django_db
 class TestSignerAddFileImportFileTypeSelectView:
     """Test cases for SignerAddFileImportFileTypeSelectView."""
@@ -164,15 +169,15 @@ class TestSignerAddFileImportFileTypeSelectView:
     def test_form_valid_pkcs12_redirects(self, request_factory):
         """Test form_valid redirects to PKCS#12 import."""
         from signer.forms import SignerAddFileTypeSelectForm
-        
+
         request = request_factory.post(reverse('signer:signer-add-file_import-file_type_select'))
         request.user = Mock(has_perm=Mock(return_value=True))
         view = SignerAddFileImportFileTypeSelectView()
         view.request = request
-        
+
         form = SignerAddFileTypeSelectForm(data={'method_select': 'pkcs_12'})
         assert form.is_valid()
-        
+
         response = view.form_valid(form)
         assert response.status_code == 302
         assert 'pkcs12' in response.url
@@ -192,6 +197,8 @@ class TestSignerAddFileImportFileTypeSelectView:
         response = view.form_valid(form)
         assert response.status_code == 302
         assert 'separate-files' in response.url or 'separate_files' in response.url
+
+
 @pytest.mark.django_db
 class TestSignerAddFileImportPkcs12View:
     """Test cases for SignerAddFileImportPkcs12View."""
@@ -205,6 +212,15 @@ class TestSignerAddFileImportPkcs12View:
         """Test view has correct success URL."""
         view = SignerAddFileImportPkcs12View()
         assert view.success_url == reverse('signer:signer_list')
+
+    def test_import_requires_manage_signer_permission(self):
+        """A user without MANAGE_SIGNER is rejected before the form can persist a signer."""
+        request = RequestFactory().post('/signer/add/file-import/pkcs12/')
+        request.user = Mock(is_authenticated=True)
+        request.user.has_perm.return_value = False
+
+        with pytest.raises(PermissionDenied):
+            SignerAddFileImportPkcs12View.as_view()(request)
 
     @patch('signer.views.AuditLog.create_entry')
     def test_form_valid_creates_audit_log(self, mock_create_entry):
@@ -306,7 +322,7 @@ class TestSignerConfigView:
         request = request_factory.get(reverse('signer:signer-config', kwargs={'pk': sample_signer.pk}))
         view = SignerConfigView.as_view()
         response = view(request, pk=sample_signer.pk)
-        
+
         assert response.status_code == 200
 
 
@@ -327,41 +343,25 @@ class TestSignedMessagesListView:
     def test_view_filters_by_signer(self, request_factory, sample_signer):
         """Test view filters signed messages by signer."""
         # Create signed messages
-        SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='abc123',
-            signature='sig123'
-        )
-        SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='def456',
-            signature='sig456'
-        )
-        
+        SignedMessageModel.objects.create(signer=sample_signer, hash_value='abc123', signature='sig123')
+        SignedMessageModel.objects.create(signer=sample_signer, hash_value='def456', signature='sig456')
+
         view = SignedMessagesListView()
         view.kwargs = {'pk': sample_signer.pk}
         queryset = view.get_queryset()
-        
+
         assert queryset.count() == 2
         assert all(msg.signer == sample_signer for msg in queryset)
 
     def test_view_orders_by_created_at_desc(self, request_factory, sample_signer):
         """Test view orders signed messages by created_at descending."""
-        msg1 = SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='first',
-            signature='sig1'
-        )
-        msg2 = SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='second',
-            signature='sig2'
-        )
-        
+        msg1 = SignedMessageModel.objects.create(signer=sample_signer, hash_value='first', signature='sig1')
+        msg2 = SignedMessageModel.objects.create(signer=sample_signer, hash_value='second', signature='sig2')
+
         view = SignedMessagesListView()
         view.kwargs = {'pk': sample_signer.pk}
         queryset = view.get_queryset()
-        
+
         # Most recent first
         assert list(queryset)[0].pk == msg2.pk
         assert list(queryset)[1].pk == msg1.pk
@@ -393,8 +393,8 @@ class TestSignerBulkDeleteConfirmView:
         request = factory.post('/signer/delete/1/')
         request.user = Mock(is_authenticated=True)
         request._messages = Mock()
-        
-        
+
+
 @pytest.mark.django_db
 class TestSignerBulkDeleteConfirmView:
     """Test cases for SignerBulkDeleteConfirmView."""
@@ -518,49 +518,45 @@ class TestSignHashView:
         valid_hash = 'a' * 64
 
         form = SignHashForm()
-        form.cleaned_data = {
-            'signer': sample_signer,
-            'hash_value': valid_hash
-        }
+        form.cleaned_data = {'signer': sample_signer, 'hash_value': valid_hash}
 
         with patch.object(sample_signer.credential, 'get_private_key') as mock_get_key:
             # Generate a real RSA key for signing
             from cryptography.hazmat.primitives.asymmetric import rsa
+
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             mock_get_key.return_value = private_key
 
             response = view.form_valid(form)
 
             assert response.status_code == 302
-            assert 'success' in response.url            # Check that signed message was created
+            assert 'success' in response.url  # Check that signed message was created
             assert SignedMessageModel.objects.filter(signer=sample_signer).exists()
 
     def test_form_valid_stores_signature_in_session(self, request_factory, sample_signer):
         """Test form_valid stores signature data in session."""
         from signer.forms import SignHashForm
-        
+
         request = request_factory.post(reverse('signer:sign_hash'))
         request.session = {}
         request._messages = Mock()
-        
+
         view = SignHashView()
         view.request = request
-        
+
         valid_hash = 'a' * 64
-        
+
         form = SignHashForm()
-        form.cleaned_data = {
-            'signer': sample_signer,
-            'hash_value': valid_hash
-        }
-        
+        form.cleaned_data = {'signer': sample_signer, 'hash_value': valid_hash}
+
         with patch.object(sample_signer.credential, 'get_private_key') as mock_get_key:
             from cryptography.hazmat.primitives.asymmetric import rsa
+
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             mock_get_key.return_value = private_key
-            
+
             view.form_valid(form)
-            
+
             assert 'last_signature' in request.session
             signature_data = request.session['last_signature']
             assert 'signer_name' in signature_data
@@ -571,25 +567,22 @@ class TestSignHashView:
     def test_form_valid_handles_signing_error(self, request_factory, sample_signer):
         """Test form_valid handles signing errors gracefully."""
         from signer.forms import SignHashForm
-        
+
         request = request_factory.post(reverse('signer:sign_hash'))
         request.session = {}
         request._messages = Mock()
-        
+
         view = SignHashView()
         view.request = request
-        
+
         form = SignHashForm()
-        form.cleaned_data = {
-            'signer': sample_signer,
-            'hash_value': 'a' * 64
-        }
-        
+        form.cleaned_data = {'signer': sample_signer, 'hash_value': 'a' * 64}
+
         with patch.object(sample_signer.credential, 'get_private_key') as mock_get_key:
             mock_get_key.side_effect = Exception('Signing failed')
-            
+
             response = view.form_valid(form)
-            
+
             # Should return form_invalid response
             assert response.status_code == 200
 
@@ -606,14 +599,14 @@ class TestSignHashSuccessView:
     def test_get_displays_signature_from_session(self, request_factory):
         """Test GET displays signature data from session."""
         from django.contrib.messages.storage.fallback import FallbackStorage
-        
+
         request = request_factory.get(reverse('signer:sign_hash_success'))
         request.session = {
             'last_signature': {
                 'signer_name': 'test-signer',
                 'hash_algorithm': 'SHA256',
                 'hash_value': 'a' * 64,
-                'signature': 'b' * 128
+                'signature': 'b' * 128,
             }
         }
         # Use Django's message storage for template rendering
@@ -621,7 +614,7 @@ class TestSignHashSuccessView:
 
         view = SignHashSuccessView()
         response = view.get(request)
-        
+
         assert response.status_code == 200
         # Session data should be removed after retrieval
         assert 'last_signature' not in request.session
@@ -642,6 +635,6 @@ class TestSignHashSuccessView:
         """Test get_context_data includes context_page_category."""
         view = SignHashSuccessView()
         context = view.get_context_data()
-        
+
         assert 'context_page_category' in context
         assert context['context_page_category'] == 'signer'

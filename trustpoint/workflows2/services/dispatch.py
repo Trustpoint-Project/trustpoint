@@ -118,7 +118,9 @@ class WorkflowDispatchService:
             locked_until__lte=now,
         ).exists()
 
-    def _drain_jobs_in_process(self, *, worker_id: str = 'inline-worker', max_ticks: int = 200) -> None:
+    def _drain_jobs_in_process(
+        self, *, worker_id: str = 'inline-worker', max_ticks: int = 200, raise_on_limit: bool = True
+    ) -> None:
         """Drain runnable jobs until nothing is claimable (blocked or empty).
 
         For inline drain we disable heartbeat to avoid concurrent DB writes.
@@ -146,20 +148,25 @@ class WorkflowDispatchService:
             if stats.claimed == 0 and stats.recovered == 0:
                 return
 
-        msg = 'Inline drain exceeded max_ticks (possible infinite job loop)'
-        raise RuntimeError(msg)
+        if raise_on_limit:
+            msg = 'Inline drain exceeded max_ticks (possible infinite job loop)'
+            raise RuntimeError(msg)
 
-    def _drain_after_commit(self, run_id: str | None = None) -> None:
+    def _drain_after_commit(
+        self, run_id: str | None = None, *, max_ticks: int = 200, raise_on_limit: bool = True
+    ) -> None:
         """Drain queued jobs after commit and refresh the run status."""
         try:
-            self._drain_jobs_in_process(worker_id='inline-worker')
+            self._drain_jobs_in_process(worker_id='inline-worker', max_ticks=max_ticks, raise_on_limit=raise_on_limit)
         finally:
             with suppress(Exception):
                 if run_id:
                     run = Workflow2Run.objects.get(id=run_id)
                     self.runtime.recompute_run_status(run)
 
-    def drain_pending_jobs_if_inline(self, *, run_id: str | None = None) -> bool:
+    def drain_pending_jobs_if_inline(
+        self, *, run_id: str | None = None, max_ticks: int = 200, raise_on_limit: bool = True
+    ) -> bool:
         """Drain pending worker jobs when the current execution mode routes work inline."""
         if not self.runs_inline():
             return False
@@ -167,9 +174,11 @@ class WorkflowDispatchService:
             return False
 
         if connection.in_atomic_block:
-            transaction.on_commit(partial(self._drain_after_commit, run_id))
+            transaction.on_commit(
+                partial(self._drain_after_commit, run_id, max_ticks=max_ticks, raise_on_limit=raise_on_limit)
+            )
         else:
-            self._drain_after_commit(run_id)
+            self._drain_after_commit(run_id, max_ticks=max_ticks, raise_on_limit=raise_on_limit)
 
         return True
 

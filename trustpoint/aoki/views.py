@@ -20,6 +20,7 @@ from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from pki.util.x509 import ClientCertificateAuthenticationError, NginxTLSClientCertExtractor
+from request.request_validator.http_req import TrustedProxyHeadersValidation
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import LoggedHttpResponse
 
@@ -138,8 +139,10 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'No TLS server certificate available. Are you on the development server?', status=500
             )
         try:
+            TrustedProxyHeadersValidation().validate_request_peer(request)
             client_cert, intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
-        except ClientCertificateAuthenticationError:
+        except (ClientCertificateAuthenticationError, ValueError):
+            self.logger.warning('AOKI initialization rejected: client certificate was not supplied by a trusted proxy.')
             return LoggedHttpResponse('No valid TLS client certificate provided.', status=401)
 
         try:

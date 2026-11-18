@@ -359,6 +359,14 @@ def test_public_paths():
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
 
 
+def test_template_context_processors_include_alerts_and_workflow_counts():
+    """Global UI context processors must be registered for templates to receive them."""
+    processors = settings.TEMPLATES[0]['OPTIONS']['context_processors']
+
+    assert 'management.context_processors.ui_config' in processors
+    assert 'workflows2.context_processors.waiting_counts' in processors
+
+
 def test_hsm_paths():
     """Verify HSM path defaults are anchored correctly."""
     assert settings.HSM_ROOT == settings.REPO_ROOT / 'var' / 'hsm'

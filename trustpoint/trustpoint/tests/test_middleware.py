@@ -231,7 +231,9 @@ class TestWorkflow2InlineDrainMiddleware:
         with patch('trustpoint.middleware.WorkflowDispatchService') as mock_service:
             workflow2_middleware.process_request(http_request)
 
-        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with()
+        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with(
+            max_ticks=5, raise_on_limit=False
+        )
 
     def test_process_request_skips_anonymous_requests(self, workflow2_middleware, http_request):
         """Public enrollment traffic must not trigger background workflow work."""
@@ -247,4 +249,6 @@ class TestWorkflow2InlineDrainMiddleware:
             workflow2_middleware.process_request(http_request)
             workflow2_middleware.process_request(http_request)
 
-        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with()
+        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with(
+            max_ticks=5, raise_on_limit=False
+        )

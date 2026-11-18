@@ -1025,11 +1025,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         # Check for unexpired certificates
         qs = self.get_issued_certificates()
-
-        for cert in qs:
-            if cert.certificate_status != CertificateModel.CertificateStatus.EXPIRED:
-                exc_msg = f'Cannot delete the CA {self} because it has issued unexpired certificate {cert}.'
-                raise ValidationError(exc_msg)
+        blocking = qs.filter(models.Q(not_valid_after__gt=timezone.now()) | models.Q(revoked_certificate__isnull=False))
+        if blocking.exists():
+            exc_msg = f'Cannot delete the CA {self} because it has issued unexpired certificate(s).'
+            raise ValidationError(exc_msg)
 
     def post_delete(self) -> None:
         """Deletes the underlying credential or certificate after deleting this CA."""

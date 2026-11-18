@@ -3,6 +3,7 @@
 
 """Serializers for Signer-related API endpoints."""
 
+import hashlib
 from typing import Any, ClassVar
 
 from rest_framework import serializers
@@ -72,6 +73,21 @@ class SignHashRequestSerializer(serializers.Serializer[Any]):
             raise serializers.ValidationError(msg) from e
 
         return value.lower()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Reject digests whose length does not match the signer's hash algorithm."""
+        signer = SignerModel.objects.filter(id=attrs['signer_id']).first()
+        if signer is None:
+            raise serializers.ValidationError({'signer_id': 'Signer does not exist.'})
+        try:
+            digest_size = hashlib.new(signer.hash_algorithm).digest_size
+        except ValueError as exc:
+            msg = 'The signer hash algorithm is not supported.'
+            raise serializers.ValidationError({'hash_value': msg}) from exc
+        if len(bytes.fromhex(attrs['hash_value'])) != digest_size:
+            msg = f'The hash value must be {digest_size} bytes for {signer.hash_algorithm}.'
+            raise serializers.ValidationError({'hash_value': msg})
+        return attrs
 
 
 class SignHashResponseSerializer(serializers.Serializer[Any]):

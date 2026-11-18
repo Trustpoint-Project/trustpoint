@@ -11,7 +11,11 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from devices.models import DeviceModel, OpcUaGdsPushConfig
-from devices.tasks import perform_gds_push_update
+from devices.tasks import (
+    perform_gds_push_update,
+    update_gds_push_server_certificate,
+    update_gds_push_trustlist,
+)
 
 from request.gds_push import GdsPushError, GdsPushService
 
@@ -404,3 +408,29 @@ class TestPerformGdsPushUpdate:
 
             assert 'Periodic GDS Push update disabled' in caplog.text
             mock_service.assert_not_called()
+
+
+class TestManualGdsPushTasks:
+    """Manual update tasks must run even when the periodic schedule is disabled."""
+
+    def test_update_trustlist_runs_once(self, mock_models):
+        """The task delegates to the GDS Push service."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_trustlist = AsyncMock(return_value=(True, 'ok'))
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            update_gds_push_trustlist(device.pk)
+
+        service.update_trustlist.assert_called_once()
+
+    def test_update_server_certificate_runs_once(self, mock_models):
+        """The task delegates the certificate push to the GDS Push service."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_server_certificate = AsyncMock(return_value=(True, 'ok', b'certificate'))
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            update_gds_push_server_certificate(device.pk)
+
+        service.update_server_certificate.assert_called_once()
