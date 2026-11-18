@@ -227,10 +227,10 @@ def test_application_credential_is_not_a_domain_credential(
 
 
 @pytest.mark.django_db
-def test_revocation_is_skipped_without_a_domain(
+def test_domainless_credential_revokes_through_certificate_issuer(
     credential_instance: dict[str, Any], device_instance: dict[str, Any], profile: CertificateProfileModel
 ) -> None:
-    """A credential without a domain has no issuing CA and is not revoked."""
+    """A credential without a domain still revokes its certificate via the verified issuer."""
     device = device_instance['device']
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Domainless Credential',
@@ -244,7 +244,8 @@ def test_revocation_is_skipped_without_a_domain(
 
     issued_credential.revoke()
 
-    assert not RevokedCertificateModel.objects.filter(certificate=issued_credential.credential.certificate).exists()
+    revocation = RevokedCertificateModel.objects.get(certificate=issued_credential.credential.certificate)
+    assert revocation.ca is not None
 
 
 @pytest.mark.django_db

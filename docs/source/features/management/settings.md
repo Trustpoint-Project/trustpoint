@@ -105,7 +105,7 @@ Configure Prometheus metrics export and view basic runtime metrics.
 
 | Area | Description |
 |---|---|
-| Prometheus export | Enables the `/prometheus/metrics` endpoint for scraping. |
+| Prometheus export | Enables the `/prometheus/metrics` endpoint for scraping. Scrapers must send `Authorization: Bearer $TRUSTPOINT_PROMETHEUS_METRICS_TOKEN`. |
 | Application metrics | Shows uptime, start time, and database size. |
 | Container metrics | Shows memory usage, disk I/O, and network I/O. |
 

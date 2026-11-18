@@ -6,7 +6,9 @@ This document describes operational procedures, monitoring, logging, health chec
 
 ### Prometheus Metrics
 
-**Metrics endpoint:** `/metrics`
+**Metrics endpoint:** `/prometheus/metrics`
+
+**Authentication:** Enable the export in Settings, set `TRUSTPOINT_PROMETHEUS_METRICS_TOKEN`, and scrape with `Authorization: Bearer <token>`. The endpoint returns 503 when metrics are enabled without a token.
 
 **Key metrics categories:**
 

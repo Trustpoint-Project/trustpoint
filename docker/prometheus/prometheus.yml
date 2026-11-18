@@ -14,5 +14,10 @@ scrape_configs:
     # Do not disable verification in production.
     tls_config:
       insecure_skip_verify: true
+    # Metrics are enabled in the UI only after a scrape token is configured.
+    # Add this to scrape them:
+    # authorization:
+    #   type: Bearer
+    #   credentials_file: /run/secrets/prometheus_metrics_token
     static_configs:
       - targets: ["trustpoint:443"]

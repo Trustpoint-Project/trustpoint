@@ -42,3 +42,9 @@ def test_https_channel_binding_headers_are_derived_from_tls() -> None:
         'X-EST-TLS-Protocol $ssl_protocol',
     ]:
         assert f'proxy_set_header {header};' in https_server
+
+
+def test_https_requires_browsers_to_stay_on_tls() -> None:
+    """Port 80 stays open for enrollment, so browsers must pin HTTPS."""
+    https_server = CONFIG.read_text().split('# HTTPS server', 1)[1]
+    assert 'add_header Strict-Transport-Security "max-age=31536000" always;' in https_server

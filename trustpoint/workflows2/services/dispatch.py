@@ -18,7 +18,7 @@ from django.utils import timezone
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.context import RuntimeContext
 from workflows2.engine.eval import eval_condition
-from workflows2.engine.executor import WorkflowExecutor
+from workflows2.engine.executor import MAX_WEBHOOK_TIMEOUT_SECONDS, WorkflowExecutor
 from workflows2.events.triggers import Triggers
 from workflows2.models import (
     Workflow2Definition,
@@ -32,6 +32,10 @@ from workflows2.services.transitions import WorkflowRunTransitionService
 from workflows2.services.worker import Workflow2DbWorker
 
 DispatchStatus = Literal['completed', 'blocked', 'running']
+
+# Inline workers run inside a web request and do not renew a heartbeat, so the
+# lease must cover the longest possible step (webhook timeout) plus a margin.
+INLINE_WORKER_LEASE_SECONDS = MAX_WEBHOOK_TIMEOUT_SECONDS + 60
 
 
 @dataclass(frozen=True)
@@ -129,7 +133,7 @@ class WorkflowDispatchService:
         worker = Workflow2DbWorker(
             runtime=self.runtime,
             worker_id=worker_id,
-            lease_seconds=5,
+            lease_seconds=INLINE_WORKER_LEASE_SECONDS,
             batch_limit=50,
             heartbeat_enabled=False,
         )

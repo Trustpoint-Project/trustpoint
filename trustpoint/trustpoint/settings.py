@@ -94,6 +94,10 @@ PUBLIC_PATHS = [
     '/prometheus/',
 ]
 
+# Scrapers authenticate with "Authorization: Bearer <token>"; the endpoint
+# fails closed when metrics are enabled but no token is configured.
+TRUSTPOINT_PROMETHEUS_METRICS_TOKEN = os.getenv('TRUSTPOINT_PROMETHEUS_METRICS_TOKEN', '').strip()
+
 
 # ------------- Variables --------------
 
@@ -581,6 +585,14 @@ TEMPLATES: list[dict[str, Any]] = [
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPolicyValidator'}]
+
+# Prefer Argon2 for new hashes; keep the older hashers so existing hashes still verify.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
 
 # Authentication backends
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends

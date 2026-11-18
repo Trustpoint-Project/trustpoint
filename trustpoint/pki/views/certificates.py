@@ -504,6 +504,15 @@ class CertificateViewSet(
             AppPermissions.MANAGE_TRUSTSTORES
         ):
             raise PermissionDenied
+        if instance.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+            msg = 'Revoked certificates cannot be deleted; the CRL entry would be lost.'
+            raise ValidationError(msg)
+        if (
+            instance.certificate_status == CertificateModel.CertificateStatus.OK
+            and instance.credential_set.filter(issued_credential__isnull=False).exists()
+        ):
+            msg = 'Issued certificates cannot be deleted. Revoke them first.'
+            raise ValidationError(msg)
         super().perform_destroy(instance)
 
     def _download_certificates(
