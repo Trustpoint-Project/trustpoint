@@ -13,7 +13,7 @@ from django.db import close_old_connections, connection
 
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.executor import WorkflowExecutor
-from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.definitions import WorkflowDefinitionService
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 from workflows2.services.runtime import WorkflowRuntimeService

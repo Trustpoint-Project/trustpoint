@@ -253,20 +253,20 @@ class DeviceBrowserCredentialDownloadView(
     is_browser_download = True
 
     @transaction.atomic
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, _request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Serialize token validation and the private-key response for one-time delivery."""
-        token = request.GET.get('token', '')
+        token = _request.GET.get('token', '')
         locked = (
             RemoteDeviceCredentialDownloadModel.objects.select_for_update()
             .filter(pk=self.credential_download.pk)
             .first()
         )
         if locked is None or not locked.check_token(token):
-            messages.warning(request, 'Invalid download token.')
+            messages.warning(_request, 'Invalid download token.')
             return redirect('devices:browser_login')
 
         self.credential_download = locked
-        return super().post(request, *args, **kwargs)
+        return super().post(_request, *args, **kwargs)
 
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------

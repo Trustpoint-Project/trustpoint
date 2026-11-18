@@ -121,13 +121,13 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingFilesTableView(
+class LoggingFilesTableView(  # type: ignore[misc]
     UserPermissionRequiredMixin,
     PageContextMixin,
     LoggerMixin,
     SortableTableFromListMixin,
-    ListView,
-):  # type: ignore[type-arg,misc]
+    ListView[Any],
+):
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
