@@ -123,7 +123,12 @@ class WorkflowDispatchService:
         ).exists()
 
     def _drain_jobs_in_process(
-        self, *, worker_id: str = 'inline-worker', max_ticks: int = 200, raise_on_limit: bool = True
+        self,
+        *,
+        worker_id: str = 'inline-worker',
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
     ) -> None:
         """Drain runnable jobs until nothing is claimable (blocked or empty).
 
@@ -134,7 +139,7 @@ class WorkflowDispatchService:
             runtime=self.runtime,
             worker_id=worker_id,
             lease_seconds=INLINE_WORKER_LEASE_SECONDS,
-            batch_limit=50,
+            batch_limit=max_jobs,
             heartbeat_enabled=False,
         )
 
@@ -157,11 +162,21 @@ class WorkflowDispatchService:
             raise RuntimeError(msg)
 
     def _drain_after_commit(
-        self, run_id: str | None = None, *, max_ticks: int = 200, raise_on_limit: bool = True
+        self,
+        run_id: str | None = None,
+        *,
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
     ) -> None:
         """Drain queued jobs after commit and refresh the run status."""
         try:
-            self._drain_jobs_in_process(worker_id='inline-worker', max_ticks=max_ticks, raise_on_limit=raise_on_limit)
+            self._drain_jobs_in_process(
+                worker_id='inline-worker',
+                max_ticks=max_ticks,
+                max_jobs=max_jobs,
+                raise_on_limit=raise_on_limit,
+            )
         finally:
             with suppress(Exception):
                 if run_id:
@@ -169,7 +184,12 @@ class WorkflowDispatchService:
                     self.runtime.recompute_run_status(run)
 
     def drain_pending_jobs_if_inline(
-        self, *, run_id: str | None = None, max_ticks: int = 200, raise_on_limit: bool = True
+        self,
+        *,
+        run_id: str | None = None,
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
     ) -> bool:
         """Drain pending worker jobs when the current execution mode routes work inline."""
         if not self.runs_inline():
@@ -179,10 +199,18 @@ class WorkflowDispatchService:
 
         if connection.in_atomic_block:
             transaction.on_commit(
-                partial(self._drain_after_commit, run_id, max_ticks=max_ticks, raise_on_limit=raise_on_limit)
+                partial(
+                    self._drain_after_commit,
+                    run_id,
+                    max_ticks=max_ticks,
+                    max_jobs=max_jobs,
+                    raise_on_limit=raise_on_limit,
+                )
             )
         else:
-            self._drain_after_commit(run_id, max_ticks=max_ticks, raise_on_limit=raise_on_limit)
+            self._drain_after_commit(
+                run_id, max_ticks=max_ticks, max_jobs=max_jobs, raise_on_limit=raise_on_limit
+            )
 
         return True
 

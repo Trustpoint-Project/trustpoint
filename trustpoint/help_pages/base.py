@@ -35,6 +35,8 @@ if TYPE_CHECKING:
 class HelpPageStrategy(abc.ABC):
     """Abstract base class for help page strategies."""
 
+    shows_enrollment_secret = False
+
     @abc.abstractmethod
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         """Builds the required sections."""

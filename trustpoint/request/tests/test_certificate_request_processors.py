@@ -59,9 +59,10 @@ def test_local_ca_certificate_issue_processor_tolerates_request_without_meta() -
 
     with patch('request.operation_processor.issue_cert.settings') as mock_settings:
         mock_settings.TP_HTTP_PORT = '80'
+        mock_settings.TP_TLS_PUBLIC_HOSTS = ['crl.example.test']
         url = LocalCaCertificateIssueProcessor()._get_crl_distribution_point_url(context, ca_id=7)  # noqa: SLF001
 
-    assert url.endswith('/crl/7')
+    assert url == 'http://crl.example.test/crl/7'
 
 
 def test_credential_issue_processor_validates_context_and_request() -> None:

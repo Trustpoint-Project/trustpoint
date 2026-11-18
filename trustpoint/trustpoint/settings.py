@@ -159,9 +159,6 @@ TRUSTPOINT_PHASE_CONFIGURED = _TRUSTPOINT_PHASE_ENV in TRUSTPOINT_VALID_PHASES o
 )
 TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
 
-if TRUSTPOINT_IS_BOOTSTRAP:
-    PUBLIC_PATHS.append('/setup-wizard')
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -269,6 +266,10 @@ for dns_name in _tls_dns_names:
         _https_origin = f'https://{dns_name}'
         if _https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
+
+# Public names a device can use to reach this server. Issued certificates embed
+# one of them in their CRL distribution point.
+TP_TLS_PUBLIC_HOSTS = [*_tls_ipv4_addrs, *_tls_dns_names, *_tls_ipv6_addrs]
 
 
 # Settings for postgreql database

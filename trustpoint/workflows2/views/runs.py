@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2RunListView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """List workflow runs with filtering and status summaries."""
 
     page_category = 'workflows2'
@@ -191,7 +191,7 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
         return 'text-bg-light text-dark'
 
 
-class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2RunDetailView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow run with its instances and event context."""
 
     page_category = 'workflows2'

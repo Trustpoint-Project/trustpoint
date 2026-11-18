@@ -1351,9 +1351,9 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         summary='Retrieve Issuing CA',
         description='Retrieve details of a specific Issuing CA by ID.',
     )
-    def retrieve(self, request: Request) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request)
+        return super().retrieve(request, *args, **kwargs)
 
     @extend_schema(
         summary='Import Issuing CA from PEM files',

@@ -14,6 +14,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import AttributeOID
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
@@ -558,6 +559,15 @@ class ScepPkiOperationHandler(LoggerMixin):
         target = device if device is not None else self.domain
         label = f'Device: {device.common_name} | ' if device is not None else ''
         try:
+            # shortcut: one rejection audit per target per minute; failure notifications keep the details.
+            recent = AuditLog.objects.filter(
+                operation_type=AuditLog.OperationType.SCEP_REJECTED,
+                target_content_type=ContentType.objects.get_for_model(target),
+                target_object_id=str(target.pk),
+                timestamp__gte=timezone.now() - dt.timedelta(minutes=1),
+            )
+            if recent.exists():
+                return
             AuditLog.create_entry(
                 operation_type=AuditLog.OperationType.SCEP_REJECTED,
                 target=target,

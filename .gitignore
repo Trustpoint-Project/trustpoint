@@ -211,3 +211,6 @@ trustpoint/request/gds_push/asyncua-gds-push-test/state/*
 
 # Deployment-provided secret files
 /secrets/
+
+# Local certificate/key artifacts must never be committed
+/*.pem

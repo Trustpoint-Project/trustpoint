@@ -93,6 +93,13 @@ def test_resolved_device_and_domain_are_linked(notifications_enabled, device_ins
     assert notification.notification_source == NotificationModel.NotificationSource.DEVICE
 
 
+def test_anonymous_failure_notifications_are_capped(notifications_enabled):
+    """A failed-request storm must not grow the notification table without bound."""
+    for _ in range(7):
+        EstCertificateRequestContext(http_response_status=403).to_http_response()
+    assert NotificationModel.objects.filter(event='REQUEST_FAILED').count() == 5
+
+
 def test_notification_failure_preserves_response_and_transaction(notifications_enabled):
     with (
         transaction.atomic(),

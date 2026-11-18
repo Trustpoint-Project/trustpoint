@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.utils import timezone
 
 from devices.models import DeviceModel
 from management.models import NotificationConfig, NotificationModel, NotificationStatus
@@ -18,6 +20,11 @@ if TYPE_CHECKING:
     from request.request_context import BaseRequestContext
 
 logger = logging.getLogger(__name__)
+
+# Keep a failure storm from filling the notification table. Identified devices
+# and domains get their own bucket; unidentified failures share one bucket.
+NOTIFICATION_BURST_LIMIT = 5
+NOTIFICATION_BURST_WINDOW = timedelta(minutes=1)
 
 _PROTOCOLS = frozenset({'cmp', 'est', 'rest', 'scep', 'manual'})
 _OPERATIONS = frozenset({
@@ -42,6 +49,19 @@ def notify_request_failure(context: BaseRequestContext) -> None:
                 return
             device = context.device if isinstance(context.device, DeviceModel) and context.device.pk else None
             domain = context.domain if isinstance(context.domain, DomainModel) and context.domain.pk else None
+            recent = NotificationModel.objects.filter(
+                event='REQUEST_FAILED',
+                message_type=NotificationModel.NotificationMessageType.REQUEST_FAILED,
+                created_at__gte=timezone.now() - NOTIFICATION_BURST_WINDOW,
+            )
+            if device is not None:
+                recent = recent.filter(device=device)
+            elif domain is not None:
+                recent = recent.filter(domain=domain)
+            else:
+                recent = recent.filter(device__isnull=True, domain__isnull=True)
+            if recent.count() >= NOTIFICATION_BURST_LIMIT:
+                return
             notification = NotificationModel.objects.create(
                 event='REQUEST_FAILED',
                 notification_source=(

@@ -18,6 +18,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance
@@ -97,7 +98,19 @@ def _build_timeout_context(
     }
 
 
-class Workflow2WaitingListView(PageContextMixin, LoginRequiredMixin, View):
+class WF2ApprovalPermReqMixin(UserPermissionRequiredMixin):
+    """Allow workflow managers and approvers to read the approval queue."""
+
+    def has_permission(self) -> bool:
+        """Allow workflow managers and approvers."""
+        user = self.request.user
+        return bool(
+            user.is_authenticated
+            and (user.has_perm(AppPermissions.MANAGE_WORKFLOWS) or user.has_perm(AppPermissions.APPROVE_WORKFLOWS))
+        )
+
+
+class Workflow2WaitingListView(WF2ApprovalPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """List workflow items waiting for user action."""
 
     page_category = 'workflows2'
@@ -258,7 +271,7 @@ class Workflow2WaitingListView(PageContextMixin, LoginRequiredMixin, View):
 Workflow2ApprovalListView = Workflow2WaitingListView
 
 
-class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2ApprovalDetailView(WF2ApprovalPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show a single approval request in context."""
 
     page_category = 'workflows2'

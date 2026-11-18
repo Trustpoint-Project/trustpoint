@@ -497,6 +497,7 @@ class SecurityConfig(models.Model):
         self.max_cert_validity_days = defaults['max_cert_validity_days']
         self.max_crl_validity_days = defaults['max_crl_validity_days']
         self.credential_ttl_seconds = defaults['credential_ttl_seconds']
+        self.allow_user_defined_device_secrets = defaults['allow_user_defined_device_secrets']
         self.allow_ca_issuance = defaults['allow_ca_issuance']
         self.allow_self_signed_ca_creation = defaults['allow_self_signed_ca_creation']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
@@ -514,6 +515,7 @@ class SecurityConfig(models.Model):
                     'max_cert_validity_days',
                     'max_crl_validity_days',
                     'credential_ttl_seconds',
+                    'allow_user_defined_device_secrets',
                     'allow_ca_issuance',
                     'allow_self_signed_ca_creation',
                     'allow_self_signed_ca',

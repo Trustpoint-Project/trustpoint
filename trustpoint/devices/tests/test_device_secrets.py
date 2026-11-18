@@ -39,8 +39,10 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def policy():
-    config = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
+    config = SecurityConfig.objects.create(pk=1)
     config.apply_security_settings()
+    config.allow_user_defined_device_secrets = True
+    config.save(update_fields=['allow_user_defined_device_secrets'])
     return config
 
 

@@ -311,7 +311,8 @@ class Workflow2InlineDrainMiddleware(MiddlewareMixin):
 
     DRAIN_INTERVAL_SECONDS = 5
     # Keep a page request responsive; the worker (or the next request) handles the rest.
-    MAX_TICKS_PER_REQUEST = 5
+    MAX_TICKS_PER_REQUEST = 1
+    MAX_JOBS_PER_REQUEST = 1
 
     def process_request(self, request: HttpRequest) -> None:
         """Drain backlog opportunistically, at most once per interval for signed-in users."""
@@ -324,6 +325,7 @@ class Workflow2InlineDrainMiddleware(MiddlewareMixin):
         try:
             WorkflowDispatchService().drain_pending_jobs_if_inline(
                 max_ticks=self.MAX_TICKS_PER_REQUEST,
+                max_jobs=self.MAX_JOBS_PER_REQUEST,
                 raise_on_limit=False,
             )
         except Exception:

@@ -99,6 +99,7 @@ fi
 def test_compose_software_kek_source_and_target_are_configurable(tmp_path, filename):
     shutil.copyfile(ROOT / filename, tmp_path / filename)
     (tmp_path / '.env').write_text(
+        'DATABASE_PASSWORD=synthetic-test-password\n'
         'TRUSTPOINT_SOFTWARE_KEK_HOST_FILE=./external-kek\n'
         'TRUSTPOINT_SOFTWARE_KEK_FILE=/run/secrets/custom-kek\n'
     )

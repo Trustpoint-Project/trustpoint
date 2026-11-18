@@ -190,8 +190,8 @@ class _SetDeviceAuthentication(AuthenticationComponent):
 
 
 @pytest.mark.django_db
-def test_composite_authentication_updates_device_ip_from_forwarded_for(device_instance):
-    """Ensure authenticated requests persist the first forwarded client IP on the device."""
+def test_composite_authentication_uses_last_forwarded_hop(device_instance):
+    """Only the hop appended by the trusted proxy may set the device IP."""
     device = device_instance['device']
     device.ip_address = None
     device.save(update_fields=['ip_address'])
@@ -207,7 +207,29 @@ def test_composite_authentication_updates_device_ip_from_forwarded_for(device_in
     auth.authenticate(context)
 
     device.refresh_from_db()
-    assert device.ip_address == '203.0.113.5'
+    assert device.ip_address == '10.0.0.8'
+
+
+@pytest.mark.django_db
+def test_composite_authentication_prefers_real_ip_over_forwarded_for(device_instance):
+    """The client-supplied X-Forwarded-For prefix must not override X-Real-IP."""
+    device = device_instance['device']
+    device.ip_address = None
+    device.save(update_fields=['ip_address'])
+
+    request = RequestFactory().post('/')
+    request.META['HTTP_X_REAL_IP'] = '198.51.100.7'
+    request.META['HTTP_X_FORWARDED_FOR'] = '203.0.113.5, 10.0.0.8'
+    request.META['REMOTE_ADDR'] = '10.0.0.8'
+
+    context = HttpBaseRequestContext(raw_message=request)
+    auth = CompositeAuthentication()
+    auth.add(_SetDeviceAuthentication(device))
+
+    auth.authenticate(context)
+
+    device.refresh_from_db()
+    assert device.ip_address == '198.51.100.7'
 
 
 @pytest.mark.django_db

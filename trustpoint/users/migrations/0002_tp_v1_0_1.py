@@ -43,6 +43,7 @@ class Migration(migrations.Migration):
                     ('manage_notifications', 'Can manage notification settings'),
                     ('manage_tls_webserver_configuration', 'Can manage TLS webserver configuration'),
                     ('view_audit_log', 'Can view the audit log'),
+                    ('add_audit_log', 'Can add external audit log entries'),
                     ('view_system_logs', 'Can view system logs'),
                     ('view_metrics', 'Can view system metrics'),
                 ],

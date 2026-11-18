@@ -23,9 +23,9 @@ class DashboardAnalyticsSemanticsTests(SimpleTestCase):
     @patch('home.analytics.DeviceModel.objects')
     def test_application_certificate_buckets_cover_all_devices_without_double_counting(self, objects, active, bad, future):
         objects.all.return_value.count.return_value = 5
-        active.return_value.values_list.return_value = [1, 2]
-        bad.return_value.values_list.return_value = [2, 3]
-        future.return_value.values_list.return_value = [4]
+        active.return_value.count.return_value = 2
+        bad.return_value.exclude.return_value.count.return_value = 1
+        future.return_value.exclude.return_value.exclude.return_value.count.return_value = 1
         actual = application_certificate_device_counts(datetime(2026, 10, 19, tzinfo=UTC))
         self.assertEqual(actual, {'active': 2, 'expired_or_revoked_only': 1, 'not_yet_valid': 1, 'none': 1})
         self.assertEqual(sum(actual.values()), 5)

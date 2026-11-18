@@ -310,7 +310,8 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.debug('IP resolution skipped: META is not a dict')
             return None
 
-        # Prefer the original client address when running behind a reverse proxy.
+        # Prefer the address the TLS proxy asserts for the direct peer. The
+        # left-most X-Forwarded-For entry is client-supplied and spoofable.
         real_ip = meta.get('HTTP_X_REAL_IP')
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
         remote_addr = meta.get('REMOTE_ADDR')
@@ -324,42 +325,28 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
                 'remote_addr': remote_addr,
             },
         )
-        if isinstance(forwarded_for, str) and forwarded_for.strip():
-            candidate = forwarded_for.split(',', 1)[0].strip()
-            try:
-                resolved_ip = str(ipaddress.ip_address(candidate))
-            except ValueError:
-                self.logger.warning(
-                    'Invalid IP in X-Forwarded-For header',
-                    extra={'forwarded_for': forwarded_for},
-                )
-            else:
-                self.logger.info(
-                    'Resolved client IP from X-Forwarded-For header: %s (raw: %s)',
-                    resolved_ip,
-                    forwarded_for,
-                    extra={'ip_address': resolved_ip, 'raw_forwarded_for': forwarded_for},
-                )
-                return resolved_ip
 
-        remote_addr = meta.get('REMOTE_ADDR')
+        candidates: list[str] = []
+        if isinstance(real_ip, str) and real_ip.strip():
+            candidates.append(real_ip.strip())
+        if isinstance(forwarded_for, str) and forwarded_for.strip():
+            # nginx appends the real peer, so only the last hop is trustworthy.
+            candidates.append(forwarded_for.rsplit(',', 1)[-1].strip())
         if isinstance(remote_addr, str) and remote_addr.strip():
-            candidate = remote_addr.strip()
+            candidates.append(remote_addr.strip())
+
+        for candidate in candidates:
             try:
                 resolved_ip = str(ipaddress.ip_address(candidate))
             except ValueError:
-                self.logger.warning(
-                    'Invalid IP in REMOTE_ADDR',
-                    extra={'remote_addr': remote_addr},
-                )
-                return None
-            else:
-                self.logger.info(
-                    'Resolved client IP from REMOTE_ADDR: %s',
-                    resolved_ip,
-                    extra={'ip_address': resolved_ip},
-                )
-                return resolved_ip
+                self.logger.warning('Invalid client IP address in request headers', extra={'candidate': candidate})
+                continue
+            self.logger.info(
+                'Resolved client IP address from request headers: %s',
+                resolved_ip,
+                extra={'ip_address': resolved_ip},
+            )
+            return resolved_ip
 
         self.logger.warning('No valid IP address found in request headers')
         return None

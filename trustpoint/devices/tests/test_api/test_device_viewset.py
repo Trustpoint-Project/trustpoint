@@ -255,8 +255,10 @@ class TestDeviceViewSetWithOnboardingConfig:
     @pytest.fixture(autouse=True)
     def enable_custom_secrets(self) -> None:
         """These tests explicitly supply custom credentials under the opt-in policy."""
-        policy = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
+        policy = SecurityConfig.objects.create(pk=1)
         policy.apply_security_settings()
+        policy.allow_user_defined_device_secrets = True
+        policy.save(update_fields=['allow_user_defined_device_secrets'])
 
     def test_create_device_with_onboarding_config_cmp_shared_secret(self, authenticated_client: APIClient) -> None:
         """POST with nested onboarding_config creates both device and config."""

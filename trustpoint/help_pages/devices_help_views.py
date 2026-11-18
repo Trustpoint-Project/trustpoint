@@ -103,6 +103,14 @@ class BaseHelpView(UserPermissionRequiredMixin, PageContextMixin, DetailView[Dev
     strategy: HelpPageStrategy
     manual_webui = False
 
+    def has_permission(self) -> bool:
+        """Secret-bearing pages also require the credential-download permission."""
+        if not super().has_permission():
+            return False
+        if self.strategy.shows_enrollment_secret:
+            return bool(self.request.user.has_perm(AppPermissions.DOWNLOAD_CREDENTIALS))
+        return True
+
     def uses_onboarding_credential(self) -> bool:
         """Return whether this help page uses an onboarding password or shared secret."""
         return isinstance(
@@ -334,6 +342,8 @@ def _build_cert_profile_sections(
 class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding CMP shared-secret help page."""
 
+    shows_enrollment_secret = True
+
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -557,6 +567,8 @@ class DeviceCmpRevokeHelpView(BaseHelpView):
 
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding EST username and password help page."""
+
+    shows_enrollment_secret = True
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -835,6 +847,8 @@ def _build_webui_ca_trust_store_section(help_context: HelpContext) -> HelpSectio
 class NoOnboardingEstWebUiStrategy(HelpPageStrategy):
     """Manual device WebUI configuration for existing EST enrollment."""
 
+    shows_enrollment_secret = True
+
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -899,6 +913,8 @@ class DeviceNoOnboardingCmpWebUiHelpView(BaseHelpView):
 
 class NoOnboardingScepStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding SCEP (RFC 8894) help page."""
+
+    shows_enrollment_secret = True
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -1169,6 +1185,8 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
 class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
     """Strategy for building the onboarding CMP shared-secret help page."""
 
+    shows_enrollment_secret = True
+
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -1233,6 +1251,8 @@ class DeviceOnboardingDomainCredentialCmpSharedSecretHelpView(BaseHelpView):
 
 class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the onboarding est username and password help page."""
+
+    shows_enrollment_secret = True
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -1488,6 +1508,8 @@ class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
 class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding REST username/password help page."""
 
+    shows_enrollment_secret = True
+
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -1586,6 +1608,8 @@ class DeviceNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
 
 class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the onboarding REST username/password domain-credential help page."""
+
+    shows_enrollment_secret = True
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -2726,6 +2750,8 @@ def _agent_get_est_password(device: DeviceModel) -> str:
 
 class AgentSetupProfileStrategy(HelpPageStrategy):
     """Strategy for building the agent setup-profile help page."""
+
+    shows_enrollment_secret = True
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
