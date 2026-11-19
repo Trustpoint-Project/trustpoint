@@ -12,7 +12,6 @@ def stamp_existing_otps(apps, _schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('devices', '0001_initial'),
     ]
