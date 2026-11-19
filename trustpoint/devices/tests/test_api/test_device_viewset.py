@@ -103,14 +103,14 @@ class TestDeviceViewSetList:
         """Devices present in the DB appear in the list response."""
         response = authenticated_client.get(reverse('device-list'))
         assert response.status_code == status.HTTP_200_OK
-        ids = [item['id'] for item in response.data]
+        ids = [item['id'] for item in response.data['results']]
         assert device.pk in ids
 
     def test_list_exposes_expected_fields(self, authenticated_client: APIClient, device: DeviceModel) -> None:
         """Each list item includes core device fields."""
         response = authenticated_client.get(reverse('device-list'))
         assert response.status_code == status.HTTP_200_OK
-        item = next(d for d in response.data if d['id'] == device.pk)
+        item = next(d for d in response.data['results'] if d['id'] == device.pk)
         for field in ('id', 'common_name', 'serial_number', 'device_type', 'created_at', 'rfc_4122_uuid'):
             assert field in item
 
@@ -255,8 +255,10 @@ class TestDeviceViewSetWithOnboardingConfig:
     @pytest.fixture(autouse=True)
     def enable_custom_secrets(self) -> None:
         """These tests explicitly supply custom credentials under the opt-in policy."""
-        policy = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
+        policy = SecurityConfig.objects.create(pk=1)
         policy.apply_security_settings()
+        policy.allow_user_defined_device_secrets = True
+        policy.save(update_fields=['allow_user_defined_device_secrets'])
 
     def test_create_device_with_onboarding_config_cmp_shared_secret(self, authenticated_client: APIClient) -> None:
         """POST with nested onboarding_config creates both device and config."""
@@ -265,7 +267,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-ONBOARD-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'my-secret-123',
+                'cmp_shared_secret': 'my-secret-12345678',
                 'pki_protocols': [OnboardingPkiProtocol.CMP],
             },
         }
@@ -278,7 +280,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         device = DeviceModel.objects.get(pk=response.data['id'])
         assert device.onboarding_config is not None
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET
-        assert device.onboarding_config.cmp_shared_secret == 'my-secret-123'  # noqa: S105
+        assert device.onboarding_config.cmp_shared_secret == 'my-secret-12345678'  # noqa: S105
 
     def test_create_device_with_onboarding_config_est_username_password(self, authenticated_client: APIClient) -> None:
         """POST with EST username/password onboarding creates device correctly."""
@@ -287,7 +289,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-EST-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.EST_USERNAME_PASSWORD,
-                'est_password': 'est-password-456',
+                'est_password': 'est-password-456789',
                 'pki_protocols': [OnboardingPkiProtocol.EST],
             },
         }
@@ -298,7 +300,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         device = DeviceModel.objects.get(pk=response.data['id'])
         assert device.onboarding_config is not None
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD
-        assert device.onboarding_config.est_password == 'est-password-456'  # noqa: S105
+        assert device.onboarding_config.est_password == 'est-password-456789'  # noqa: S105
 
     def test_create_device_with_onboarding_config_multiple_pki_protocols(self, authenticated_client: APIClient) -> None:
         """POST with multiple PKI protocols creates device correctly."""
@@ -307,7 +309,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-MULTI-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'multi-secret',
+                'cmp_shared_secret': 'multi-secret-12345',
                 'pki_protocols': [OnboardingPkiProtocol.CMP, OnboardingPkiProtocol.EST],
             },
         }
@@ -329,7 +331,7 @@ class TestDeviceViewSetWithOnboardingConfig:
         payload = {
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'updated-secret',
+                'cmp_shared_secret': 'updated-secret-123',
                 'pki_protocols': [OnboardingPkiProtocol.CMP],
             },
         }
@@ -421,7 +423,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-ENUM-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'test-secret',
+                'cmp_shared_secret': 'test-secret-12345',
                 'pki_protocols': ['CMP', 'EST'],  # Using enum names instead of values
             },
         }
@@ -441,7 +443,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-MIXED-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'test-secret',
+                'cmp_shared_secret': 'test-secret-12345',
                 'pki_protocols': ['CMP', 2],  # Mix of enum name and integer value
             },
         }
@@ -461,7 +463,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-LOWER-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'test-secret',
+                'cmp_shared_secret': 'test-secret-12345',
                 'pki_protocols': ['cmp', 'est'],  # Lowercase enum names
             },
         }
@@ -481,7 +483,7 @@ class TestDeviceViewSetWithOnboardingConfig:
             'serial_number': 'SN-INVALID-001',
             'onboarding_config': {
                 'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
-                'cmp_shared_secret': 'test-secret',
+                'cmp_shared_secret': 'test-secret-12345',
                 'pki_protocols': ['INVALID_PROTOCOL'],
             },
         }

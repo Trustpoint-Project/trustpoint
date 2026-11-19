@@ -9,6 +9,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.http.request import HttpRequest
 from django.shortcuts import redirect
@@ -66,7 +67,6 @@ class DownloadTokenRequiredAuthenticationMixin:
             err_msg = 'Internal server error. Failed to get super().dispatch().'
             raise Http404(err_msg)
 
-        token = request.GET.get('token')
         try:
             self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
                 issued_credential_model=kwargs.get('pk')
@@ -75,6 +75,11 @@ class DownloadTokenRequiredAuthenticationMixin:
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
 
+        token = request.GET.get('token') or request.session.get(
+            RemoteDeviceCredentialDownloadModel.download_token_session_key(
+                self.credential_download.issued_credential_model_id
+            )
+        )
         if not token or not self.credential_download.check_token(token):
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
@@ -220,6 +225,10 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
                 as_attachment=True,
                 filename=f'trustpoint-{credential_type_name}-credential{file_format.file_extension}',
             )
+            response['Cache-Control'] = 'no-store'
+            if self.is_browser_download and hasattr(self, 'credential_download'):
+                # The URL token must not be usable for a second private-key download.
+                self.credential_download.consume_token()
 
             return cast('HttpResponse', response)
 
@@ -246,6 +255,29 @@ class DeviceBrowserCredentialDownloadView(
     """View to download a password protected domain or app credential in the desired format from a remote client."""
 
     is_browser_download = True
+
+    @transaction.atomic
+    def post(self, _request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Serialize token validation and the private-key response for one-time delivery."""
+        session_key = RemoteDeviceCredentialDownloadModel.download_token_session_key(
+            self.credential_download.issued_credential_model_id
+        )
+        token = _request.GET.get('token') or _request.session.get(session_key, '')
+        locked = (
+            RemoteDeviceCredentialDownloadModel.objects.select_for_update()
+            .filter(pk=self.credential_download.pk)
+            .first()
+        )
+        if locked is None or not locked.check_token(token):
+            messages.warning(_request, 'Invalid download token.')
+            return redirect('devices:browser_login')
+
+        self.credential_download = locked
+        response = super().post(_request, *args, **kwargs)
+        if isinstance(response, FileResponse):
+            # Keep the token in the session while the password form is re-rendered.
+            _request.session.pop(session_key, None)
+        return response
 
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------

@@ -1,6 +1,7 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -13,6 +14,7 @@ from request.request_context import (
     RestCertificateRequestContext,
 )
 from request.workflows2_handler import Workflow2CertificateRequestHandler, Workflow2HandleResult, Workflow2Handler
+from request.workflows2_handler import _build_certificate_request_dispatch, _build_cmp_request_dispatch
 from workflows2.events.request_events import Events
 from workflows2.events.triggers import Triggers
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
@@ -350,7 +352,7 @@ def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> N
     assert call['event']['cmp']['operation'] == 'initialization'
     assert call['event']['cmp']['transaction_id'] == 'a1b2c3'
     assert call['event']['cmp']['fingerprint']
-    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] != call['event']['cmp']['fingerprint']
     assert 'csr_pem' not in call['event']['cmp']
 
 
@@ -398,7 +400,7 @@ def test_workflows2_handler_cmp_idempotency_uses_cmp_body_not_transaction_id() -
 
     call = mock_service.return_value.emit_event_outcome.call_args.kwargs
     assert call['event']['cmp']['transaction_id'] == 'differenttxid'
-    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] != call['event']['cmp']['fingerprint']
     assert call['idempotency_key'] != 'differenttxid'
     assert context.workflow2_outcome == outcome
 
@@ -446,7 +448,7 @@ def test_workflows2_handler_emits_cmp_certification_from_request_context() -> No
     assert call['event']['cmp']['operation'] == 'certification'
     assert call['event']['cmp']['transaction_id'] == 'd4e5f6'
     assert call['event']['cmp']['fingerprint']
-    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] != call['event']['cmp']['fingerprint']
     assert context.workflow2_outcome == outcome
 
 
@@ -596,3 +598,38 @@ def test_workflows2_device_handler_continues_for_unknown_event() -> None:
     )
     result = Workflow2Handler().handle(context)
     assert result == Workflow2HandleResult.continue_processing()
+
+
+@pytest.mark.parametrize('protocol', ['rest', 'cmp'])
+@pytest.mark.parametrize('scope', ['device', 'domain', 'ca', 'profile'])
+def test_enrollment_workflow_keys_include_scope(test_csr_fixture, protocol, scope):
+    """Identical certificate requests cannot share approvals across enrollment scopes."""
+    ca = SimpleNamespace(id=11)
+    domain = SimpleNamespace(id=7, get_issuing_ca_or_value_error=lambda: ca)
+    device = SimpleNamespace(id=1, common_name='device', serial_number='serial')
+    profile = SimpleNamespace(pk=5)
+    context_type = RestCertificateRequestContext if protocol == 'rest' else CmpCertificateRequestContext
+    context = context_type(
+        protocol=protocol,
+        operation='enroll' if protocol == 'rest' else 'certification',
+        device=device,
+        domain=domain,
+        certificate_profile_model=profile,
+        cert_profile_str='tls_client',
+        cert_requested=test_csr_fixture.get_cryptography_object(),
+    )
+
+    def dispatch():
+        if protocol == 'rest':
+            return _build_certificate_request_dispatch(context, on='rest.enroll', event_key='rest', operation='enroll')
+        return _build_cmp_request_dispatch(context, on='cmp.certification', operation='certification')
+
+    with patch('request.workflows2_handler._cmp_body_bytes', return_value=b'same-body'):
+        original = dispatch()
+        assert dispatch().idempotency_key == original.idempotency_key
+        if scope == 'profile':
+            profile.pk += 1
+        else:
+            {'device': device, 'domain': domain, 'ca': ca}[scope].id += 1
+        changed = dispatch()
+    assert changed.idempotency_key != original.idempotency_key

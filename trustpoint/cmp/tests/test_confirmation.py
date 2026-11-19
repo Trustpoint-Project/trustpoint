@@ -14,7 +14,12 @@ from pyasn1.codec.der import decoder
 from pyasn1_modules import rfc4210
 from trustpoint_core.oid import HmacAlgorithm
 
-from cmp.confirmation import expire_confirmation, expire_due_confirmations, initialize_confirmation_expiry
+from cmp.confirmation import (
+    expire_confirmation,
+    expire_due_confirmations,
+    initialize_confirmation_expiry,
+    trim_finalized_cmp_transactions,
+)
 from cmp.models import CmpTransactionModel
 from devices.secrets import assign_secret
 from management.models import SecurityConfig
@@ -79,6 +84,16 @@ def test_implicit_confirmation_has_no_deadline(pending_confirmation):
     record = CmpTransactionState.mark_issued(record.pk, context)
     assert record.confirmation_deadline is None
     assert not expire_confirmation(record.pk, now=timezone.now() + timedelta(days=1))
+
+
+def test_trim_finalized_cmp_transactions_removes_old_request_payload(pending_confirmation):
+    record, _ = pending_confirmation
+    old = timezone.now() - timedelta(days=31)
+    CmpTransactionModel.objects.filter(pk=record.pk).update(finalized_at=old)
+
+    assert trim_finalized_cmp_transactions(now=timezone.now()) == 1
+    record.refresh_from_db()
+    assert record.request_der == b''
 
 
 def test_timeout_revokes_once_and_invalidates_bootstrap_without_completing_onboarding(pending_confirmation):

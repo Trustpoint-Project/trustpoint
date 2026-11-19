@@ -34,7 +34,11 @@ def resolve_revocation_ca(certificate: CertificateModel, ca: CaModel | None) -> 
         ca_certificate = ca.ca_certificate_model
         if ca_certificate is not None and ca_certificate.pk == issuer_pk:
             return ca
-    return CaModel.objects.filter(credential__certificate_id=issuer_pk).first() or ca
+    return (
+        CaModel.objects.filter(credential__certificate_id=issuer_pk).first()
+        or CaModel.objects.filter(certificate_id=issuer_pk).first()
+        or ca
+    )
 
 
 @transaction.atomic

@@ -85,12 +85,16 @@ class SftpClient:
             msg = 'No private key provided.'
             raise SftpError(msg)
 
-        try:
-            key_stream = io.StringIO(self.private_key_text)
-            return paramiko.RSAKey.from_private_key(key_stream, password=self.passphrase or None)
-        except paramiko.SSHException as e:
-            msg = f'Failed to load private key: {e}'
-            raise SftpError(msg) from e
+        key_stream = io.StringIO(self.private_key_text)
+        last_error: paramiko.SSHException | None = None
+        for key_type in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey):
+            key_stream.seek(0)
+            try:
+                return key_type.from_private_key(key_stream, password=self.passphrase or None)
+            except paramiko.SSHException as exc:
+                last_error = exc
+        msg = f'Failed to load private key: {last_error}'
+        raise SftpError(msg) from last_error
 
     def _connect_sftp(self) -> tuple[paramiko.SSHClient, paramiko.SFTPClient]:
         """Verify the pinned server key, then authenticate and open SFTP.

@@ -128,7 +128,7 @@ def _get_step_meta(inst: Workflow2Instance) -> dict[str, dict[str, Any]]:
     return meta
 
 
-class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2InstanceDetailView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow instance with step history, jobs, and approvals."""
 
     page_category = 'workflows2'

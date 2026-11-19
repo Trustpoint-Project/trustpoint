@@ -1,0 +1,66 @@
+@startuml
+' General interface for all authorization logic.
+interface AuthorizationComponent {
+    + authorize(context: RequestContext)
+}
+
+' Composite that combines multiple authorization mechanisms.
+class CompositeAuthorization {
+    + components: list[AuthorizationComponent]
+    + add(component: AuthorizationComponent)
+    + remove(component: AuthorizationComponent)
+    + authorize(context: RequestContext)
+}
+
+' Specific composite for EST authorization rules.
+class EstAuthorization {
+    + __init__()
+    + authorize(context: RequestContext)
+}
+
+' Concrete authorization rules for different aspects of a request.
+class ProtocolAuthorization {
+    + allowed_protocols: list[str]
+    + authorize(context: RequestContext)
+}
+
+class OperationAuthorization {
+    + allowed_operations: list[str]
+    + authorize(context: RequestContext)
+}
+
+class CertificateProfileAuthorization {
+    + authorize(context: RequestContext)
+}
+
+class DomainScopeValidation {
+    + authorize(context: RequestContext)
+}
+
+' Dependency: Context object used in all authorization methods.
+class RequestContext {
+    + protocol: str
+    + operation: str
+    + cert_profile_str: str
+    + domain: DomainModel
+    + device: DeviceModel
+}
+
+' Relationships between components.
+AuthorizationComponent <|-- ProtocolAuthorization
+AuthorizationComponent <|-- OperationAuthorization
+AuthorizationComponent <|-- CertificateProfileAuthorization
+AuthorizationComponent <|-- DomainScopeValidation
+AuthorizationComponent <|-- CompositeAuthorization
+CompositeAuthorization <|-- EstAuthorization
+
+' Aggregations and dependencies.
+CompositeAuthorization o--> AuthorizationComponent : components
+CompositeAuthorization --> RequestContext : uses
+EstAuthorization --> CompositeAuthorization : extends
+ProtocolAuthorization --> RequestContext : reads protocol
+OperationAuthorization --> RequestContext : reads operation
+CertificateProfileAuthorization --> RequestContext : checks template
+DomainScopeValidation --> RequestContext : validates domain
+
+@enduml

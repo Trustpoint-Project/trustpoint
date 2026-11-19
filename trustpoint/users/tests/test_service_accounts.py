@@ -432,6 +432,7 @@ class TestServiceAccountAPI:
     ) -> None:
         """A valid HTTP Basic auth header should authenticate real API calls for service accounts."""
         credential, secret = service_credential
+        credential.service_account.role.permissions.add(Permission.objects.get(codename='manage_devices'))
         client = APIClient()
         basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
         client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')

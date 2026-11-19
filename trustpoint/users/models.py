@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 
 
 SERVICE_ACCOUNT_PERMISSION_CODENAMES = frozenset({'use_rest_api'})
+USAGE_WRITE_INTERVAL = timedelta(minutes=1)
 
 
 class BuiltinRole(models.TextChoices):
@@ -537,6 +538,7 @@ class AppPermission(models.Model):
             # Monitoring and audit
             # -----------------------------------------------------------------
             ('view_audit_log', _('Can view the audit log')),
+            ('add_audit_log', _('Can add external audit log entries')),
             ('view_system_logs', _('Can view system logs')),
             ('view_metrics', _('Can view system metrics')),
         ]
@@ -657,13 +659,15 @@ class ServiceAccountCredential(models.Model):
         return not self.is_expired()
 
     def record_usage(self) -> None:
-        """Record the last usage time of this credential."""
-        self.last_used = timezone.now()
+        """Record usage at most once per minute so API polling does not write every request."""
+        now = timezone.now()
+        if self.last_used is not None and now - self.last_used < USAGE_WRITE_INTERVAL:
+            return
+        self.last_used = now
         type(self).objects.filter(pk=self.pk).update(
             last_used=self.last_used,
             usage_count=models.F('usage_count') + 1,
         )
-        self.refresh_from_db(fields=['usage_count'])
 
     @staticmethod
     def generate_client_id() -> str:

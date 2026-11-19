@@ -19,6 +19,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.decorators.http import require_POST
 from django.views.generic import CreateView, DeleteView, DetailView, ListView
 
+from trustpoint.views.base import UserPermissionRequiredMixin
 from users.models import BuiltinRole, ServiceAccountCredential, TrustpointUser
 from users.permissions import AppPermissions
 
@@ -29,13 +30,14 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class ServiceAccountListView(LoginRequiredMixin, ListView[TrustpointUser]):
+class ServiceAccountListView(UserPermissionRequiredMixin, LoginRequiredMixin, ListView[TrustpointUser]):
     """List all service accounts."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_list.html'
     context_object_name = 'service_accounts'
     paginate_by = 50
+    permission_required = AppPermissions.MANAGE_SERVICE_ACCOUNTS
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
@@ -54,12 +56,13 @@ class ServiceAccountListView(LoginRequiredMixin, ListView[TrustpointUser]):
         return context
 
 
-class ServiceAccountDetailView(LoginRequiredMixin, DetailView[TrustpointUser]):
+class ServiceAccountDetailView(UserPermissionRequiredMixin, LoginRequiredMixin, DetailView[TrustpointUser]):
     """View service account details and credentials."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_detail.html'
     context_object_name = 'service_account'
+    permission_required = AppPermissions.MANAGE_SERVICE_ACCOUNTS
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""
@@ -76,12 +79,15 @@ class ServiceAccountDetailView(LoginRequiredMixin, DetailView[TrustpointUser]):
         return context
 
 
-class ServiceAccountCreateView(CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]):
+class ServiceAccountCreateView(
+    UserPermissionRequiredMixin, CreateView[TrustpointUser, forms.ModelForm[TrustpointUser]]
+):
     """Create a new service account with API credentials."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/service_account_create.html'
     fields = ['username', 'organization']  # noqa: RUF012
+    permission_required = AppPermissions.MANAGE_SERVICE_ACCOUNTS
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the fixed service role and page context."""
@@ -217,13 +223,14 @@ def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect(reverse('management:service_account_created'))
 
 
-class ServiceAccountDeleteView(LoginRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
+class ServiceAccountDeleteView(UserPermissionRequiredMixin, LoginRequiredMixin, DeleteView[TrustpointUser, forms.Form]):
     """Delete a service account."""
 
     model = TrustpointUser
     template_name = 'management/service_accounts/delete_service_account_confirm.html'
     success_url = reverse_lazy('management:service_account_list')
     context_object_name = 'service_account'
+    permission_required = AppPermissions.MANAGE_SERVICE_ACCOUNTS
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return only service accounts."""

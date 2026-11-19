@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
@@ -89,15 +90,23 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
-        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
+        from pki.services.revocation import resolve_revocation_ca, revoke_certificates  # noqa: PLC0415
 
         domain = self.domain
-        if domain is None or domain.issuing_ca is None:
-            return
+        ca = domain.issuing_ca if domain is not None else None
+        certificates = list(self.credential.certificates.all())
+        now = timezone.now()
+        if any(
+            resolve_revocation_ca(certificate, ca) is None
+            for certificate in certificates
+            if certificate.not_valid_after > now
+        ):
+            msg = _('Cannot revoke a credential certificate without a known issuing CA.')
+            raise ValidationError(msg)
         revoke_certificates(
-            self.credential.certificates.all(),
+            certificates,
             reason=RevokedCertificateModel.ReasonCode.CESSATION,
-            ca=domain.issuing_ca,
+            ca=ca,
             only_unexpired=True,
         )
 

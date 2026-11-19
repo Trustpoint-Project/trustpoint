@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Unit tests for authentication components."""
+
 import datetime
 from unittest.mock import Mock, patch
 
@@ -11,10 +12,19 @@ from cryptography.hazmat.primitives import hashes
 from django.test import RequestFactory
 from pki.models import IssuedCredentialModel
 
-from request.authentication.base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
+from request.authentication.base import (
+    AuthenticationComponent,
+    ClientCertificateAuthentication,
+    CompositeAuthentication,
+)
 from request.authentication.est import UsernamePasswordAuthentication
 from request.authentication.rest import RestUsernamePasswordAuthentication
-from request.request_context import BaseRequestContext, EstBaseRequestContext, HttpBaseRequestContext, RestBaseRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    EstBaseRequestContext,
+    HttpBaseRequestContext,
+    RestBaseRequestContext,
+)
 
 
 class TestUsernamePasswordAuthentication:
@@ -133,8 +143,9 @@ class TestClientCertificateAuthentication:
         mock_cert = Mock()
         self.context.client_certificate = mock_cert
 
-        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate',
-                          side_effect=IssuedCredentialModel.DoesNotExist()):
+        with patch.object(
+            IssuedCredentialModel, 'get_credential_for_certificate', side_effect=IssuedCredentialModel.DoesNotExist()
+        ):
             try:
                 self.auth.authenticate(self.context)
                 assert False, 'Expected ValueError to be raised'
@@ -144,20 +155,16 @@ class TestClientCertificateAuthentication:
     def test_authenticate_invalid_credential(self, domain_credential_est_onboarding, rsa_private_key):
         """Test authentication with invalid credential."""
 
-
-        invalid_cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
-        ).public_key(
-            rsa_private_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=1)
-        ).not_valid_after(
-            datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(rsa_private_key, hashes.SHA256())
+        invalid_cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')]))
+            .public_key(rsa_private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=1))
+            .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365))
+            .sign(rsa_private_key, hashes.SHA256())
+        )
 
         self.context.client_certificate = invalid_cert
 
@@ -190,8 +197,8 @@ class _SetDeviceAuthentication(AuthenticationComponent):
 
 
 @pytest.mark.django_db
-def test_composite_authentication_updates_device_ip_from_forwarded_for(device_instance):
-    """Ensure authenticated requests persist the first forwarded client IP on the device."""
+def test_composite_authentication_uses_last_forwarded_hop(device_instance):
+    """Only the hop appended by the trusted proxy may set the device IP."""
     device = device_instance['device']
     device.ip_address = None
     device.save(update_fields=['ip_address'])
@@ -207,7 +214,29 @@ def test_composite_authentication_updates_device_ip_from_forwarded_for(device_in
     auth.authenticate(context)
 
     device.refresh_from_db()
-    assert device.ip_address == '203.0.113.5'
+    assert device.ip_address == '10.0.0.8'
+
+
+@pytest.mark.django_db
+def test_composite_authentication_prefers_real_ip_over_forwarded_for(device_instance):
+    """The client-supplied X-Forwarded-For prefix must not override X-Real-IP."""
+    device = device_instance['device']
+    device.ip_address = None
+    device.save(update_fields=['ip_address'])
+
+    request = RequestFactory().post('/')
+    request.META['HTTP_X_REAL_IP'] = '198.51.100.7'
+    request.META['HTTP_X_FORWARDED_FOR'] = '203.0.113.5, 10.0.0.8'
+    request.META['REMOTE_ADDR'] = '10.0.0.8'
+
+    context = HttpBaseRequestContext(raw_message=request)
+    auth = CompositeAuthentication()
+    auth.add(_SetDeviceAuthentication(device))
+
+    auth.authenticate(context)
+
+    device.refresh_from_db()
+    assert device.ip_address == '198.51.100.7'
 
 
 @pytest.mark.django_db

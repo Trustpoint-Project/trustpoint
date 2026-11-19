@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
@@ -20,6 +22,13 @@ from workflows2.services.transitions import WorkflowInstanceTransitionService, s
 
 if TYPE_CHECKING:
     from workflows2.services.runtime import WorkflowRuntimeService
+
+logger = logging.getLogger(__name__)
+
+# Mechanical job rows are kept only long enough to debug recent runs.
+JOB_RETENTION_DAYS = 30
+JOB_PURGE_INTERVAL_SECONDS = 3600
+_last_purge_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -63,11 +72,9 @@ class Workflow2DbWorker:
         # "database is locked". For inline drain we also disable it explicitly.
         self.heartbeat_enabled = bool(heartbeat_enabled) and (connection.vendor != 'sqlite')
 
-    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread:
+    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread | None:
         if not self.heartbeat_enabled:
-            t = threading.Thread(target=lambda: None, daemon=True)
-            t.start()
-            return t
+            return None
 
         # renew at half the lease; never less than 1s
         interval = max(1.0, self.lease_seconds / 2)
@@ -85,6 +92,7 @@ class Workflow2DbWorker:
     def tick(self) -> WorkerStats:
         """Process up to one batch of queued jobs."""
         recovered = self._recover_stale_running_jobs()
+        self._purge_old_jobs()
 
         claimed = 0
         processed = 0
@@ -99,8 +107,8 @@ class Workflow2DbWorker:
 
             _ok, made_next, did_skip = self._process_job(job)
             processed += 1
-            created_next += (1 if made_next else 0)
-            skipped += (1 if did_skip else 0)
+            created_next += 1 if made_next else 0
+            skipped += 1 if did_skip else 0
 
         return WorkerStats(
             claimed=claimed,
@@ -109,6 +117,22 @@ class Workflow2DbWorker:
             skipped=skipped,
             recovered=recovered,
         )
+
+    def _purge_old_jobs(self) -> None:
+        """Delete finished job rows past the retention window, at most once per interval."""
+        global _last_purge_at  # noqa: PLW0603 - one throttle per process, not per worker instance
+        now = time.monotonic()
+        if _last_purge_at is not None and now - _last_purge_at < JOB_PURGE_INTERVAL_SECONDS:
+            return
+        _last_purge_at = now
+        cutoff = timezone.now() - timedelta(days=JOB_RETENTION_DAYS)
+        try:
+            Workflow2Job.objects.filter(
+                status__in=[Workflow2Job.STATUS_DONE, Workflow2Job.STATUS_CANCELLED],
+                updated_at__lt=cutoff,
+            ).delete()
+        except Exception:
+            logger.exception('Failed to purge old Workflow 2 jobs.')
 
     @transaction.atomic
     def heartbeat(self, job_id: str) -> bool:
@@ -268,7 +292,8 @@ class Workflow2DbWorker:
             return True, created_next, skipped
         finally:
             stop_evt.set()
-            hb_thread.join(timeout=1.0)
+            if hb_thread is not None:
+                hb_thread.join(timeout=1.0)
 
     @transaction.atomic
     def _mark_done(self, job: Workflow2Job) -> None:

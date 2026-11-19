@@ -1,0 +1,18 @@
+@startuml
+!theme plain
+
+actor "Application Flow" as App
+participant "CryptoBackend" as Backend
+participant "Bundle Export Service" as Bundles
+participant "Pkcs11Backend" as P11
+database "Export Bundle Records" as Repo
+
+App -> Backend : create_export_bundle(request)
+Backend -> Bundles : create_export_bundle(request)
+Bundles -> P11 : generate delivery artifact
+P11 --> Bundles : PKCS#12/PEM payload + metadata
+Bundles -> Repo : save metadata only
+Repo --> Bundles : ExportBundleRef
+Bundles --> Backend : ExportBundleRef
+Backend --> App : ExportBundleRef
+@enduml

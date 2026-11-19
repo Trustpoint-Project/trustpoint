@@ -32,12 +32,15 @@ def test_credential_issue_processor_does_not_gate_on_workflow2_outcome() -> None
     generated_key = Mock()
     generated_key.as_crypto.return_value = private_key
 
-    with patch(
-        'request.operation_processor.issue_cred.KeyGenerator.generate_private_key',
-        return_value=generated_key,
-    ) as mock_generate, patch(
-        'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',
-    ) as mock_issue:
+    with (
+        patch(
+            'request.operation_processor.issue_cred.KeyGenerator.generate_private_key',
+            return_value=generated_key,
+        ) as mock_generate,
+        patch(
+            'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',
+        ) as mock_issue,
+    ):
         CredentialIssueProcessor().process_operation(context)
 
     mock_generate.assert_called_once_with(domain=context.domain)
@@ -59,9 +62,10 @@ def test_local_ca_certificate_issue_processor_tolerates_request_without_meta() -
 
     with patch('request.operation_processor.issue_cert.settings') as mock_settings:
         mock_settings.TP_HTTP_PORT = '80'
+        mock_settings.TP_TLS_PUBLIC_HOSTS = ['crl.example.test']
         url = LocalCaCertificateIssueProcessor()._get_crl_distribution_point_url(context, ca_id=7)  # noqa: SLF001
 
-    assert url.endswith('/crl/7')
+    assert url == 'http://crl.example.test/crl/7'
 
 
 def test_credential_issue_processor_validates_context_and_request() -> None:
@@ -78,7 +82,9 @@ def test_credential_issue_processor_validates_context_and_request() -> None:
 def test_credential_issue_processor_preserves_existing_key_and_propagates_issue_errors() -> None:
     """Reuse an existing key and expose errors from certificate issuance."""
     context = ManualCredentialRequestContext(
-        cert_requested=x509.CertificateBuilder(), domain=Mock(), private_key=Mock(),
+        cert_requested=x509.CertificateBuilder(),
+        domain=Mock(),
+        private_key=Mock(),
     )
     with patch(
         'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',

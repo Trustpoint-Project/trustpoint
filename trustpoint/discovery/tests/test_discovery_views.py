@@ -33,6 +33,14 @@ def authenticated_client(client):
 class TestDiscoveryViews:
     """Tests for discovery request handlers."""
 
+    def test_inventory_requires_discovery_permission(self, client) -> None:
+        """Users without the discovery permission must not read the scanned inventory."""
+        user = get_user_model().objects.create_user(username='discovery-reader', password='testpass123')  # noqa: S106
+        client.force_login(user)
+
+        assert client.get(reverse('discovery:device_list')).status_code == 403
+        assert client.get(reverse('discovery:export_csv')).status_code == 403
+
     def test_device_list_renders_stats_and_scan_state(self, authenticated_client) -> None:
         """The dashboard should expose device risk totals, OT totals, and scan state."""
         DiscoveryPort.objects.create(port_number=1883, description='MQTT broker')
@@ -67,6 +75,8 @@ class TestDiscoveryViews:
         assert response.context['end_ip'] == '192.168.1.254'
         assert response.context['page_category'] == 'tools'
         assert response.context['page_name'] == 'discovery'
+        assert response.context['page_obj'].paginator.count == 2
+        assert b'192.168.1.70' in response.content
 
     def test_start_scan_enqueues_background_job(self, authenticated_client) -> None:
         """The web process reserves a shared scan and queues work without starting a thread."""
@@ -100,6 +110,17 @@ class TestDiscoveryViews:
         assert not DiscoveryScan.objects.filter(is_running=True).exists()
         enqueue.assert_not_called()
 
+    def test_oversized_scan_range_is_not_queued(self, authenticated_client) -> None:
+        """A range larger than the cap is rejected before any address list is built."""
+        with patch('discovery.services.async_task') as enqueue:
+            response = authenticated_client.post(
+                reverse('discovery:start_scan'),
+                {'start_ip': '10.0.0.0', 'end_ip': '10.255.255.255'},
+            )
+        assert response.status_code == 302
+        assert not DiscoveryScan.objects.filter(is_running=True).exists()
+        enqueue.assert_not_called()
+
     def test_stop_scan_requests_shutdown_and_redirects(self, authenticated_client) -> None:
         """Stopping a scan should delegate to the manager and redirect back to the dashboard."""
         with patch('discovery.views.ScanManager.request_stop') as mock_request_stop:
@@ -124,6 +145,17 @@ class TestDiscoveryViews:
         response = authenticated_client.post(
             reverse('discovery:add_port'),
             {'port_number': 'not-a-number', 'description': 'bad'},
+        )
+
+        assert response.status_code == 302
+        assert DiscoveryPort.objects.count() == 0
+
+    @pytest.mark.parametrize('port_number', ['0', '65536'])
+    def test_add_port_rejects_out_of_range_port(self, authenticated_client, port_number: str) -> None:
+        """Ports outside 1-65535 must not be saved; an invalid port breaks socket scans."""
+        response = authenticated_client.post(
+            reverse('discovery:add_port'),
+            {'port_number': port_number, 'description': 'bad'},
         )
 
         assert response.status_code == 302

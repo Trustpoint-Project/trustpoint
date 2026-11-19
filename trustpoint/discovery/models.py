@@ -3,6 +3,7 @@
 
 """Models for the network discovery module."""
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 from pki.models.certificate import CertificateModel
@@ -17,6 +18,7 @@ class DiscoveryScan(models.Model):
     stop_pending = models.BooleanField(default=False)
     start_ip = models.GenericIPAddressField(protocol='IPv4', default='10.100.13.1')
     end_ip = models.GenericIPAddressField(protocol='IPv4', default='10.100.13.254')
+    claimed_at = models.DateTimeField(null=True)
     started_at = models.DateTimeField(null=True)
 
     def __str__(self) -> str:
@@ -27,7 +29,13 @@ class DiscoveryScan(models.Model):
 class DiscoveryPort(models.Model):
     """Stores ports to be included in network scans."""
 
-    port_number = models.PositiveIntegerField(unique=True)
+    MIN_PORT = 1
+    MAX_PORT = 65535
+
+    port_number = models.PositiveIntegerField(
+        unique=True,
+        validators=[MinValueValidator(MIN_PORT), MaxValueValidator(MAX_PORT)],
+    )
     description = models.CharField(max_length=255)
 
     def __str__(self) -> str:

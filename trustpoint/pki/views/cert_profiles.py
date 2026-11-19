@@ -108,16 +108,19 @@ class CertProfileConfigView(
             context['profile_json'] = default_json
             return context
 
-        cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
-        if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
-            cleaned_raw = cleaned_raw[1:-1]
-
+        # Profiles may be stored either as a JSON object or as a JSON string containing JSON.
+        cleaned_raw = raw_json
+        parsed_json: Any = None
+        parsed = False
         with contextlib.suppress(json.JSONDecodeError):
-            context['profile_json'] = json.loads(cleaned_raw)
-            return context
+            parsed_json = json.loads(raw_json)
+            if isinstance(parsed_json, str):
+                cleaned_raw = parsed_json
+                parsed_json = json.loads(parsed_json)
+            parsed = True
 
-        with contextlib.suppress(json.JSONDecodeError):
-            context['profile_json'] = json.loads(raw_json)
+        if parsed:
+            context['profile_json'] = parsed_json
             return context
 
         # Invalid JSON typed by the user - render as-is to revise

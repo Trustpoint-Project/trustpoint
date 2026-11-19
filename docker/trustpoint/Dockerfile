@@ -6,6 +6,7 @@ ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_NO_CACHE=1 \
     UV_FROZEN=1 \
+    TRUSTPOINT_CONTAINER=1 \
     TRUSTPOINT_HSM_ROOT=/var/lib/trustpoint/hsm \
     SOFTHSM2_CONF=/var/lib/trustpoint/hsm/config/softhsm2.conf
 
@@ -127,10 +128,6 @@ RUN chown root:root /var/www/html/trustpoint /var/www/html/trustpoint/docker && 
     chmod 750 /var/lib/trustpoint/bootstrap && \
     chmod 750 /var/lib/trustpoint/hsm /var/lib/trustpoint/hsm/config && \
     chmod -R 755 /var/www/html/trustpoint/docker/trustpoint/nginx/tls
-
-# Set DEBUG = False and DOCKER_CONTAINER = True in the Django settings.
-RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
-    sed -i '/DOCKER_CONTAINER = False/s/False/True/' trustpoint/trustpoint/settings.py
 
 # Create and set up the /etc/trustpoint/ directory.
 RUN mkdir -p /etc/trustpoint/ && \

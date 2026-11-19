@@ -131,26 +131,24 @@ def _build_certificate_request_dispatch(
     )
 
     fingerprint = hashlib.sha256(context.cert_requested.tbs_certrequest_bytes).hexdigest()
-    idempotency_key = fingerprint
-    if isinstance(context, EstCertificateRequestContext):
-        request_info = context.cert_requested.tbs_certrequest_bytes
-        if context.est_channel_binding_verified:
-            # A verified connection binding changes on reconnect, but the enrollment does not.
-            info, _ = der_decoder.decode(request_info, asn1Spec=rfc2986.CertificationRequestInfo())
-            attributes = [attr for attr in info['attributes'] if str(attr['type']) != CHALLENGE_PASSWORD_OID]
-            info['attributes'].clear()
-            info['attributes'].extend(attributes)
-            request_info = der_encoder.encode(info)
-        profile = context.certificate_profile_model
-        identity = [
-            source.ca_id,
-            source.domain_id,
-            source.device_id,
-            operation,
-            profile.pk if profile is not None else context.cert_profile_str,
-            hashlib.sha256(request_info).hexdigest(),
-        ]
-        idempotency_key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
+    request_info = context.cert_requested.tbs_certrequest_bytes
+    if isinstance(context, EstCertificateRequestContext) and context.est_channel_binding_verified:
+        # A verified connection binding changes on reconnect, but the enrollment does not.
+        info, _ = der_decoder.decode(request_info, asn1Spec=rfc2986.CertificationRequestInfo())
+        attributes = [attr for attr in info['attributes'] if str(attr['type']) != CHALLENGE_PASSWORD_OID]
+        info['attributes'].clear()
+        info['attributes'].extend(attributes)
+        request_info = der_encoder.encode(info)
+    profile = context.certificate_profile_model
+    identity = [
+        source.ca_id,
+        source.domain_id,
+        source.device_id,
+        operation,
+        profile.pk if profile is not None else context.cert_profile_str,
+        hashlib.sha256(request_info).hexdigest(),
+    ]
+    idempotency_key = hashlib.sha256(json.dumps(identity).encode()).hexdigest()
     event = {
         'device': {
             **build_device_snapshot(context.device),
@@ -244,6 +242,15 @@ def _build_cmp_request_dispatch(
         certconf_status_str = 'rejected' if certconf_status == PKI_STATUS_REJECTION else 'accepted'
 
     fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
+    profile = getattr(context, 'certificate_profile_model', None)
+    identity = [
+        source.ca_id,
+        source.domain_id,
+        source.device_id,
+        operation,
+        profile.pk if profile is not None else getattr(context, 'cert_profile_str', None),
+        fingerprint,
+    ]
     transaction_id = _cmp_transaction_id(context)
     event = {
         'device': {
@@ -264,7 +271,7 @@ def _build_cmp_request_dispatch(
         on=on,
         event=event,
         source=source,
-        idempotency_key=fingerprint,
+        idempotency_key=hashlib.sha256(json.dumps(identity).encode()).hexdigest(),
         initial_vars={},
     )
 

@@ -43,6 +43,22 @@ def test_debug_setting():
     assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
 
 
+def test_container_mode_comes_from_environment(monkeypatch, tmp_path):
+    """The image declares container mode instead of editing source at build time."""
+    secret_file = tmp_path / 'django_secret_key'
+    secret_file.write_text('x' * 64, encoding='utf-8')
+    monkeypatch.setenv('TRUSTPOINT_CONTAINER', '1')
+    monkeypatch.setenv('DJANGO_SECRET_KEY_FILE', str(secret_file))
+    importlib.reload(settings)
+    try:
+        assert settings.DOCKER_CONTAINER is True
+        assert settings.DEBUG is False
+    finally:
+        monkeypatch.delenv('TRUSTPOINT_CONTAINER', raising=False)
+        monkeypatch.delenv('DJANGO_SECRET_KEY_FILE', raising=False)
+        importlib.reload(settings)
+
+
 def test_tls_addresses_not_set_keeps_default_hosts_and_origins(monkeypatch):
     """Ensure defaults remain unchanged when TLS address variables are not set."""
     monkeypatch.delenv('TP_TLS_IPV4_ADDRESSES', raising=False)
@@ -341,6 +357,14 @@ def test_public_paths():
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
+
+
+def test_template_context_processors_include_alerts_and_workflow_counts():
+    """Global UI context processors must be registered for templates to receive them."""
+    processors = settings.TEMPLATES[0]['OPTIONS']['context_processors']
+
+    assert 'management.context_processors.ui_config' in processors
+    assert 'workflows2.context_processors.waiting_counts' in processors
 
 
 def test_hsm_paths():

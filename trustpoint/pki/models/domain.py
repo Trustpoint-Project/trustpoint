@@ -166,6 +166,12 @@ class DomainModel(models.Model):
         if self.issuing_ca and not self.issuing_ca.can_issue_endpoint_certificates:
             exc_msg = 'Management CAs cannot issue certificates for endpoint domains.'
             raise ValidationError(exc_msg)
+        if (
+            self.domain_credential_profile is not None
+            and self.domain_credential_profile.credential_type != CertificateProfileModel.ProfileCredentialType.DOMAIN
+        ):
+            exc_msg = 'The domain credential profile must be a domain credential profile.'
+            raise ValidationError(exc_msg)
 
     def get_issuing_ca_or_value_error(self) -> CaModel:
         """Gets the corresponding Issuing CA.

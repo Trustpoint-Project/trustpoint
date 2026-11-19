@@ -60,3 +60,52 @@ jobs:
           header: test-report
           recreate: true
           path: md-report.md
+
+  pytest-postgres:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:18.7
+        env:
+          POSTGRES_DB: trustpoint_db
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: testing321
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin -d trustpoint_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      TRUSTPOINT_OPERATIONAL_DATABASE: postgresql
+      DATABASE_ENGINE: django.db.backends.postgresql
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: 5432
+      POSTGRES_DB: trustpoint_db
+      DATABASE_USER: admin
+      DATABASE_PASSWORD: testing321
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+        with:
+          run_migrations: true
+
+      - name: Run database-sensitive tests on PostgreSQL
+        run: |
+          uv run pytest \
+            trustpoint/users/tests/test_service_accounts.py \
+            trustpoint/devices/tests/test_gds_push_audit_regressions.py \
+            trustpoint/workflows2/tests/test_dispatch.py \
+            trustpoint/workflows2/tests/test_worker.py \
+            trustpoint/workflows2/tests/test_crash_recovery.py \
+            -q -o md_report=false

@@ -1,0 +1,25 @@
+@startuml
+!theme plain
+
+actor "Application Flow" as App
+participant "CryptoBackend" as Backend
+participant "Key Manager" as Keys
+participant "Pkcs11Backend" as P11
+participant "Session Pool" as Pool
+participant "Object Locator" as Locator
+database "Managed Key Records" as Repo
+
+App -> Backend : ensure_managed_key(alias, spec, policy)
+Backend -> Keys : ensure_managed_key(...)
+Keys -> Repo : lookup(alias)
+Repo --> Keys : missing
+Keys -> P11 : generate_key(alias, spec, policy)
+P11 -> Pool : borrow session
+P11 -> Locator : resolve/create objects
+Locator --> P11 : key id + metadata
+P11 --> Keys : provider key metadata
+Keys -> Repo : save managed key record
+Repo --> Keys : ManagedKeyRef
+Keys --> Backend : ManagedKeyRef
+Backend --> App : ManagedKeyRef
+@enduml

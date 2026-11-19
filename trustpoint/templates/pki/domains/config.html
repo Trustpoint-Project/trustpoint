@@ -197,12 +197,12 @@
                     <div>
                         <div>{% trans 'Certificates Issued' %}</div>
                         <div>
-                            {% if certificates %}
+                            {% if certificate_count %}
                                 <a href="{% url 'pki:domain-issued_certificates' pk=domain.pk %}">
-                                    {{ certificates|length }}
+                                    {{ certificate_count }}
                                 </a>
                             {% else %}
-                                {{ certificates|length }}
+                                {{ certificate_count }}
                             {% endif %}
                         </div>
                     </div>

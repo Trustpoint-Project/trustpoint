@@ -719,7 +719,8 @@ def test_default_cacerts_includes_prepared_rollover(client, domain_instance, rsa
     rollover = Mock(state=CaRolloverState.PREPARATION)
     rollover.new_issuing_ca.credential.get_certificate.return_value = next_cert
     rollover.new_issuing_ca.credential.get_certificate_chain.return_value = []
-    with patch('est.views.CaRolloverService.get_active_rollover', return_value=rollover):
+    prepared = {domain_instance['domain'].issuing_ca_id: rollover}
+    with patch('est.views.CaRolloverService.get_prepared_rollovers', return_value=prepared):
         response = client.get('/.well-known/est/cacerts')
 
     assert response.status_code == 200

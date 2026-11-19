@@ -769,7 +769,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """
         self.logger.debug('Generating CRL for CA %s', self.unique_name)
         try:
-            self._issue_crl(crl_validity_hours=crl_validity_hours)
+            with transaction.atomic():
+                # Serialize CRL-number allocation and the active-CRL switch per CA.
+                locked_ca = type(self).objects.select_for_update().get(pk=self.pk)
+                locked_ca._issue_crl(crl_validity_hours=crl_validity_hours)  # noqa: SLF001
             self.logger.info('CRL generation for CA %s finished.', self.unique_name)
         except Exception:
             self.logger.exception('CRL generation for CA %s failed', self.unique_name)
@@ -849,10 +852,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """
         from pki.models.crl import CrlModel  # noqa: PLC0415
 
-        try:
-            return CrlModel.objects.get(ca=self, is_active=True)
-        except CrlModel.DoesNotExist:
-            return None
+        return CrlModel.objects.filter(ca=self, is_active=True).order_by('-this_update').first()
 
     def get_latest_crl(self) -> CrlModel | None:
         """Returns the most recent CRL for this CA (by this_update).
@@ -1007,7 +1007,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         revoke_certificates(qs, reason=reason, ca=self, only_unexpired=True)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
-        self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))
+        self.issue_crl(crl_validity_hours=self.crl_validity_hours)
 
     def pre_delete(self) -> None:
         """Checks for unexpired certificates issued by this CA and child CAs before deleting it.
@@ -1025,11 +1025,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         # Check for unexpired certificates
         qs = self.get_issued_certificates()
-
-        for cert in qs:
-            if cert.certificate_status != CertificateModel.CertificateStatus.EXPIRED:
-                exc_msg = f'Cannot delete the CA {self} because it has issued unexpired certificate {cert}.'
-                raise ValidationError(exc_msg)
+        blocking = qs.filter(models.Q(not_valid_after__gt=timezone.now()) | models.Q(revoked_certificate__isnull=False))
+        if blocking.exists():
+            exc_msg = f'Cannot delete the CA {self} because it has issued unexpired certificate(s).'
+            raise ValidationError(exc_msg)
 
     def post_delete(self) -> None:
         """Deletes the underlying credential or certificate after deleting this CA."""

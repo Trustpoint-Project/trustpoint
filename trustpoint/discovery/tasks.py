@@ -50,4 +50,4 @@ def run_scan(scan_id: str) -> None:
                     },
                 )
     finally:
-        active.update(is_running=False, stop_pending=False, started_at=None)
+        active.update(is_running=False, stop_pending=False, claimed_at=None, started_at=None)

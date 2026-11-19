@@ -90,6 +90,7 @@ class WorkflowRuntimeService:
         run: Any | None = None,
     ) -> Workflow2Instance:
         """Create a new workflow instance positioned at `workflow.start`."""
+        definition = Workflow2Definition.objects.select_for_update().get(pk=definition.pk)
         wf = (definition.ir_json or {}).get('workflow') or {}
         start = wf.get('start')
         if not isinstance(start, str) or not start:

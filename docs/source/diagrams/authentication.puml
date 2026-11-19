@@ -1,0 +1,67 @@
+@startuml
+' General interface for all authentication classes.
+interface AuthenticationComponent {
+    + authenticate(context: RequestContext)
+}
+
+' Defines the structure for aggregating multiple authentications.
+class CompositeAuthentication {
+    + components: list[AuthenticationComponent]
+    + add(component: AuthenticationComponent)
+    + remove(component: AuthenticationComponent)
+    + authenticate(context: RequestContext)
+}
+
+' Composite for EST-specific authentication methods.
+class EstAuthentication {
+    + __init__()
+    + authenticate(context: RequestContext)
+}
+
+' Individual concrete authentication implementations for specialized use cases.
+class UsernamePasswordAuthentication {
+    + authenticate(context: RequestContext)
+}
+
+class ClientCertificateAuthentication {
+    + authenticate(context: RequestContext)
+}
+
+class ReenrollmentAuthentication {
+    + authenticate(context: RequestContext)
+}
+
+class IDevIDAuthentication {
+    + authenticate(context: RequestContext)
+}
+
+' Dependency relationship with request context.
+class RequestContext {
+    + est_username: str
+    + est_password: str
+    + client_certificate: Certificate
+    + cert_requested: Certificate
+    + raw_message: Message
+    + device: DeviceModel
+    + domain: DomainModel
+}
+
+' Relationship between AuthenticationComponent and implementations.
+AuthenticationComponent <|-- UsernamePasswordAuthentication
+AuthenticationComponent <|-- ClientCertificateAuthentication
+AuthenticationComponent <|-- ReenrollmentAuthentication
+AuthenticationComponent <|-- IDevIDAuthentication
+AuthenticationComponent <|-- CompositeAuthentication
+CompositeAuthentication <|-- EstAuthentication
+
+' Internal dependencies
+CompositeAuthentication o--> AuthenticationComponent : components
+CompositeAuthentication --> RequestContext : uses
+EstAuthentication --> CompositeAuthentication : extends
+
+UsernamePasswordAuthentication --> RequestContext : reads credentials
+ClientCertificateAuthentication --> RequestContext : verifies certificate
+ReenrollmentAuthentication --> RequestContext : validates re-enrollment
+IDevIDAuthentication --> RequestContext : checks IDevID authentication
+
+@enduml

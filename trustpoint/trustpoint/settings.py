@@ -94,12 +94,16 @@ PUBLIC_PATHS = [
     '/prometheus/',
 ]
 
+# Scrapers authenticate with "Authorization: Bearer <token>"; the endpoint
+# fails closed when metrics are enabled but no token is configured.
+TRUSTPOINT_PROMETHEUS_METRICS_TOKEN = os.getenv('TRUSTPOINT_PROMETHEUS_METRICS_TOKEN', '').strip()
+
 
 # ------------- Variables --------------
 
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
-DOCKER_CONTAINER = False
+DOCKER_CONTAINER = os.getenv('TRUSTPOINT_CONTAINER', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 TRUSTPOINT_PHASE_BOOTSTRAP = 'bootstrap'
@@ -155,16 +159,12 @@ TRUSTPOINT_PHASE_CONFIGURED = _TRUSTPOINT_PHASE_ENV in TRUSTPOINT_VALID_PHASES o
 )
 TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
 
-if TRUSTPOINT_IS_BOOTSTRAP:
-    PUBLIC_PATHS.append('/setup-wizard')
-
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = not DOCKER_CONTAINER
-ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
 # Reverse proxy SSL header settings
@@ -266,6 +266,10 @@ for dns_name in _tls_dns_names:
         _https_origin = f'https://{dns_name}'
         if _https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(_https_origin)
+
+# Public names a device can use to reach this server. Issued certificates embed
+# one of them in their CRL distribution point.
+TP_TLS_PUBLIC_HOSTS = [*_tls_ipv4_addrs, *_tls_dns_names, *_tls_ipv6_addrs]
 
 
 # Settings for postgreql database
@@ -417,8 +421,6 @@ if TRUSTPOINT_IS_BOOTSTRAP:
 
 DJANGO_LOG_LEVEL = 'INFO'
 
-TAGGIT_CASE_INSENSITIVE = True
-
 DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 ROOT_URLCONF = 'trustpoint.urls_bootstrap' if TRUSTPOINT_IS_BOOTSTRAP else 'trustpoint.urls'
@@ -526,7 +528,6 @@ MIDDLEWARE = [
     'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
-    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
@@ -544,6 +545,8 @@ TEMPLATE_CONTEXT_PROCESSORS = [
     'django.contrib.messages.context_processors.messages',
     'trustpoint.settings.app_version',
     'management.context_processors.notification_alerts',
+    'management.context_processors.ui_config',
+    'workflows2.context_processors.waiting_counts',
 ]
 
 BOOTSTRAP_EXCLUDED_CONTEXT_PROCESSORS = [
@@ -584,6 +587,14 @@ TEMPLATES: list[dict[str, Any]] = [
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPolicyValidator'}]
 
+# Prefer Argon2 for new hashes; keep the older hashers so existing hashes still verify.
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
+
 # Authentication backends
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
@@ -595,11 +606,17 @@ AUTHENTICATION_BACKENDS = [
 
 # Only these direct peers may assert TLS client identity. They must overwrite the
 # SSL-Client-Cert, X-SSL-Client-Verify, and X-Forwarded-Proto request headers.
-CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = tuple(
+# Addresses may be single IPs or CIDR networks.
+TRUSTPOINT_TRUSTED_PROXY_IPS = tuple(
     address.strip()
-    for address in os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1').split(',')
+    for address in os.getenv(
+        'TRUSTPOINT_TRUSTED_PROXY_IPS',
+        os.getenv('TRUSTPOINT_CLIENT_CERTIFICATE_PROXY_IPS', '127.0.0.1,::1'),
+    ).split(',')
     if address.strip()
 )
+# Kept as an alias for existing deployments that used the older name.
+CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS = TRUSTPOINT_TRUSTED_PROXY_IPS
 
 
 def _bootstrap_database_path() -> Path:
@@ -738,6 +755,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'PAGE_SIZE': 100,
 }
 
 SPECTACULAR_SETTINGS = {
@@ -750,12 +768,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False
-
-TASKS = {
-    'default': {
-        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
-    }
-}
 
 Q_CLUSTER = {
     'name': 'trustpoint',

@@ -23,6 +23,7 @@ from django.views.generic.list import ListView
 from crypto.models import CryptoProviderProfileModel
 from home.filters import NotificationFilter
 from home.views import ERROR, SUCCESS
+from management.context_processors import reset_notification_badge_cache
 from management.i18n import format_datetime
 from management.i18n_context import get_current_user
 from management.models import NotificationModel, NotificationStatus
@@ -89,9 +90,8 @@ class NotificationsListView(
             if new_status_qs.exists():
                 new_status = new_status_qs.first()
                 if new_status is not None:
-                    unread = NotificationModel.objects.filter(statuses=new_status)
-                    for notification in unread:
-                        notification.statuses.remove(new_status)
+                    new_status.notifications.clear()
+                    reset_notification_badge_cache()
                     messages.success(request, _('All notifications marked as read.'))
             else:
                 messages.info(request, _('No unread notifications.'))

@@ -287,6 +287,24 @@ class CaRolloverService:
         ).first()
 
     @staticmethod
+    def get_prepared_rollovers(issuing_ca_ids: set[int]) -> dict[int, CaRolloverModel]:
+        """Return prepared rollovers for many CAs in one query, keyed by old CA id."""
+        if not issuing_ca_ids:
+            return {}
+        prepared = (
+            CaRolloverModel.objects.filter(
+                old_issuing_ca_id__in=issuing_ca_ids,
+                state=CaRolloverState.PREPARATION,
+            )
+            .select_related('new_issuing_ca__credential')
+            .order_by('pk')
+        )
+        rollovers: dict[int, CaRolloverModel] = {}
+        for rollover in prepared:
+            rollovers.setdefault(rollover.old_issuing_ca_id, rollover)
+        return rollovers
+
+    @staticmethod
     def get_rollover_history(issuing_ca: CaModel) -> QuerySet[CaRolloverModel]:
         """Return completed/cancelled rollovers involving the given CA.
 

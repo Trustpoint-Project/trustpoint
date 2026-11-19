@@ -11,6 +11,8 @@ from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -31,6 +33,17 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+
+class CanManageDevices(BasePermission):
+    """Allow only users permitted to manage devices."""
+
+    def has_permission(self, request: Request, _view: Any) -> bool:
+        """Check if the user has permission to manage devices."""
+        return bool(
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_DEVICES)
+        )
+
+
 @extend_schema(tags=['Device'])
 class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.
@@ -42,6 +55,8 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     to set up automatic certificate enrollment. The API supports both
     enum names (e.g., "CMP", "EST") and integer values for protocols.
     """
+
+    permission_classes = (CanManageDevices,)
 
     @action(detail=True, methods=['post'], url_path='change-secret')
     def change_secret(self, request: Request, pk: str | None = None) -> Response:
@@ -58,14 +73,23 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
             msg = 'No enrollment configuration is available.'
             raise serializers.ValidationError(msg)
         try:
-            secret = assign_secret(config, data['credential'], custom=data['action'] == 'custom',
-                                   value=data.get('value'), device=device, actor=request.user)
+            secret = assign_secret(
+                config,
+                data['credential'],
+                custom=data['action'] == 'custom',
+                value=data.get('value'),
+                device=device,
+                actor=request.user,
+            )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.messages) from exc
         return Response({'credential': data['credential'], 'value': secret}, headers={'Cache-Control': 'no-store'})
 
-    queryset = DeviceModel.objects.all()
+    queryset = DeviceModel.objects.select_related(
+        'domain', 'onboarding_config', 'no_onboarding_config', 'opc_ua_gds_push_config'
+    ).order_by('pk')
     serializer_class = DeviceSerializer
+    pagination_class = PageNumberPagination
     action_descriptions: ClassVar[dict[str, str]] = {
         'list': 'Retrieve a list of all devices.',
         'retrieve': 'Retrieve a single device by id.',
@@ -158,10 +182,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                     },
                 },
                 request_only=True,
-                description=(
-                    'Uses EST_USERNAME_PASSWORD (4) protocol. '
-                    'Password can be omitted for auto-generation.'
-                ),
+                description=('Uses EST_USERNAME_PASSWORD (4) protocol. Password can be omitted for auto-generation.'),
             ),
             OpenApiExample(
                 'Multiple PKI Protocols (Mixed Format)',
@@ -204,7 +225,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                 request_only=True,
                 description='OPC UA GDS Push device with all required OPC-specific fields.',
             ),
-        ]
+        ],
     )
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Create a new device, optionally with onboarding configuration."""
@@ -235,4 +256,3 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
         if hasattr(self, 'action') and self.action in self.action_descriptions:
             return self.action_descriptions[self.action]
         return super().get_view_description(html)
-

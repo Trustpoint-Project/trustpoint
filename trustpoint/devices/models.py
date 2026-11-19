@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, transaction
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare
 from django.utils.translation import gettext_lazy as _
 from django_q.models import Schedule
 from django_q.tasks import schedule
@@ -285,25 +286,25 @@ class OpcUaGdsPushConfig(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @transaction.atomic
     def schedule_next_gds_push_update(self) -> None:
-        """Schedule the next periodic GDS Push server certificate and trustlist update using Django-Q2.
-
-        Creates a one-off scheduled task in Django-Q2 that will execute at the calculated time
-        based on the configured renewal interval. Does nothing when periodic updates are disabled
-        or the device is not of type OPC UA GDS Push.
-        """
-        if not self.opc_gds_push_enable_periodic_update:
-            return
-        scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
-
-        schedule(
-            'devices.tasks.perform_gds_push_update',
-            self.device_id,
-            schedule_type='O',
-            next_run=scheduled_time,
-            name=f'gds_push_update_{self.device_id}_{scheduled_time.timestamp()}',
-        )
-
+        """Replace the device's pending update, removing legacy timestamp-named schedules."""
+        self.refresh_from_db(from_queryset=type(self).objects.select_for_update())
+        task_name = f'gds_push_update_{self.device_id}'
+        Schedule.objects.filter(models.Q(name=task_name) | models.Q(name__startswith=f'{task_name}_')).delete()
+        scheduled_time = None
+        if (
+            self.opc_gds_push_enable_periodic_update
+            and self.device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        ):
+            scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
+            schedule(
+                'devices.tasks.perform_gds_push_update',
+                self.device_id,
+                schedule_type='O',
+                next_run=scheduled_time,
+                name=task_name,
+            )
         self.opc_gds_push_last_update_scheduled_at = scheduled_time
         type(self).objects.filter(pk=self.pk).update(opc_gds_push_last_update_scheduled_at=scheduled_time)
 
@@ -332,10 +333,12 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
+    OTP_VALIDITY = dt.timedelta(minutes=30)
     TOKEN_VALIDITY = dt.timedelta(minutes=3)
 
     issued_credential_model = models.OneToOneField(IssuedCredentialModel, on_delete=models.CASCADE)
     otp = models.CharField(_('OTP'), max_length=32, default='')
+    otp_created_at = models.DateTimeField(_('OTP Created'), null=True)
     device = models.ForeignKey('devices.DeviceModel', on_delete=models.CASCADE)
     attempts = models.IntegerField(_('Attempts'), default=0)
     download_token = models.CharField(_('Download Token'), max_length=64, default='')
@@ -352,7 +355,30 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         """Generates a new random OTP on initial save of the model."""
         if not self.otp:
             self.otp = secrets.token_urlsafe(8)
+            self.otp_created_at = timezone.now()
         super().save(*args, **kwargs)
+
+    def rotate_otp(self) -> None:
+        """Replace the OTP with a fresh one, invalidating outstanding guesses."""
+        self.otp = secrets.token_urlsafe(8)
+        self.otp_created_at = timezone.now()
+        self.attempts = 0
+        self.save(update_fields=['otp', 'otp_created_at', 'attempts'])
+
+    @staticmethod
+    def download_token_session_key(credential_id: int) -> str:
+        """Return the session key that carries a browser download token out of the URL."""
+        return f'browser_download_token_{credential_id}'
+
+    def otp_is_expired(self) -> bool:
+        """Return whether the OTP is missing or consumed."""
+        if not self.otp or self.otp == '-':
+            return True
+        if self.otp_created_at is None:
+            # Rows written before the timestamp existed (or built directly in code)
+            # have no age to compare against; the OTP page rotates them on view.
+            return False
+        return timezone.now() - self.otp_created_at > self.OTP_VALIDITY
 
     def get_otp_display(self) -> str:
         """Return the OTP in the format 'credential_id.otp' for display within the admin view.
@@ -360,7 +386,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         Returns:
             The str to display.
         """
-        if not self.otp or self.otp == '-':
+        if self.otp_is_expired():
             return 'OTP no longer valid'
         return f'{self.issued_credential_model.id}.{self.otp}'
 
@@ -380,14 +406,15 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         except RemoteDeviceCredentialDownloadModel.DoesNotExist:
             return False
 
-        if not self.otp or self.otp == '-':
+        if self.otp_is_expired():
             return False
-        matches = otp == self.otp
+        matches = constant_time_compare(otp, self.otp)
         if not matches:
             self.attempts += 1
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
-                self.otp = '-'
-                self.delete()
+                # Rotate instead of deleting: unauthenticated guessing must not
+                # end an onboarding an operator is working on.
+                self.rotate_otp()
             else:
                 self.save()
             return False
@@ -412,4 +439,10 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
             self.delete()
             return False
 
-        return token == self.download_token
+        return constant_time_compare(token, self.download_token)
+
+    def consume_token(self) -> None:
+        """Invalidate the download token after the credential has been delivered."""
+        self.download_token = ''
+        self.token_created_at = None
+        self.save(update_fields=['download_token', 'token_created_at'])

@@ -452,7 +452,7 @@ class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
 
 
 class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswordSetForm]):
-    """Allow users with MANAGE_USERS to set another human user's password."""
+    """Allow user managers to set a non-administrator human user's password."""
 
     template_name = 'users/profile_form.html'
     form_class = TrustpointPasswordSetForm
@@ -464,6 +464,9 @@ class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswor
         if not request.user.is_authenticated:
             return self.handle_no_permission()
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+        if not request.user.is_superuser and self.get_target_user().is_superuser:
+            # Resetting an administrator's password would be equivalent to becoming that administrator.
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 

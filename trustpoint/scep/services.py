@@ -171,7 +171,7 @@ def scep_permitted_by_security_config() -> bool:
 
     cfg = SecurityConfig.objects.first()
     if cfg is None:
-        return True
+        return False
     return NoOnboardingPkiProtocol.SCEP.value in (cfg.permitted_no_onboarding_pki_protocols or [])
 
 

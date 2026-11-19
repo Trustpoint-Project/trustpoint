@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from django import forms as dj_forms
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ImproperlyConfigured, PermissionDenied
+from django.core.exceptions import FieldError, ImproperlyConfigured, PermissionDenied
 from django.db import models
 from django.http import Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -58,6 +58,7 @@ class SuperuserRequiredMixin:
             return redirect('management:index')
         return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
+
 class UserPermissionRequiredMixin:
     """Mixin that restricts access to user with required permissions only.
 
@@ -65,10 +66,11 @@ class UserPermissionRequiredMixin:
     Authenticated non-superusers without required permissions are
     redirected to the 403 page.
     """
+
     permission_required: str | None = None
     request: HttpRequest
 
-    def has_permission(self) ->bool:
+    def has_permission(self) -> bool:
         """Verify user permission."""
         if self.permission_required is None:
             return True
@@ -134,12 +136,14 @@ class ListInDetailView(ListView[Any]):
         context[self.detail_context_object_name] = self.object
         return context
 
+
 class SupportsGetContextData(Protocol):
     """For typing to provide super().get_context_data()."""
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data."""
         ...
+
 
 class ParentSupportsGetContextData(SupportsGetContextData, Protocol):
     """For typing to provide super().get_context_data()."""
@@ -164,10 +168,15 @@ class SortableTableMixin[T: models.Model]:
             queryset = self.model.objects.all()  # type: ignore[attr-defined]
 
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        if hasattr(self.model, 'is_active'):
-            return queryset.order_by('-is_active', sort_param)
-        return queryset.order_by(sort_param)
-
+        try:
+            if hasattr(self.model, 'is_active'):
+                return queryset.order_by('-is_active', sort_param)
+            return queryset.order_by(sort_param)
+        except FieldError:
+            # An unknown ?sort= value must fall back to the default, not return a 500.
+            if hasattr(self.model, 'is_active'):
+                return queryset.order_by('-is_active', self.default_sort_param)
+            return queryset.order_by(self.default_sort_param)
 
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Add sorting information to the context."""
@@ -196,6 +205,7 @@ class SortableTableFromListMixin:
     default_sort_param must be set in the view to specify default sorting order.
     Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
     """
+
     default_sort_param: str
     request: HttpRequest
     model: type[models.Model]
@@ -235,6 +245,7 @@ class SortableTableFromListMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context  # type: ignore[no-any-return]
+
 
 class ContextDataMixin:
     """Mixin to add context data from attributes prefixed with 'context_'."""
@@ -328,6 +339,7 @@ class PrimaryKeyListFromPrimaryKeyString:
 
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     """Mixin to retrieve a queryset based on primary keys provided in the URL."""
+
     kwargs: dict[str, Any]
     model: type[models.Model]
     queryset: models.QuerySet[Any, Any] | None
@@ -356,6 +368,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     """View for bulk deletion of objects."""
+
     model: type[models.Model]
 
     def get_queryset(self) -> models.QuerySet[Any, Any]:
@@ -366,6 +379,7 @@ class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFrom
 
 
 THRESHOLD_LOGGER_HTTP_STATUS: int = 400
+
 
 class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""

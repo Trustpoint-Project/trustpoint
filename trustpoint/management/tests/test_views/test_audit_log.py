@@ -20,10 +20,10 @@ User = get_user_model()
 
 
 class AuditLogExportRedirectTest(SimpleTestCase):
-    """Export errors return to a local page and retain encoded filters."""
+    """Export errors return to the local export page without reflecting request data."""
 
-    def test_error_redirects_preserve_filters(self) -> None:
-        """URL-like input remains query data in every export error path."""
+    def test_error_redirects_ignore_request_urls(self) -> None:
+        """URL-like input never becomes part of the redirect target."""
         for valid, error in [(False, None), (True, ValidationError('Invalid export')), (True, RuntimeError())]:
             with (
                 self.subTest(valid=valid, error=error),
@@ -47,7 +47,7 @@ class AuditLogExportRedirectTest(SimpleTestCase):
 
                 self.assertRedirects(
                     response,
-                    f'{reverse("management:audit-log-export")}?{request.GET.urlencode()}',
+                    reverse('management:audit-log-export'),
                     fetch_redirect_response=False,
                 )
 

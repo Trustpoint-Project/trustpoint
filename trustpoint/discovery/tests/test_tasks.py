@@ -12,7 +12,7 @@ from django_q.exceptions import TimeoutException
 from django_q.models import OrmQ
 
 from discovery.models import DiscoveredDevice, DiscoveryPort, DiscoveryScan
-from discovery.services import SCAN_TIMEOUT_SECONDS, ScanManager
+from discovery.services import SCAN_RUN_TIMEOUT_SECONDS, SCAN_TIMEOUT_SECONDS, ScanManager
 from discovery.tasks import run_scan
 
 pytestmark = pytest.mark.django_db
@@ -32,7 +32,7 @@ def test_scan_reservation_enqueues_only_once():
     task = OrmQ.objects.get().task
     assert task['func'] == 'discovery.tasks.run_scan'
     assert task['args'] == (str(state.scan_id),)
-    assert task['timeout'] == SCAN_TIMEOUT_SECONDS
+    assert task['timeout'] == SCAN_RUN_TIMEOUT_SECONDS
     assert task['ack_failure']
     assert ScanManager.get_state() == {
         'scan_running': True,
@@ -47,6 +47,19 @@ def test_enqueue_failure_rolls_back_reservation():
         with pytest.raises(RuntimeError, match='Queue unavailable'):
             ScanManager.begin_scan('192.168.1.1', '192.168.1.100')
     assert not DiscoveryScan.objects.filter(is_running=True).exists()
+
+
+def test_queued_scan_expires_when_worker_never_starts():
+    """A lost queue entry must not block discovery forever."""
+    claim_age = timedelta(seconds=SCAN_TIMEOUT_SECONDS + 11)
+    DiscoveryScan.objects.create(
+        pk=1,
+        is_running=True,
+        claimed_at=timezone.now() - claim_age,
+        started_at=None,
+    )
+
+    assert ScanManager.get_state()['scan_running'] is False
 
 
 def test_cancel_queued_scan_does_not_cancel_newer_scan(queued_scan):
@@ -149,7 +162,7 @@ def test_task_failure_releases_scan_state(queued_scan, error):
 
 def test_dead_worker_state_expires_and_stale_job_cannot_release_new_scan(queued_scan):
     DiscoveryScan.objects.filter(pk=1).update(
-        started_at=timezone.now() - timedelta(seconds=SCAN_TIMEOUT_SECONDS + 11),
+        started_at=timezone.now() - timedelta(seconds=SCAN_RUN_TIMEOUT_SECONDS + 11),
     )
     assert not ScanManager.get_state()['scan_running']
     with patch('discovery.services.async_task'):

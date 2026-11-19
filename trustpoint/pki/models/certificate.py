@@ -14,7 +14,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.contrib import admin
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core.oid import (
@@ -178,8 +178,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     issuer_public_bytes = models.CharField(verbose_name=_('Issuer Public Bytes'), max_length=2048, editable=False)
 
     issuer_id = models.ForeignKey(
-        to='CertificateModel', verbose_name=_('Issuer Certificate'),
-        null=True, blank=True, on_delete=models.SET_NULL, db_column='issuer_id')
+        to='CertificateModel',
+        verbose_name=_('Issuer Certificate'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column='issuer_id',
+    )
 
     # The validity entries use datetime objects with UTC timezone.
     not_valid_before = models.DateTimeField(verbose_name=_('Not Valid Before (UTC)'), editable=False)
@@ -377,13 +382,11 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         """Meta class configuration."""
 
         indexes: ClassVar[list[models.Index]] = [
-            models.Index(fields=['not_valid_after'],   name='pki_cert_not_valid_after_idx'),
-            models.Index(fields=['not_valid_before'],  name='pki_cert_not_valid_before_idx'),
-            models.Index(fields=['serial_number'],     name='pki_cert_serial_num_idx'),
-            models.Index(fields=['subject_public_bytes'],
-                         name='pki_cert_subj_pub_bytes_idx'),
-            models.Index(fields=['issuer_public_bytes', 'issuer_id'],
-                         name='pki_cert_iss_pub_bytes_idx'),
+            models.Index(fields=['not_valid_after'], name='pki_cert_not_valid_after_idx'),
+            models.Index(fields=['not_valid_before'], name='pki_cert_not_valid_before_idx'),
+            models.Index(fields=['serial_number'], name='pki_cert_serial_num_idx'),
+            models.Index(fields=['subject_public_bytes'], name='pki_cert_subj_pub_bytes_idx'),
+            models.Index(fields=['issuer_public_bytes', 'issuer_id'], name='pki_cert_iss_pub_bytes_idx'),
         ]
 
     # ------------------------------------------ Magic and default methods -------------------------------------------
@@ -487,6 +490,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         if self.not_valid_after > now:
             return (self.not_valid_after - now).days
         return 0
+
     @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""
@@ -543,11 +547,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         # Persist legacy RSA sizes and zero for ML-DSA; Core PublicKeyInfo uses different conventions.
         key_size = (
             cert_public_key.key_size
-            if isinstance(cert_public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)) else 0
+            if isinstance(cert_public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey))
+            else 0
         )
         curve = (
             NamedCurve[cert_public_key.curve.name.upper()]
-            if isinstance(cert_public_key, ec.EllipticCurvePublicKey) else NamedCurve.NONE
+            if isinstance(cert_public_key, ec.EllipticCurvePublicKey)
+            else NamedCurve.NONE
         )
         return algorithm, key_size, curve
 
@@ -648,16 +654,18 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
         # --------------------------------------------- Store in DataBase ----------------------------------------------
 
-        return cls._atomic_save(cert_model=cert_model, certificate=certificate, subject=subject, issuer=issuer)
+        try:
+            return cls._atomic_save(cert_model=cert_model, certificate=certificate, subject=subject, issuer=issuer)
+        except IntegrityError:
+            # A concurrent request may have inserted the same certificate first.
+            existing_certificate = cls.get_cert_by_sha256_fingerprint(sha256_fingerprint)
+            if existing_certificate is None:
+                raise
+            return existing_certificate
 
     @staticmethod
     def _save_attribute_and_value_pairs(oid: str, value: str) -> AttributeTypeAndValue:
-        existing_attr_type_and_val = AttributeTypeAndValue.objects.filter(oid=oid, value=value).first()
-        if existing_attr_type_and_val:
-            return existing_attr_type_and_val
-
-        attr_type_and_val = AttributeTypeAndValue(oid=oid, value=value)
-        attr_type_and_val.save()
+        attr_type_and_val, _created = AttributeTypeAndValue.objects.get_or_create(oid=oid, value=value)
         return attr_type_and_val
 
     @classmethod
@@ -728,8 +736,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
         for issuer_candidate in issuer_candidates:
             try:
-                certificate.verify_directly_issued_by(
-                    issuer_candidate.get_certificate_serializer().as_crypto())
+                certificate.verify_directly_issued_by(issuer_candidate.get_certificate_serializer().as_crypto())
                 cert_model.issuer_id = issuer_candidate
                 break
             except (ValueError, TypeError, InvalidSignature):
@@ -738,8 +745,9 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         cert_model._save()
 
         # Adding issuer references on CertificateModels that were issued by this certificate
-        issued_candidates = cls.objects.filter(issuer_public_bytes=cert_model.subject_public_bytes,
-                                               issuer_id__isnull=True)
+        issued_candidates = cls.objects.filter(
+            issuer_public_bytes=cert_model.subject_public_bytes, issuer_id__isnull=True
+        )
 
         for issued_candidate in issued_candidates:
             try:

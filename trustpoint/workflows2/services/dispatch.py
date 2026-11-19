@@ -18,7 +18,7 @@ from django.utils import timezone
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.context import RuntimeContext
 from workflows2.engine.eval import eval_condition
-from workflows2.engine.executor import WorkflowExecutor
+from workflows2.engine.executor import MAX_WEBHOOK_TIMEOUT_SECONDS, WorkflowExecutor
 from workflows2.events.triggers import Triggers
 from workflows2.models import (
     Workflow2Definition,
@@ -32,6 +32,10 @@ from workflows2.services.transitions import WorkflowRunTransitionService
 from workflows2.services.worker import Workflow2DbWorker
 
 DispatchStatus = Literal['completed', 'blocked', 'running']
+
+# Inline workers run inside a web request and do not renew a heartbeat, so the
+# lease must cover the longest possible step (webhook timeout) plus a margin.
+INLINE_WORKER_LEASE_SECONDS = MAX_WEBHOOK_TIMEOUT_SECONDS + 60
 
 
 @dataclass(frozen=True)
@@ -118,17 +122,26 @@ class WorkflowDispatchService:
             locked_until__lte=now,
         ).exists()
 
-    def _drain_jobs_in_process(self, *, worker_id: str = 'inline-worker', max_ticks: int = 200) -> None:
+    def _drain_jobs_in_process(
+        self,
+        *,
+        worker_id: str = 'inline-worker',
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
+    ) -> None:
         """Drain runnable jobs until nothing is claimable (blocked or empty).
 
         For inline drain we disable heartbeat to avoid concurrent DB writes.
         Also includes a small SQLite lock backoff.
         """
+        # Inline steps run inside a web request, so use an executor that caps their wait time.
+        inline_executor = WorkflowExecutor(inline=True)
         worker = Workflow2DbWorker(
-            runtime=self.runtime,
+            runtime=WorkflowRuntimeService(executor=inline_executor),
             worker_id=worker_id,
-            lease_seconds=5,
-            batch_limit=50,
+            lease_seconds=INLINE_WORKER_LEASE_SECONDS,
+            batch_limit=max_jobs,
             heartbeat_enabled=False,
         )
 
@@ -146,20 +159,40 @@ class WorkflowDispatchService:
             if stats.claimed == 0 and stats.recovered == 0:
                 return
 
-        msg = 'Inline drain exceeded max_ticks (possible infinite job loop)'
-        raise RuntimeError(msg)
+        if raise_on_limit:
+            msg = 'Inline drain exceeded max_ticks (possible infinite job loop)'
+            raise RuntimeError(msg)
 
-    def _drain_after_commit(self, run_id: str | None = None) -> None:
+    def _drain_after_commit(
+        self,
+        run_id: str | None = None,
+        *,
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
+    ) -> None:
         """Drain queued jobs after commit and refresh the run status."""
         try:
-            self._drain_jobs_in_process(worker_id='inline-worker')
+            self._drain_jobs_in_process(
+                worker_id='inline-worker',
+                max_ticks=max_ticks,
+                max_jobs=max_jobs,
+                raise_on_limit=raise_on_limit,
+            )
         finally:
             with suppress(Exception):
                 if run_id:
                     run = Workflow2Run.objects.get(id=run_id)
                     self.runtime.recompute_run_status(run)
 
-    def drain_pending_jobs_if_inline(self, *, run_id: str | None = None) -> bool:
+    def drain_pending_jobs_if_inline(
+        self,
+        *,
+        run_id: str | None = None,
+        max_ticks: int = 200,
+        max_jobs: int = 50,
+        raise_on_limit: bool = True,
+    ) -> bool:
         """Drain pending worker jobs when the current execution mode routes work inline."""
         if not self.runs_inline():
             return False
@@ -167,9 +200,17 @@ class WorkflowDispatchService:
             return False
 
         if connection.in_atomic_block:
-            transaction.on_commit(partial(self._drain_after_commit, run_id))
+            transaction.on_commit(
+                partial(
+                    self._drain_after_commit,
+                    run_id,
+                    max_ticks=max_ticks,
+                    max_jobs=max_jobs,
+                    raise_on_limit=raise_on_limit,
+                )
+            )
         else:
-            self._drain_after_commit(run_id)
+            self._drain_after_commit(run_id, max_ticks=max_ticks, max_jobs=max_jobs, raise_on_limit=raise_on_limit)
 
         return True
 
@@ -192,6 +233,7 @@ class WorkflowDispatchService:
         )
         return instances
 
+    @transaction.atomic
     def _emit_event_internal(
         self,
         *,
@@ -402,7 +444,11 @@ class WorkflowDispatchService:
         initial_vars: dict[str, Any] | None,
     ) -> list[Workflow2Definition]:
         """Return enabled definitions matching the trigger and source scope."""
-        qs = Workflow2Definition.objects.filter(enabled=True, trigger_on=on).order_by('created_at')
+        qs = (
+            Workflow2Definition.objects.select_for_update()
+            .filter(enabled=True, trigger_on=on)
+            .order_by('created_at', 'id')
+        )
         defs = list(qs)
 
         matched: list[Workflow2Definition] = []

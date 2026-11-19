@@ -102,6 +102,7 @@ class TlsMaterialStrategy(ABC):
         """Write PEM files to the nginx runtime locations."""
         NGINX_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
         NGINX_KEY_PATH.write_text(private_key_pem)
+        NGINX_KEY_PATH.chmod(0o600)
         NGINX_CERT_PATH.write_text(certificate_pem)
 
         if chain_pem.strip():

@@ -5,9 +5,12 @@
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 from typing import TYPE_CHECKING, get_args
 
+from asn1crypto import cms
+from asn1crypto import crl as asn1_crl
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.utils import timezone
@@ -55,14 +58,16 @@ def generate_empty_crl(
     actual_private_key = validate_certificate_signing_private_key(actual_private_key)
 
     # For ML-DSA keys, hash_algorithm must be None
-    is_mldsa = (
-        ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)
-    ) or (
-        mldsa is not None and isinstance(actual_private_key, (
-            mldsa.MLDSA44PrivateKey,
-            mldsa.MLDSA65PrivateKey,
-            mldsa.MLDSA87PrivateKey,
-        ))
+    is_mldsa = (ManagedMLDSAPrivateKey is not None and isinstance(private_key, ManagedMLDSAPrivateKey)) or (
+        mldsa is not None
+        and isinstance(
+            actual_private_key,
+            (
+                mldsa.MLDSA44PrivateKey,
+                mldsa.MLDSA65PrivateKey,
+                mldsa.MLDSA87PrivateKey,
+            ),
+        )
     )
 
     # Set default hash algorithm only for non-ML-DSA keys
@@ -85,6 +90,30 @@ def generate_empty_crl(
 
     crl = crl_builder.sign(private_key=actual_private_key, algorithm=hash_algorithm)
     return crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
+
+
+def crl_to_pkcs7_der(crl: CertificateRevocationList) -> bytes:
+    """Wrap a signed CRL in a degenerate PKCS#7 SignedData container."""
+    signed_data = cms.SignedData(
+        {
+            'version': 'v1',
+            'digest_algorithms': [],
+            'encap_content_info': {'content_type': 'data'},
+            'crls': [
+                cms.RevocationInfoChoice(
+                    {'crl': asn1_crl.CertificateList.load(crl.public_bytes(serialization.Encoding.DER))}
+                )
+            ],
+            'signer_infos': [],
+        }
+    )
+    return bytes(cms.ContentInfo({'content_type': 'signed_data', 'content': signed_data}).dump())
+
+
+def crl_to_pkcs7_pem(crl: CertificateRevocationList) -> bytes:
+    """Return the PKCS#7 wrapper in PEM form."""
+    body = base64.encodebytes(crl_to_pkcs7_der(crl)).decode('ascii')
+    return f'-----BEGIN PKCS7-----\n{body}-----END PKCS7-----\n'.encode('ascii')
 
 
 def generate_crl_with_revoked_certs(
@@ -125,7 +154,9 @@ def generate_crl_with_revoked_certs(
     )
     crl_builder = crl_builder.add_extension(x509.CRLNumber(next_crl_number), critical=False)
 
-    crl_certificates = issuing_ca.revoked_certificates.all()
+    crl_certificates = issuing_ca.revoked_certificates.select_related('certificate').filter(
+        certificate__not_valid_after__gt=crl_issued_at
+    )
 
     for cert in crl_certificates:
         revoked_cert = (

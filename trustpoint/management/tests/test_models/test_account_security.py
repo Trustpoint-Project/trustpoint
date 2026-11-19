@@ -17,7 +17,7 @@ class AccountSecurityConfigTest(SimpleTestCase):
         config = AccountSecurityConfig.get()
 
         assert config.pk == 1
-        assert config.failed_login_attempts is None
+        assert config.failed_login_attempts == 5
         assert not hasattr(AccountSecurityConfig, 'password_minimum_length')
         assert not hasattr(AccountSecurityConfig, 'password_similarity')
         assert not hasattr(AccountSecurityConfig, 'password_common')

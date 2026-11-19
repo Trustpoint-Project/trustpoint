@@ -12,7 +12,11 @@ BUILDDIR      = build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-.PHONY: help Makefile
+.PHONY: help diagrams Makefile
+
+# Render the checked-in PlantUML diagrams to SVG (needs a Java runtime).
+diagrams:
+	java -jar source/plantuml-mit-1.2025.2.jar -tsvg source/diagrams/*.puml
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

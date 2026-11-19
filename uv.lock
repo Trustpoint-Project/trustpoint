@@ -1006,18 +1006,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-taggit"
-version = "6.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/34/a6/f1beaf8f552fe90c153cc039316ebab942c23dfbc88588dde081fefca816/django_taggit-6.1.0.tar.gz", hash = "sha256:c4d1199e6df34125dd36db5eb0efe545b254dec3980ce5dd80e6bab3e78757c3", size = 38151, upload-time = "2024-09-29T08:07:39.477Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/34/4185c345530b91d05cb82e05d07148f481a5eb5dc2ac44e092b3daa6f206/django_taggit-6.1.0-py3-none-any.whl", hash = "sha256:ab776264bbc76cb3d7e49e1bf9054962457831bd21c3a42db9138b41956e4cf0", size = 75749, upload-time = "2024-09-29T08:07:14.612Z" },
-]
-
-[[package]]
 name = "djangorestframework"
 version = "3.18.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2601,15 +2589,6 @@ wheels = [
 ]
 
 [[package]]
-name = "sphinxcontrib-plantuml"
-version = "0.31"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "sphinx" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/08/8f/f26dd61b92176c4cba6b7898ca2875e7dfc29263d8e1b3b63d6acf81434f/sphinxcontrib_plantuml-0.31.tar.gz", hash = "sha256:fd74752f8ea070e641c3f8a402fccfa1d4a4056e0967b56033d2a76282d9f956", size = 15736, upload-time = "2025-09-03T11:11:35.028Z" }
-
-[[package]]
 name = "sphinxcontrib-qthelp"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2687,10 +2666,11 @@ wheels = [
 
 [[package]]
 name = "trustpoint"
-version = "1.0.1.dev0"
+version = "1.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "argon2-cffi" },
+    { name = "asn1crypto" },
     { name = "asyncua" },
     { name = "certifi" },
     { name = "crispy-bootstrap5" },
@@ -2699,17 +2679,14 @@ dependencies = [
     { name = "django-crispy-forms" },
     { name = "django-dbbackup" },
     { name = "django-filter" },
-    { name = "django-filter-stubs" },
     { name = "django-otp", extra = ["qrcode"] },
     { name = "django-prometheus" },
     { name = "django-q2" },
-    { name = "django-stubs", extra = ["compatible-mypy"] },
-    { name = "django-taggit" },
+    { name = "django-stubs-ext" },
     { name = "djangorestframework" },
     { name = "djangorestframework-simplejwt" },
     { name = "drf-spectacular" },
     { name = "drf-yasg" },
-    { name = "furo" },
     { name = "packaging" },
     { name = "paramiko" },
     { name = "psycopg" },
@@ -2717,12 +2694,9 @@ dependencies = [
     { name = "pyasn1" },
     { name = "pyasn1-modules" },
     { name = "pydantic" },
-    { name = "pydeps" },
     { name = "python-pkcs11" },
+    { name = "requests" },
     { name = "trustpoint-core" },
-    { name = "types-paramiko" },
-    { name = "types-requests" },
-    { name = "zeroconf" },
 ]
 
 [package.dev-dependencies]
@@ -2735,6 +2709,8 @@ dev = [
     { name = "behave-html-pretty-formatter" },
     { name = "devtools" },
     { name = "django-extensions" },
+    { name = "django-filter-stubs" },
+    { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "docutils-stubs" },
     { name = "mypy" },
     { name = "pyopenssl" },
@@ -2746,9 +2722,11 @@ dev = [
     { name = "pytest-html" },
     { name = "pytest-md" },
     { name = "pytest-md-report" },
-    { name = "requests" },
     { name = "ruff" },
+    { name = "types-paramiko" },
+    { name = "types-requests" },
     { name = "werkzeug" },
+    { name = "zeroconf" },
 ]
 docker = [
     { name = "gunicorn", extra = ["gevent"] },
@@ -2757,17 +2735,18 @@ docs = [
     { name = "furo" },
     { name = "myst-parser", extra = ["linkify"] },
     { name = "pillow" },
+    { name = "pydeps" },
     { name = "roman-numerals" },
     { name = "sphinx" },
     { name = "sphinx-autoapi" },
     { name = "sphinxcontrib-mermaid" },
     { name = "sphinxcontrib-openapi" },
-    { name = "sphinxcontrib-plantuml" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argon2-cffi", specifier = ">=25.1.0" },
+    { name = "asn1crypto", specifier = ">=1.5.1" },
     { name = "asyncua", specifier = "~=2.1.0" },
     { name = "certifi", specifier = ">=2026.7.22" },
     { name = "crispy-bootstrap5", specifier = "~=2026.3" },
@@ -2776,17 +2755,14 @@ requires-dist = [
     { name = "django-crispy-forms", specifier = "~=2.7" },
     { name = "django-dbbackup", specifier = ">=5.0.0" },
     { name = "django-filter", specifier = "~=26.1" },
-    { name = "django-filter-stubs", specifier = ">=0.1.3" },
     { name = "django-otp", extras = ["qrcode"], specifier = ">=1.7.3,<2" },
     { name = "django-prometheus", specifier = ">=2.4.0" },
     { name = "django-q2", specifier = ">=1.9.0" },
-    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.2" },
-    { name = "django-taggit", specifier = ">=6.1.0,<7" },
+    { name = "django-stubs-ext", specifier = ">=6.1.0" },
     { name = "djangorestframework", specifier = ">=3.17.1" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.5.1" },
     { name = "drf-spectacular", specifier = ">=0.30.0" },
     { name = "drf-yasg", specifier = ">=1.21.15" },
-    { name = "furo", specifier = ">=2024.8.6" },
     { name = "packaging", specifier = ">=26.2" },
     { name = "paramiko", specifier = ">=3.5.1" },
     { name = "psycopg", specifier = ">=3.3.4" },
@@ -2794,12 +2770,9 @@ requires-dist = [
     { name = "pyasn1", specifier = ">=0.6.1,<0.7" },
     { name = "pyasn1-modules", specifier = ">=0.4.1,<0.5" },
     { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "pydeps", specifier = ">=3.0.1" },
     { name = "python-pkcs11", specifier = ">=0.8.1" },
+    { name = "requests", specifier = ">=2.32.3" },
     { name = "trustpoint-core", specifier = ">=0.4.1" },
-    { name = "types-paramiko", specifier = ">=3.5.0.20250516" },
-    { name = "types-requests", specifier = ">=2.32.4.20260324" },
-    { name = "zeroconf", specifier = ">=0.154,<0.155" },
 ]
 
 [package.metadata.requires-dev]
@@ -2812,6 +2785,8 @@ dev = [
     { name = "behave-html-pretty-formatter", specifier = ">=1.14.1" },
     { name = "devtools", specifier = ">=0.13,<0.14" },
     { name = "django-extensions", specifier = ">=4.1" },
+    { name = "django-filter-stubs", specifier = ">=0.1.3" },
+    { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.2" },
     { name = "docutils-stubs", specifier = ">=0.0.22,<0.0.23" },
     { name = "mypy", specifier = "==2.4.1" },
     { name = "pyopenssl", specifier = ">=26,<27" },
@@ -2823,21 +2798,23 @@ dev = [
     { name = "pytest-html", specifier = ">=4.1.1" },
     { name = "pytest-md", specifier = ">=0.2.0" },
     { name = "pytest-md-report", specifier = ">=0.6.3" },
-    { name = "requests", specifier = ">=2.32.3" },
     { name = "ruff", specifier = "==0.17.4" },
+    { name = "types-paramiko", specifier = ">=3.5.0.20250516" },
+    { name = "types-requests", specifier = ">=2.32.4.20260324" },
     { name = "werkzeug", specifier = ">=3.1.3,<4" },
+    { name = "zeroconf", specifier = ">=0.154,<0.155" },
 ]
 docker = [{ name = "gunicorn", extras = ["gevent"], specifier = ">=25.3.0" }]
 docs = [
     { name = "furo", specifier = ">=2024.8.6" },
     { name = "myst-parser", extras = ["linkify"], specifier = ">=5.1.0" },
     { name = "pillow", specifier = ">=11.2.1" },
+    { name = "pydeps", specifier = ">=3.0.1" },
     { name = "roman-numerals", specifier = ">=4.1.0" },
     { name = "sphinx", specifier = ">=9.1.0" },
     { name = "sphinx-autoapi", specifier = ">=3.6.0" },
     { name = "sphinxcontrib-mermaid", specifier = ">=0.9.2" },
     { name = "sphinxcontrib-openapi", specifier = ">=0.9.0" },
-    { name = "sphinxcontrib-plantuml", specifier = ">=0.30" },
 ]
 
 [[package]]

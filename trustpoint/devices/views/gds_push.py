@@ -3,7 +3,6 @@
 
 """Views for OPC UA GDS Push certificate distribution."""
 
-import asyncio
 import io
 import zipfile
 from typing import Any, cast
@@ -17,6 +16,7 @@ from django.http.request import HttpRequest
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.views.generic.detail import DetailView
+from django_q.tasks import async_task
 
 # noinspection PyUnresolvedReferences
 from devices.models import (
@@ -24,12 +24,9 @@ from devices.models import (
 )
 from onboarding.models import (
     OnboardingProtocol,
-    OnboardingStatus,
 )
 from pki.models import IssuedCredentialModel
 from pki.models.ca import CaModel
-from request.gds_push import GdsPushService
-from request.gds_push.gds_push_service import GdsPushError
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -48,10 +45,11 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
 
-class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the trustlist on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = DeviceModel
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
@@ -68,21 +66,8 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-
-        try:
-            service = GdsPushService(device=self.object)
-
-            success, message = asyncio.run(service.update_trustlist())
-
-            if success:
-                messages.success(request, f'Trustlist updated successfully: {message}')
-            else:
-                messages.error(request, f'Failed to update trustlist: {message}')
-
-        except GdsPushError as e:
-            messages.error(request, f'GDS Push error: {e}')
-        except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Unexpected error: {e}')
+        async_task('devices.tasks.update_gds_push_trustlist', self.object.pk)
+        messages.info(request, 'Trustlist update queued.')
 
         return self._redirect_to_help_page()
 
@@ -100,10 +85,11 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         )
 
 
-class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.ISSUE_CERTIFICATES
     model = DeviceModel
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
@@ -120,26 +106,8 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-
-        try:
-            service = GdsPushService(device=self.object)
-
-            success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
-
-            if success and certificate_bytes:
-                messages.success(request, f'Server certificate updated successfully: {message}')
-
-                if self.object.onboarding_config:
-                    self.object.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-                    self.object.onboarding_config.save()
-
-            else:
-                messages.error(request, f'Failed to update server certificate: {message}')
-
-        except GdsPushError as e:
-            messages.error(request, f'GDS Push error: {e}')
-        except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Unexpected error: {e}')
+        async_task('devices.tasks.update_gds_push_server_certificate', self.object.pk)
+        messages.info(request, 'Server certificate update queued.')
 
         return self._redirect_to_help_page()
 

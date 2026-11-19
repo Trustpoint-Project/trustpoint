@@ -6,6 +6,7 @@
 import contextlib
 import re
 from typing import TYPE_CHECKING, cast, get_args
+from urllib.parse import urlsplit
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -185,13 +186,22 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         request: HttpRequest | None = None
         if isinstance(context, HttpBaseRequestContext):
             request = context.raw_message
-        request_meta = getattr(request, 'META', {}) if request else {}
-        if not isinstance(request_meta, dict):
-            request_meta = {}
+
+        host = next(
+            (value for value in getattr(settings, 'TP_TLS_PUBLIC_HOSTS', ()) if isinstance(value, str) and value),
+            '',
+        )
+        if not host and request is not None:
+            with contextlib.suppress(Exception):
+                host = urlsplit(f'//{request.get_host()}').hostname or ''
+        if not host:
+            host = TlsSettings.get_first_ipv4_address()
+        if ':' in host and not host.startswith('['):
+            host = f'[{host}]'
 
         http_port = settings.TP_HTTP_PORT or '80'
         port_str = f':{http_port}' if http_port != '80' else ''
-        return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
+        return f'http://{host}{port_str}/crl/{ca_id}'
 
     def _save_credential(
         self, context: BaseCertificateRequestContext, signed_cert: x509.Certificate, issuing_credential: CredentialModel

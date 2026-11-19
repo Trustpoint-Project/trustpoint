@@ -68,11 +68,13 @@ def step_submit_otp(context: runner.Context) -> None:
     response = context.unauthenticated_user_client.post('/devices/browser/', {'otp': context.otp})
     if response.status_code == HTTP_FOUND:
         redirect_url = response.url
-        context.download_token = redirect_url.split('?token=')[-1] if '?token=' in redirect_url else None
         context.download_id = (
             int(redirect_url.split('credential-download/')[1].split('/')[0])
-            if 'credential-download' in redirect_url else None
+            if 'credential-download' in redirect_url
+            else None
         )
+        # The token is kept in the session, not the URL; read it from the grant for assertions.
+        context.download_token = RemoteDeviceCredentialDownloadModel.objects.get(pk=context.download_id).download_token
         response = context.unauthenticated_user_client.get(response.url)
     assert response.status_code == HTTP_OK
     context.otp_post_view_response = response.content
@@ -85,7 +87,7 @@ def step_format_page(context: runner.Context) -> None:
 
 @then('they will receive a warning saying the OTP is incorrect')
 def step_incorrect_warning(context: runner.Context) -> None:
-    assert 'The provided password is not valid.' in context.otp_post_view_response.decode()
+    assert 'The OTP is invalid or the download process has expired.' in context.otp_post_view_response.decode()
 
 
 @given('the user is on the credential download page')
@@ -110,7 +112,7 @@ def step_download_password(context: runner.Context) -> None:
 
 @when('selects a file format')
 def step_file_format(context: runner.Context) -> None:
-    url = f'/devices/browser/credential-download/{context.download_id}/?token={context.download_token}'
+    url = f'/devices/browser/credential-download/{context.download_id}/'
     context.download_response = context.unauthenticated_user_client.post(
         url,
         {

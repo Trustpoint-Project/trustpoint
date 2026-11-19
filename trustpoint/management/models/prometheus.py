@@ -32,5 +32,12 @@ class PrometheusConfig(models.Model):
 
     @classmethod
     def get(cls) -> PrometheusConfig:
-        """Return the singleton Prometheus configuration, creating it if necessary."""
-        return cls.objects.first() or cls.objects.create()
+        """Return the fixed singleton row, preserving an existing older row."""
+        config = cls.objects.filter(pk=1).first()
+        if config is not None:
+            return config
+        existing = cls.objects.order_by('pk').first()
+        if existing is not None:
+            return existing
+        config, _created = cls.objects.get_or_create(pk=1)
+        return config

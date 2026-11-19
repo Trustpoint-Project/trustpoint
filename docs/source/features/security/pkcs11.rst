@@ -115,42 +115,8 @@ General HSM Operations
 Architecture
 ------------
 
-.. uml::
-
-   @startuml
-   !theme plain
-   
-   package "Docker Environment" {
-       package "Trustpoint Container" {
-           [Django Application] as App
-           [PKCS#11 Utilities] as Utils
-           [SoftHSM] as HSM
-           [Cache] as Cache
-       }
-       
-       package "PostgreSQL Container" {
-           [Database] as DB
-       }
-       
-       package "Docker Secrets" {
-           [HSM PIN] as PIN
-           [SO PIN] as SOPIN
-       }
-       
-       package "Docker Volumes" {
-           [SoftHSM Tokens] as Tokens
-       }
-   }
-   
-   App --> Utils
-   Utils --> HSM : PKCS#11 API
-   Utils --> DB : Store wrapped DEK
-   Utils --> Cache : Cache DEK
-   Utils --> PIN : Authentication
-   Utils --> SOPIN : Token initialization
-   HSM --> Tokens : Token storage
-   
-   @enduml
+.. image:: ../../diagrams/pkcs11_architecture.svg
+   :alt: Pkcs11 architecture
 
 Key Components
 ~~~~~~~~~~~~~~

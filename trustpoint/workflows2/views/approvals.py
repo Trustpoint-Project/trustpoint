@@ -18,6 +18,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from trustpoint.page_context import PageContextMixin
+from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance
@@ -45,11 +46,13 @@ def _json_object(value: Any) -> dict[str, Any]:
 
 def _expire_pending_approvals() -> None:
     now = timezone.now()
-    approval_ids = list(Workflow2Approval.objects.filter(
-        status=Workflow2Approval.STATUS_PENDING,
-        expires_at__isnull=False,
-        expires_at__lte=now,
-    ).values_list('id', flat=True))
+    approval_ids = list(
+        Workflow2Approval.objects.filter(
+            status=Workflow2Approval.STATUS_PENDING,
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).values_list('id', flat=True)
+    )
     if not approval_ids:
         return
 
@@ -97,7 +100,19 @@ def _build_timeout_context(
     }
 
 
-class Workflow2WaitingListView(PageContextMixin, LoginRequiredMixin, View):
+class WF2ApprovalPermReqMixin(UserPermissionRequiredMixin):
+    """Allow workflow managers and approvers to read the approval queue."""
+
+    def has_permission(self) -> bool:
+        """Allow workflow managers and approvers."""
+        user = self.request.user
+        return bool(
+            user.is_authenticated
+            and (user.has_perm(AppPermissions.MANAGE_WORKFLOWS) or user.has_perm(AppPermissions.APPROVE_WORKFLOWS))
+        )
+
+
+class Workflow2WaitingListView(WF2ApprovalPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """List workflow items waiting for user action."""
 
     page_category = 'workflows2'
@@ -258,7 +273,7 @@ class Workflow2WaitingListView(PageContextMixin, LoginRequiredMixin, View):
 Workflow2ApprovalListView = Workflow2WaitingListView
 
 
-class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2ApprovalDetailView(WF2ApprovalPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show a single approval request in context."""
 
     page_category = 'workflows2'
@@ -273,12 +288,17 @@ class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
         )
         inst = approval.instance
         step_meta = _get_approval_step_meta(approval)
-        step_display = describe_step(approval.step_id, {approval.step_id: {
-            'id': approval.step_id,
-            'title': str(step_meta.get('title') or approval.step_id),
-            'type': 'approval',
-            'description': '',
-        }})
+        step_display = describe_step(
+            approval.step_id,
+            {
+                approval.step_id: {
+                    'id': approval.step_id,
+                    'title': str(step_meta.get('title') or approval.step_id),
+                    'type': 'approval',
+                    'description': '',
+                }
+            },
+        )
         event_source = _json_object(inst.event_json).get('source')
         run = inst.run if inst.run_id else None
         source_context = resolve_source_context(run.source_json if run is not None else event_source)
@@ -318,7 +338,7 @@ class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
 class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
     """Approve/Reject and continue with the normal dispatch execution policy."""
 
-    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse: #noqa: C901
+    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:  # noqa: C901
         """Resolve an approval and continue execution if the workflow can proceed."""
         if not request.user.has_perm(AppPermissions.APPROVE_WORKFLOWS):
             raise PermissionDenied
@@ -354,25 +374,23 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
                     elif resolution.expired:
                         success_message = _('Approval expired. Timeout branch queued.')
                     elif continue_inline:
-                        success_message = _(
-                            'Approval resolved: %(decision)s. Workflow continued inline.'
-                        ) % {'decision': decision}
+                        success_message = _('Approval resolved: %(decision)s. Workflow continued inline.') % {
+                            'decision': decision
+                        }
                     else:
-                        success_message = _(
-                            'Approval resolved: %(decision)s. Next workflow step queued.'
-                        ) % {'decision': decision}
+                        success_message = _('Approval resolved: %(decision)s. Next workflow step queued.') % {
+                            'decision': decision
+                        }
                 elif inst.status == Workflow2Instance.STATUS_APPROVED:
-                    success_message = _(
-                        'Approval resolved: %(decision)s. Workflow ended approved.'
-                    ) % {'decision': decision}
+                    success_message = _('Approval resolved: %(decision)s. Workflow ended approved.') % {
+                        'decision': decision
+                    }
                 elif inst.status == Workflow2Instance.STATUS_TIMED_OUT:
-                    success_message = _(
-                        'Approval expired before it could be resolved. Workflow timed out.'
-                    )
+                    success_message = _('Approval expired before it could be resolved. Workflow timed out.')
                 elif inst.status == Workflow2Instance.STATUS_REJECTED:
-                    success_message = _(
-                        'Approval resolved: %(decision)s. Workflow ended rejected.'
-                    ) % {'decision': decision}
+                    success_message = _('Approval resolved: %(decision)s. Workflow ended rejected.') % {
+                        'decision': decision
+                    }
                 else:
                     success_message = _('Approval resolved: %(decision)s.') % {'decision': decision}
 
@@ -380,8 +398,7 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
         except Exception as e:  # noqa: BLE001
             messages.error(
                 request,
-                _('Resolve failed: %(type)s: %(error)s')
-                % {'type': type(e).__name__, 'error': e},
+                _('Resolve failed: %(type)s: %(error)s') % {'type': type(e).__name__, 'error': e},
             )
 
         return redirect('workflows2:approvals-detail', approval_id=approval_id)
@@ -397,25 +414,17 @@ def _get_approval_step_meta(approval: Workflow2Approval) -> dict[str, str | int 
     params = _json_object(step.get('params'))
 
     return {
-        'title': (
-            (step.get('title') if isinstance(step, dict) else None)
-            or params.get('title')
-            or approval.step_id
-        ),
+        'title': ((step.get('title') if isinstance(step, dict) else None) or params.get('title') or approval.step_id),
         'approved_outcome': (
-            params.get('approved_outcome')
-            or (step.get('approved_outcome') if isinstance(step, dict) else None)
+            params.get('approved_outcome') or (step.get('approved_outcome') if isinstance(step, dict) else None)
         ),
         'rejected_outcome': (
-            params.get('rejected_outcome')
-            or (step.get('rejected_outcome') if isinstance(step, dict) else None)
+            params.get('rejected_outcome') or (step.get('rejected_outcome') if isinstance(step, dict) else None)
         ),
         'timeout_outcome': (
-            params.get('timeout_outcome')
-            or (step.get('timeout_outcome') if isinstance(step, dict) else None)
+            params.get('timeout_outcome') or (step.get('timeout_outcome') if isinstance(step, dict) else None)
         ),
         'timeout_seconds': (
-            params.get('timeout_seconds')
-            or (step.get('timeout_seconds') if isinstance(step, dict) else None)
+            params.get('timeout_seconds') or (step.get('timeout_seconds') if isinstance(step, dict) else None)
         ),
     }
