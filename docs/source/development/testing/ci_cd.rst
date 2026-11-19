@@ -45,15 +45,19 @@ Below is an overview of the key workflows included in the project:
 Sequence Diagram CI/CD Pipeline
 -------------------------------
 
-.. plantuml:: ../../diagrams/sequence_pipeline.puml
-    :caption: Sequence Diagram of the automatically triggered pipelines
+.. figure:: ../../diagrams/sequence_pipeline.svg
+    :alt: Sequence Diagram of the automatically triggered pipelines
+
+    Sequence Diagram of the automatically triggered pipelines
 
 --------------------------------
 Component Diagram CI/CD Pipeline
 --------------------------------
 
-.. plantuml:: ../../diagrams/component_pipeline.puml
-    :caption: Component Diagram of the automatically triggered pipelines
+.. figure:: ../../diagrams/component_pipeline.svg
+    :alt: Component Diagram of the automatically triggered pipelines
+
+    Component Diagram of the automatically triggered pipelines
 
 .. _composite_setup_action:
 

@@ -1,0 +1,93 @@
+@startuml
+' General interface for all validation classes.
+interface ValidationComponent {
+    + validate(context: RequestContext)
+}
+
+' Composite class for grouping and executing multiple validation rules.
+class CompositeValidation {
+    + components: list[ValidationComponent]
+    + add(component: ValidationComponent)
+    + remove(component: ValidationComponent)
+    + validate(context: RequestContext)
+}
+
+' Composite validators for CMP and EST-specific requests.
+class CmpHttpRequestValidator {
+    + __init__()
+    + validate(context: RequestContext)
+}
+
+class EstHttpRequestValidator {
+    + __init__()
+    + validate(context: RequestContext)
+}
+
+' Individual validation components.
+class PayloadSizeValidation {
+    + max_payload_size: int
+    + validate(context: RequestContext)
+}
+
+class ContentTypeValidation {
+    + expected_content_type: str
+    + validate(context: RequestContext)
+}
+
+class AcceptHeaderValidation {
+    + allowed_content_types: list[str]
+    + validate(context: RequestContext)
+}
+
+class AuthorizationHeaderValidation {
+    + validate(context: RequestContext)
+}
+
+class ClientCertificateValidation {
+    + validate(context: RequestContext)
+}
+
+class IntermediateCertificatesValidation {
+    + validate(context: RequestContext)
+}
+
+class ContentTransferEncodingValidation {
+    + validate(context: RequestContext)
+}
+
+' Dependency relationship with RequestContext.
+class RequestContext {
+    + raw_message: Request
+    + parsed_message: bytes
+    + est_username: str
+    + est_password: str
+    + client_certificate: x509.Certificate
+    + client_intermediate_certificate: list[x509.Certificate]
+}
+
+' Relationships.
+ValidationComponent <|-- CompositeValidation
+CompositeValidation <|-- CmpHttpRequestValidator
+CompositeValidation <|-- EstHttpRequestValidator
+ValidationComponent <|-- PayloadSizeValidation
+ValidationComponent <|-- ContentTypeValidation
+ValidationComponent <|-- AcceptHeaderValidation
+ValidationComponent <|-- AuthorizationHeaderValidation
+ValidationComponent <|-- ClientCertificateValidation
+ValidationComponent <|-- IntermediateCertificatesValidation
+ValidationComponent <|-- ContentTransferEncodingValidation
+
+' Composite relationships.
+CompositeValidation o--> ValidationComponent : "validates using"
+CompositeValidation --> RequestContext : "uses"
+CmpHttpRequestValidator --> CompositeValidation : "extends"
+EstHttpRequestValidator --> CompositeValidation : "extends"
+PayloadSizeValidation --> RequestContext : "validates payload size"
+ContentTypeValidation --> RequestContext : "checks content type"
+AcceptHeaderValidation --> RequestContext : "checks 'Accept'"
+AuthorizationHeaderValidation --> RequestContext : "extracts credentials"
+ClientCertificateValidation --> RequestContext : "verifies SSL client cert"
+IntermediateCertificatesValidation --> RequestContext : "validates CA chain"
+ContentTransferEncodingValidation --> RequestContext : "decodes base64"
+
+@enduml

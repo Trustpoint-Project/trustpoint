@@ -31,11 +31,6 @@ sys.path.insert(0, str(project_root / 'trustpoint'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'trustpoint.settings')  # Set Django settings
 django.setup()  # Initialize Django
 
-# -- PlantUML Configuration -------------------------------------------------
-# Define the path to the PlantUML JAR file for diagram generation.
-PLANTUML_PATH = Path(__file__).parent / 'plantuml-mit-1.2025.2.jar'
-plantuml = f'java -jar {PLANTUML_PATH}'
-
 # -- Project information ----------------------------------------------------
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
@@ -49,7 +44,6 @@ nitpicky = True
 extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
-    'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
     'sphinxcontrib.openapi',  # Generate APIs docs
     'sphinxcontrib.mermaid',  # Enables Mermaid diagrams
     'myst_parser',  # Supports Markdown files

@@ -1,0 +1,50 @@
+@startuml
+' Base context for all request types.
+class BaseRequestContext {
+    + raw_message: HttpRequest
+    + protocol: str
+    + operation: str
+    + domain_str: str
+    + cert_profile_str: str
+    --
+    + domain: DomainModel | None
+    + device: DeviceModel | None
+}
+
+' Validation request contexts.
+class EstBaseRequestContext {
+    + est_username: str | None
+    + est_password: str | None
+    + client_certificate: x509.Certificate | None
+    + client_intermediate_certificate: list[x509.Certificate] | None
+}
+
+class CmpBaseRequestContext {
+    + parsed_message: rfc4210.PKIMessage | None
+    + cmp_shared_secret: str | None
+    + client_certificate: x509.Certificate | None
+}
+
+' Certificate request contexts.
+class EstCertificateRequestContext {
+    + cert_requested: x509.CertificateSigningRequest | None
+    + est_encoding: str | None
+}
+
+class CmpCertificateRequestContext {
+    + parsed_message: rfc4210.PKIMessage
+}
+
+' Revocation request contexts.
+class CmpRevocationRequestContext {
+    + parsed_message: rfc4210.PKIMessage
+}
+
+' Relationships.
+BaseRequestContext <|-- EstBaseRequestContext
+BaseRequestContext <|-- CmpBaseRequestContext
+EstBaseRequestContext <|-- EstCertificateRequestContext
+CmpBaseRequestContext <|-- CmpCertificateRequestContext
+CmpBaseRequestContext <|-- CmpRevocationRequestContext
+
+@enduml

@@ -150,71 +150,8 @@ custody. Those keys are not treated as Trustpoint signing-authority keys.
 Top-Level Architecture
 ----------------------
 
-.. uml::
-
-   @startuml
-   !theme plain
-   skinparam componentStyle rectangle
-
-   package "Trustpoint Application" {
-     [Devices / PKI / Request Flows] as App
-     [CryptoBackend] as Backend
-   }
-
-   package "Crypto Application Layer" {
-     [Key Manager]
-     [Certificate Service]
-     [Signing Service]
-     [Bundle Export Service]
-     [Secret Protection Service]
-   }
-
-   package "Provider Layer" {
-     [Pkcs11Backend]
-     [Provider Profile]
-     [Capability Probe]
-   }
-
-   package "PKCS#11 Adapter Layer" {
-     [Session Pool]
-     [Object Locator]
-     [Mechanism Policy]
-     [Error Mapper]
-   }
-
-   package "Persistence" {
-     [Managed Key Records]
-     [Credential Records]
-     [Export Bundle Records]
-     [Provider Profile Records]
-   }
-
-   App --> Backend
-   Backend --> [Key Manager]
-   Backend --> [Certificate Service]
-   Backend --> [Signing Service]
-   Backend --> [Bundle Export Service]
-   Backend --> [Secret Protection Service]
-
-   [Key Manager] --> [Pkcs11Backend]
-   [Certificate Service] --> [Pkcs11Backend]
-   [Signing Service] --> [Pkcs11Backend]
-   [Bundle Export Service] --> [Pkcs11Backend]
-   [Secret Protection Service] --> [Pkcs11Backend]
-
-   [Pkcs11Backend] --> [Provider Profile]
-   [Pkcs11Backend] --> [Capability Probe]
-   [Pkcs11Backend] --> [Session Pool]
-   [Pkcs11Backend] --> [Object Locator]
-   [Pkcs11Backend] --> [Mechanism Policy]
-   [Pkcs11Backend] --> [Error Mapper]
-
-   [Key Manager] --> [Managed Key Records]
-   [Certificate Service] --> [Credential Records]
-   [Bundle Export Service] --> [Export Bundle Records]
-   [Pkcs11Backend] --> [Provider Profile Records]
-   @enduml
-
+.. image:: ../../diagrams/crypto_top_level_architecture.svg
+   :alt: Crypto top level architecture
 
 Layer Responsibilities
 ----------------------
@@ -403,60 +340,16 @@ The rest of the backend uses a mechanism policy that selects from supported opti
 Managed Key Flow
 ----------------
 
-.. uml::
-
-   @startuml
-   !theme plain
-
-   actor "Application Flow" as App
-   participant "CryptoBackend" as Backend
-   participant "Key Manager" as Keys
-   participant "Pkcs11Backend" as P11
-   participant "Session Pool" as Pool
-   participant "Object Locator" as Locator
-   database "Managed Key Records" as Repo
-
-   App -> Backend : ensure_managed_key(alias, spec, policy)
-   Backend -> Keys : ensure_managed_key(...)
-   Keys -> Repo : lookup(alias)
-   Repo --> Keys : missing
-   Keys -> P11 : generate_key(alias, spec, policy)
-   P11 -> Pool : borrow session
-   P11 -> Locator : resolve/create objects
-   Locator --> P11 : key id + metadata
-   P11 --> Keys : provider key metadata
-   Keys -> Repo : save managed key record
-   Repo --> Keys : ManagedKeyRef
-   Keys --> Backend : ManagedKeyRef
-   Backend --> App : ManagedKeyRef
-   @enduml
-
+.. image:: ../../diagrams/crypto_managed_key_flow.svg
+   :alt: Crypto managed key flow
 
 Export Bundle Flow
 ------------------
 
 Export bundles are intentionally separate from managed keys.
 
-.. uml::
-
-   @startuml
-   !theme plain
-
-   actor "Application Flow" as App
-   participant "CryptoBackend" as Backend
-   participant "Bundle Export Service" as Bundles
-   participant "Pkcs11Backend" as P11
-   database "Export Bundle Records" as Repo
-
-   App -> Backend : create_export_bundle(request)
-   Backend -> Bundles : create_export_bundle(request)
-   Bundles -> P11 : generate delivery artifact
-   P11 --> Bundles : PKCS#12/PEM payload + metadata
-   Bundles -> Repo : save metadata only
-   Repo --> Bundles : ExportBundleRef
-   Bundles --> Backend : ExportBundleRef
-   Backend --> App : ExportBundleRef
-   @enduml
+.. image:: ../../diagrams/crypto_export_bundle_flow.svg
+   :alt: Crypto export bundle flow
 
 The backend may implement this using:
 
@@ -548,31 +441,8 @@ Restore responsibilities:
 - verify that stored public-key fingerprints still match
 - mark missing keys as degraded state instead of failing silently
 
-.. uml::
-
-   @startuml
-   !theme plain
-
-   actor Operator
-   participant "Restore Workflow" as Restore
-   participant "CryptoBackend" as Backend
-   participant "Pkcs11Backend" as P11
-   database "Managed Key Records" as Repo
-
-   Operator -> Restore : restore DB + provider profile
-   Restore -> Backend : verify_provider()
-   Backend -> P11 : load profile and probe
-   P11 --> Backend : provider OK
-   Restore -> Repo : list managed key refs
-   loop for each managed key
-     Restore -> Backend : verify_key(ref)
-     Backend -> P11 : locate by provider id
-     P11 --> Backend : public key
-     Backend --> Restore : matches / missing / mismatch
-   end
-   Restore --> Operator : restore report
-   @enduml
-
+.. image:: ../../diagrams/crypto_restore_flow.svg
+   :alt: Crypto restore flow
 
 Error Handling
 --------------
