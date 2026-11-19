@@ -14,7 +14,6 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import FormView, TemplateView
@@ -112,12 +111,9 @@ class AuditLogExportDownloadView(UserPermissionRequiredMixin, PageContextMixin, 
         """Export all matching entries, independent of pagination, using a safe GET request."""
         selection = AuditLogFilter(request.GET, queryset=AuditLog.objects.all())
         export_url = reverse('management:audit-log-export')
-        return_url = f'{export_url}?{request.GET.urlencode()}'
-        if not url_has_allowed_host_and_scheme(return_url, allowed_hosts=set()):
-            return_url = export_url
         if not selection.form.is_valid():
             messages.error(request, _('Invalid audit log filters. Return to the audit log and correct them.'))
-            return redirect(return_url)
+            return redirect(export_url)
         filters = {name: request.GET[name] for name in selection.filters if request.GET.get(name)}
         if filters and not request.user.has_perm(AppPermissions.MANAGE_TRACEABILITY_CREDENTIALS):
             raise PermissionDenied
@@ -125,11 +121,11 @@ class AuditLogExportDownloadView(UserPermissionRequiredMixin, PageContextMixin, 
             document = create_evidence_export(selection.qs, filters)
         except ValidationError as error:
             messages.error(request, str(error))
-            return redirect(return_url)
+            return redirect(export_url)
         except (CryptoError, RuntimeError, ValueError):
             self.logger.exception('Could not create audit evidence export.')
             messages.error(request, _('Could not create the evidence package. Check the audit signing configuration.'))
-            return redirect(return_url)
+            return redirect(export_url)
         content = encode_json(document)
         response = HttpResponse(content, content_type='application/json')
         response['Content-Disposition'] = 'attachment; filename="trustpoint-audit-evidence.json"'
