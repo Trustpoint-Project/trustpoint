@@ -89,6 +89,7 @@ def test_required_channel_binding_is_advertised(client, settings, path):
 def csrattrs_profile(domain_instance):
     profile = CertificateProfileModel.objects.create(
         unique_name='csrattrs-test',
+        credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN,
         profile_json={'type': 'cert_profile', 'subj': {'serial_number': {'required': True}}},
     )
     domain = domain_instance['domain']

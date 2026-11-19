@@ -551,11 +551,11 @@ def test_rotation_between_authentication_and_issuance_fails_safely(client: Clien
     assert rep.status == PkiStatus.SUCCESS
 
 
-@pytest.mark.parametrize('chosen', [' ', ' edge spaces ', 'a' * 128])
+@pytest.mark.parametrize('chosen', [' ' * 16, ' edge spaces    ', 'a' * 128])
 def test_custom_scep_challenge_authorizes_enrollment_exactly(client: Client, rsa_env: ScepEnv, chosen: str) -> None:
     """Printable ASCII, including an all-space value, remains usable as the exact SCEP challenge."""
 
-    policy = SecurityConfig.objects.create(pk=1)
+    policy, _ = SecurityConfig.objects.get_or_create(pk=1)
     policy.apply_security_settings()
     policy.allow_user_defined_device_secrets = True
     policy.save(update_fields=['allow_user_defined_device_secrets'])

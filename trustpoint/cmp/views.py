@@ -132,6 +132,7 @@ class CmpRequestView(LoggerMixin, View):
             # authorization succeeded, otherwise an attacker could burn a nonce.
             mark_cmp_client_nonce(ctx)
             authorized = True
+            ctx.cmp_authenticated = True
 
             process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:

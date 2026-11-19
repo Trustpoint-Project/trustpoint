@@ -1036,6 +1036,8 @@ class CmpErrorMessageResponder(CmpMessageResponder):
             sender_kid=sender_kid,
             issuer_cert=issuer_credential.get_certificate() if issuer_credential is not None else None,
         )
+        # Never echo request-only generalInfo in an error response.
+        err_header['generalInfo'].clear()
 
         cp_extra_certs = univ.SequenceOf()
 
@@ -1107,12 +1109,18 @@ class CmpErrorMessageResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             context=context,
         )
-        if context.cmp_shared_secret:
-            pki_message = CmpErrorMessageResponder._add_protection_shared_secret(
-                pki_message=pki_message, context=context
-            )
+        if context.operation == 'getcacerts' or context.cmp_authenticated:
+            if context.cmp_shared_secret:
+                pki_message = CmpErrorMessageResponder._add_protection_shared_secret(
+                    pki_message=pki_message, context=context
+                )
+            else:
+                pki_message = CmpErrorMessageResponder._sign_pki_message(pki_message=pki_message, context=context)
         else:
-            pki_message = CmpErrorMessageResponder._sign_pki_message(pki_message=pki_message, context=context)
+            # An unauthenticated request must never cause a CA-key signature.
+            # An unsigned error still gives the client a parseable CMP response.
+            pki_message['header']['generalInfo'].clear()
+            pki_message['header']['protectionAlg'] = univ.noValue
 
         encoded_message = encoder.encode(pki_message)
 

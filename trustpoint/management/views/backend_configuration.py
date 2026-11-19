@@ -21,6 +21,7 @@ from appsecrets.models import AppSecretBackendModel
 from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from pki.services.key_generation import supported_key_type_choices
+from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 PKCS11_ASSET_DOWNLOADS = {
@@ -169,10 +170,11 @@ def _active_pkcs11_config() -> Any | None:
     return getattr(profile, 'pkcs11_config', None) if profile is not None else None
 
 
-class BackendConfigurationPkcs11AssetDownloadView(View):
+class BackendConfigurationPkcs11AssetDownloadView(UserPermissionRequiredMixin, View):
     """Download installed PKCS#11 provider files for the active backend."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CRYPTO_BACKENDS
 
     def get(self, _request: HttpRequest, asset: str) -> FileResponse:
         """Return the selected PKCS#11 provider asset as an attachment."""
@@ -198,10 +200,11 @@ class BackendConfigurationPkcs11AssetDownloadView(View):
         )
 
 
-class BackendConfigurationView(TemplateView):
+class BackendConfigurationView(UserPermissionRequiredMixin, TemplateView):
     """Display the configured managed-crypto and application-secret backends."""
 
     template_name = 'management/backend_configuration.html'
+    permission_required = AppPermissions.MANAGE_CRYPTO_BACKENDS
     extra_context: dict[str, str] = {  # noqa: RUF012
         'page_category': 'management',
         'page_name': 'backend_configuration',

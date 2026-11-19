@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import FieldError, PermissionDenied
 from django.db import transaction
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -129,7 +129,10 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         """Return all domains with the issuing CA relationship prefetched."""
         base_qs = DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
         qs = self.apply_filters(base_qs)
-        return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
+        try:
+            return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
+        except FieldError:
+            return qs.order_by(self.default_sort_param)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add filter state to the context."""
@@ -271,6 +274,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             if domain_cred_profile_id:
                 try:
                     profile = CertificateProfileModel.objects.get(pk=int(domain_cred_profile_id))
+                    if profile.credential_type != CertificateProfileModel.ProfileCredentialType.DOMAIN:
+                        messages.error(request, _('The selected profile is not a domain credential profile.'))
+                        return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
                     domain.domain_credential_profile = profile
                 except (CertificateProfileModel.DoesNotExist, ValueError):
                     messages.error(request, _('Invalid domain credential profile selected.'))

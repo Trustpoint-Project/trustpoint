@@ -26,6 +26,7 @@ from .types import ExecutionResult, RunStatus, StepRun
 
 OnStepRun = Callable[[StepRun], None]
 MAX_WEBHOOK_TIMEOUT_SECONDS = 300
+INLINE_MAX_WEBHOOK_TIMEOUT_SECONDS = 10
 
 _TERMINAL_RUN_STATUSES = {
     'awaiting',
@@ -50,7 +51,7 @@ class WorkflowExecutor:
       - The approval step returns status="awaiting"
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - adapter injection for tests and the inline flag.
         self,
         *,
         email: EmailAdapter | None = None,
@@ -58,6 +59,7 @@ class WorkflowExecutor:
         webhook: WebhookAdapter | None = None,
         on_step_run: OnStepRun | None = None,
         max_steps: int = 200,
+        inline: bool = False,
     ) -> None:
         """Initialize the executor with adapters and an optional hook."""
         self.email = email or DjangoEmailAdapter()
@@ -65,6 +67,7 @@ class WorkflowExecutor:
         self.webhook = webhook or RequestsWebhookAdapter()
         self.on_step_run = on_step_run
         self.max_steps = max_steps
+        self.inline = inline
 
     def execute_single_step(
         self,
@@ -392,8 +395,8 @@ class WorkflowExecutor:
             )
         )
 
-    @staticmethod
     def _validate_webhook_inputs(
+        self,
         step_id: str,
         values: dict[str, Any],
     ) -> tuple[str, str, dict[str, Any], int, list[Any]]:
@@ -415,6 +418,11 @@ class WorkflowExecutor:
             capture = []
         if not isinstance(capture, list):
             raise StepExecutionError(step_id, 'Invalid webhook.capture (expected list)')
+
+        if self.inline:
+            # shortcut: inline steps run inside a web request, so cap the wait;
+            # a long webhook needs the dedicated worker (WORKER mode).
+            timeout_seconds = min(timeout_seconds, INLINE_MAX_WEBHOOK_TIMEOUT_SECONDS)
 
         return method, url, headers, timeout_seconds, capture
 

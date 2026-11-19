@@ -32,12 +32,15 @@ def test_credential_issue_processor_does_not_gate_on_workflow2_outcome() -> None
     generated_key = Mock()
     generated_key.as_crypto.return_value = private_key
 
-    with patch(
-        'request.operation_processor.issue_cred.KeyGenerator.generate_private_key',
-        return_value=generated_key,
-    ) as mock_generate, patch(
-        'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',
-    ) as mock_issue:
+    with (
+        patch(
+            'request.operation_processor.issue_cred.KeyGenerator.generate_private_key',
+            return_value=generated_key,
+        ) as mock_generate,
+        patch(
+            'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',
+        ) as mock_issue,
+    ):
         CredentialIssueProcessor().process_operation(context)
 
     mock_generate.assert_called_once_with(domain=context.domain)
@@ -79,7 +82,9 @@ def test_credential_issue_processor_validates_context_and_request() -> None:
 def test_credential_issue_processor_preserves_existing_key_and_propagates_issue_errors() -> None:
     """Reuse an existing key and expose errors from certificate issuance."""
     context = ManualCredentialRequestContext(
-        cert_requested=x509.CertificateBuilder(), domain=Mock(), private_key=Mock(),
+        cert_requested=x509.CertificateBuilder(),
+        domain=Mock(),
+        private_key=Mock(),
     )
     with patch(
         'request.operation_processor.issue_cred.CertificateIssueProcessor.process_operation',

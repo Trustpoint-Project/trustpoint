@@ -38,10 +38,9 @@ class CanManageTruststores(BasePermission):
     def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage signer settings."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.has_perm(AppPermissions.MANAGE_SIGNER)
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_SIGNER)
         )
+
 
 @extend_schema(tags=['Signer'])
 class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
@@ -63,9 +62,9 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
             200: OpenApiResponse(description='Signature generated successfully'),
             400: OpenApiResponse(description='Bad Request - Invalid input data'),
             404: OpenApiResponse(description='Not Found - Signer does not exist'),
-            500: OpenApiResponse(description='Internal Server Error - Failed to sign hash')
+            500: OpenApiResponse(description='Internal Server Error - Failed to sign hash'),
         },
-        request=None
+        request=None,
     )
     @action(detail=False, methods=['post'], url_path='sign')
     def sign_hash(self, request: Request) -> Response:
@@ -96,17 +95,12 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 signature = private_key.sign(hash_bytes, ec.ECDSA(prehashed_algo))
             else:
                 self.logger.error('Unsupported key algorithm for signer %s', signer_id)
-                return Response(
-                    {'error': 'Unsupported key algorithm'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': 'Unsupported key algorithm'}, status=status.HTTP_400_BAD_REQUEST)
 
             signature_hex = signature.hex()
 
             signed_message = SignedMessageModel.objects.create(
-                signer=signer,
-                hash_value=hash_value,
-                signature=signature_hex
+                signer=signer, hash_value=hash_value, signature=signature_hex
             )
 
             response_data = {
@@ -119,26 +113,16 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 'created_at': signed_message.created_at,
             }
 
-            self.logger.info(
-                'Successfully signed hash with signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Successfully signed hash with signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(response_data, status=status.HTTP_200_OK)
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', signer_id)
-            return Response(
-                {'error': f'Signer with ID {signer_id} does not exist'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': f'Signer with ID {signer_id} does not exist'}, status=status.HTTP_404_NOT_FOUND)
         except Exception:
             self.logger.exception('Failed to sign hash with signer %s', signer_id)
-            return Response(
-                {'error': 'Failed to sign hash'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': 'Failed to sign hash'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @extend_schema(
         methods='get',
@@ -161,11 +145,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
             # Get certificate in PEM format
             certificate_pem = signer.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
 
-            self.logger.info(
-                'Certificate retrieved for signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Certificate retrieved for signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(
                 {
@@ -173,21 +153,15 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                     'signer_name': signer.unique_name,
                     'certificate_pem': certificate_pem,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', pk)
-            return Response(
-                {'error': f'Signer with ID {pk} does not exist'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': f'Signer with ID {pk} does not exist'}, status=status.HTTP_404_NOT_FOUND)
         except Exception:
             self.logger.exception('Failed to retrieve certificate for signer %s', pk)
-            return Response(
-                {'error': 'Failed to retrieve certificate'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': 'Failed to retrieve certificate'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CanReadSignedMessages(BasePermission):

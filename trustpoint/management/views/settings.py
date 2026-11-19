@@ -614,6 +614,25 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
 
         with security_change(target=form.instance, actor=self.request.user):
             old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
+
+            if 'auto_gen_pki' in form.changed_data:
+                old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
+                new_auto = form.cleaned_data.get('auto_gen_pki', None)
+                self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
+
+                if old_auto and not new_auto:
+                    try:
+                        AutoGenPkiFeature.disable()
+                    except Exception as exception:
+                        self.logger.exception('Failed to disable the auto-generated PKI.')
+                        form.add_error(
+                            None,
+                            _('Could not disable the auto-generated PKI: %(error)s')
+                            % {'error': str(exception) or type(exception).__name__},
+                        )
+                        return self.form_invalid(form)
+                    self.logger.info('Auto-generated PKI disabled')
+
             form.save()
 
             if 'security_mode' in form.changed_data:
@@ -648,15 +667,6 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
 
                 if new_int > old_int:
                     self.sec.reset_settings(new_value)
-
-            if 'auto_gen_pki' in form.changed_data:
-                old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
-                new_auto = form.cleaned_data.get('auto_gen_pki', None)
-                self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
-
-                if old_auto != new_auto and not new_auto:
-                    AutoGenPkiFeature.disable()
-                    self.logger.info('Auto-generated PKI disabled')
 
             messages.success(self.request, _('Your changes were saved successfully.'))
             return redirect(self.get_success_url())

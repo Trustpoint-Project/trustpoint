@@ -69,6 +69,7 @@ def test_otp_max_attempts(mock_models: dict[str, Any]) -> None:
 
     assert not rcd.check_otp(valid_otp)
 
-    # ensure model was deleted
-    with pytest.raises(RemoteDeviceCredentialDownloadModel.DoesNotExist):
-        RemoteDeviceCredentialDownloadModel.objects.get(id=rcd.id)
+    # the grant survives with a fresh OTP so an unauthenticated attacker cannot end onboarding
+    rcd.refresh_from_db()
+    assert rcd.otp != valid_otp
+    assert rcd.check_otp(rcd.otp)

@@ -58,6 +58,7 @@ def test_default_route_issues_using_authenticated_domain(enrollment_request, cus
     if custom_default:
         profile = CertificateProfileModel.objects.create(
             unique_name='custom-default',
+            credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN,
             profile_json={'type': 'cert_profile', 'subj': {'allow': '*'}, 'validity': {'days': 7}},
         )
         device.domain.domain_credential_profile = profile
@@ -105,6 +106,7 @@ def test_profile_only_route_uses_selected_profile(enrollment_request, suffix):
     selected.save()
     domain.domain_credential_profile = CertificateProfileModel.objects.create(
         unique_name='other-default',
+        credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN,
         profile_json={'type': 'cert_profile', 'subj': {'allow': '*'}, 'validity': {'days': 30}},
     )
     domain.save()

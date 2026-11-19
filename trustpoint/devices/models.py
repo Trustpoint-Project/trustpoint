@@ -333,10 +333,12 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
 
     BROWSER_MAX_OTP_ATTEMPTS = 3
+    OTP_VALIDITY = dt.timedelta(minutes=30)
     TOKEN_VALIDITY = dt.timedelta(minutes=3)
 
     issued_credential_model = models.OneToOneField(IssuedCredentialModel, on_delete=models.CASCADE)
     otp = models.CharField(_('OTP'), max_length=32, default='')
+    otp_created_at = models.DateTimeField(_('OTP Created'), null=True)
     device = models.ForeignKey('devices.DeviceModel', on_delete=models.CASCADE)
     attempts = models.IntegerField(_('Attempts'), default=0)
     download_token = models.CharField(_('Download Token'), max_length=64, default='')
@@ -353,7 +355,30 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         """Generates a new random OTP on initial save of the model."""
         if not self.otp:
             self.otp = secrets.token_urlsafe(8)
+            self.otp_created_at = timezone.now()
         super().save(*args, **kwargs)
+
+    def rotate_otp(self) -> None:
+        """Replace the OTP with a fresh one, invalidating outstanding guesses."""
+        self.otp = secrets.token_urlsafe(8)
+        self.otp_created_at = timezone.now()
+        self.attempts = 0
+        self.save(update_fields=['otp', 'otp_created_at', 'attempts'])
+
+    @staticmethod
+    def download_token_session_key(credential_id: int) -> str:
+        """Return the session key that carries a browser download token out of the URL."""
+        return f'browser_download_token_{credential_id}'
+
+    def otp_is_expired(self) -> bool:
+        """Return whether the OTP is missing or consumed."""
+        if not self.otp or self.otp == '-':
+            return True
+        if self.otp_created_at is None:
+            # Rows written before the timestamp existed (or built directly in code)
+            # have no age to compare against; the OTP page rotates them on view.
+            return False
+        return timezone.now() - self.otp_created_at > self.OTP_VALIDITY
 
     def get_otp_display(self) -> str:
         """Return the OTP in the format 'credential_id.otp' for display within the admin view.
@@ -361,7 +386,7 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         Returns:
             The str to display.
         """
-        if not self.otp or self.otp == '-':
+        if self.otp_is_expired():
             return 'OTP no longer valid'
         return f'{self.issued_credential_model.id}.{self.otp}'
 
@@ -381,14 +406,15 @@ class RemoteDeviceCredentialDownloadModel(models.Model):
         except RemoteDeviceCredentialDownloadModel.DoesNotExist:
             return False
 
-        if not self.otp or self.otp == '-':
+        if self.otp_is_expired():
             return False
         matches = constant_time_compare(otp, self.otp)
         if not matches:
             self.attempts += 1
             if self.attempts >= self.BROWSER_MAX_OTP_ATTEMPTS:
-                self.otp = '-'
-                self.delete()
+                # Rotate instead of deleting: unauthenticated guessing must not
+                # end an onboarding an operator is working on.
+                self.rotate_otp()
             else:
                 self.save()
             return False

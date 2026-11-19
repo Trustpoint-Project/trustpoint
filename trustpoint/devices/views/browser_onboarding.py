@@ -84,6 +84,8 @@ class AbstractBrowserOnboardingOTPView(
         if cdm is None:
             cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
             cdm.save()
+        elif cdm.otp_is_expired():
+            cdm.rotate_otp()
 
         context.update(
             {
@@ -174,9 +176,9 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         credential_id = cast('int', self.cleaned_data.get('credential_id'))
         credential_download = cast('RemoteDeviceCredentialDownloadModel', self.cleaned_data.get('credential_download'))
         token: str = credential_download.download_token
-        return (
-            f'{reverse_lazy("devices:browser_domain_credential_download", kwargs={"pk": credential_id})}?token={token}'
-        )
+        # Keep the private-key token out of the URL (and therefore out of access logs).
+        self.request.session[RemoteDeviceCredentialDownloadModel.download_token_session_key(credential_id)] = token
+        return str(reverse_lazy('devices:browser_domain_credential_download', kwargs={'pk': credential_id}))
 
     def form_invalid(self, form: BrowserLoginForm) -> HttpResponse:
         """Adds an error message in the case of an invalid OTP.
@@ -187,7 +189,7 @@ class DeviceOnboardingBrowserLoginView(FormView[BrowserLoginForm]):
         Returns:
             The Django HttpResponse object.
         """
-        messages.error(self.request, gettext_lazy('The provided password is not valid.'))
+        messages.error(self.request, gettext_lazy('The OTP is invalid or the download process has expired.'))
         return super().form_invalid(form)
 
     def form_valid(self, form: BrowserLoginForm) -> HttpResponse:

@@ -113,11 +113,15 @@ def _rest_enrollment(
     operation: Literal['enroll', 'reenroll'],
     authenticate: Callable[[RestCertificateRequestContext], None],
 ) -> EnrollmentOrchestrator[RestCertificateRequestContext]:
+    def authenticate_with_policy(ctx: RestCertificateRequestContext) -> None:
+        require_single_security_config(ctx)
+        authenticate(ctx)
+
     return EnrollmentOrchestrator(
         context=context,
         validate=lambda ctx: RestHttpRequestValidator().validate(ctx),
         parse=lambda ctx: cast('RestCertificateRequestContext', RestMessageParser().parse(ctx)),
-        authenticate=authenticate,
+        authenticate=authenticate_with_policy,
         authorize=lambda ctx: RestAuthorization(allowed_operations=[operation]).authorize(ctx),
         process=lambda ctx: OperationProcessor().process_operation(ctx),
         respond=RestMessageResponder.build_response,

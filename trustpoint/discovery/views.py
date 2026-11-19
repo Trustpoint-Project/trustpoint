@@ -198,10 +198,11 @@ class AddPortView(View):
         return redirect('discovery:device_list')
 
 
-class PortConfigView(DiscoveryContextMixin, View):
+class PortConfigView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Display and manage port configuration."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the port configuration page."""

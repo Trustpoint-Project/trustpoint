@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 from django.db import connection, connections, transaction
+from django.utils import timezone
 
 from devices.models import RemoteDeviceCredentialDownloadModel
 
@@ -224,9 +225,23 @@ def test_check_otp_stale_copies_share_attempt_limit(
             download.refresh_from_db()
             assert download.attempts == attempt
 
-    assert not RemoteDeviceCredentialDownloadModel.objects.filter(pk=download.pk).exists()
+    download.refresh_from_db()
+    assert download.attempts == 0
+    assert download.otp != otp
     assert not download.check_otp(otp)
-    assert not RemoteDeviceCredentialDownloadModel.objects.filter(pk=download.pk).exists()
+
+
+@pytest.mark.django_db
+def test_check_otp_rejects_expired_otp(remote_device_credential_download_instance: dict[str, Any]) -> None:
+    """An OTP older than its lifetime must not authenticate."""
+    download = remote_device_credential_download_instance['remote_credential']
+    otp = download.otp
+    download.otp_created_at = timezone.now() - download.OTP_VALIDITY - timedelta(minutes=1)
+    download.save(update_fields=['otp_created_at'])
+
+    assert download.otp_is_expired()
+    assert not download.check_otp(otp)
+    assert download.get_otp_display() == 'OTP no longer valid'
 
 
 @pytest.mark.django_db
@@ -268,24 +283,25 @@ def test_check_otp_exceed_max_attempts(remote_device_credential_download_instanc
             f'Attempt {attempt + 1}: Invalid OTP should return False.'
         )
 
-    assert remote_device_credential_download.otp == '-', 'OTP should be invalid after exceeding max attempts.'
-    with pytest.raises(RemoteDeviceCredentialDownloadModel.DoesNotExist):
-        RemoteDeviceCredentialDownloadModel.objects.get(pk=remote_device_credential_download.pk)
+    remote_device_credential_download.refresh_from_db()
+    assert remote_device_credential_download.attempts == 0, 'Attempts reset when the OTP is rotated.'
+    assert remote_device_credential_download.otp not in {'', '-'}, 'A fresh OTP should be available to the operator.'
+    assert remote_device_credential_download.otp != invalid_otp
 
 
 @pytest.mark.django_db
-def test_check_otp_resets_on_max_attempts(remote_device_credential_download_instance: dict[str, Any]) -> None:
-    """Test that the object is deleted after exceeding max OTP attempts."""
+def test_check_otp_rotates_on_max_attempts(remote_device_credential_download_instance: dict[str, Any]) -> None:
+    """Test that exhausting attempts rotates the OTP instead of ending the onboarding."""
     remote_device_credential_download = remote_device_credential_download_instance['remote_credential']
+    original_otp = remote_device_credential_download.otp
 
-    max_attempts = RemoteDeviceCredentialDownloadModel.BROWSER_MAX_OTP_ATTEMPTS
-    invalid_otp = 'wrong-otp'
+    for _ in range(RemoteDeviceCredentialDownloadModel.BROWSER_MAX_OTP_ATTEMPTS):
+        remote_device_credential_download.check_otp('wrong-otp')
 
-    for _ in range(max_attempts):
-        remote_device_credential_download.check_otp(invalid_otp)
-
-    with pytest.raises(RemoteDeviceCredentialDownloadModel.DoesNotExist):
-        RemoteDeviceCredentialDownloadModel.objects.get(pk=remote_device_credential_download.pk)
+    remote_device_credential_download.refresh_from_db()
+    assert remote_device_credential_download.pk is not None
+    assert remote_device_credential_download.otp != original_otp
+    assert remote_device_credential_download.check_otp(remote_device_credential_download.otp) is True
 
 
 @pytest.mark.django_db

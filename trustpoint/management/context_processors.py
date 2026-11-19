@@ -17,7 +17,15 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 _CYCLE_CHECK_INTERVAL_SECONDS = 60
+_BADGE_CACHE_INTERVAL_SECONDS = 30
 _cycle_check_state = {'last': 0.0}
+_badge_cache: dict[str, Any] = {'last': 0.0, 'counts': {}}
+
+
+def reset_notification_badge_cache() -> None:
+    """Clear the per-process badge cache (used by tests and after bulk status changes)."""
+    _badge_cache['last'] = 0.0
+    _badge_cache['counts'] = {}
 
 
 def notification_alerts(request: HttpRequest) -> dict[str, Any]:
@@ -30,25 +38,27 @@ def notification_alerts(request: HttpRequest) -> dict[str, Any]:
         _cycle_check_state['last'] = now
         check_notification_cycle()
 
-    counts = NotificationModel.objects.filter(
-        statuses__status=NotificationStatus.StatusChoices.NEW,
-        notification_type__in=[
-            NotificationModel.NotificationTypes.CRITICAL,
-            NotificationModel.NotificationTypes.WARNING,
-        ],
-    ).aggregate(
-        critical=Count('pk', filter=Q(notification_type=NotificationModel.NotificationTypes.CRITICAL), distinct=True),
-        warning=Count('pk', filter=Q(notification_type=NotificationModel.NotificationTypes.WARNING), distinct=True),
-    )
+    if now - _badge_cache['last'] >= _BADGE_CACHE_INTERVAL_SECONDS:
+        counts = NotificationModel.objects.filter(
+            statuses__status=NotificationStatus.StatusChoices.NEW,
+            notification_type__in=[
+                NotificationModel.NotificationTypes.CRITICAL,
+                NotificationModel.NotificationTypes.WARNING,
+            ],
+        ).aggregate(
+            critical=Count(
+                'pk', filter=Q(notification_type=NotificationModel.NotificationTypes.CRITICAL), distinct=True
+            ),
+            warning=Count('pk', filter=Q(notification_type=NotificationModel.NotificationTypes.WARNING), distinct=True),
+        )
+        _badge_cache['counts'] = {
+            'notification_alert_critical_count': counts['critical'],
+            'notification_alert_warning_count': counts['warning'],
+            'notification_alert_total': counts['critical'] + counts['warning'],
+        }
+        _badge_cache['last'] = now
 
-    unread_critical = counts['critical']
-    unread_warning = counts['warning']
-
-    return {
-        'notification_alert_critical_count': unread_critical,
-        'notification_alert_warning_count': unread_warning,
-        'notification_alert_total': unread_critical + unread_warning,
-    }
+    return dict(_badge_cache['counts'])
 
 
 def ui_config(request: HttpRequest) -> dict[str, Any]:

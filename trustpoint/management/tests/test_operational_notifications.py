@@ -27,6 +27,7 @@ def config():
     from management import context_processors
 
     context_processors._cycle_check_state['last'] = 0.0
+    context_processors.reset_notification_badge_cache()
     config = NotificationConfig.get()
     config.enabled = True
     config.cert_expiry_warning_days = 7

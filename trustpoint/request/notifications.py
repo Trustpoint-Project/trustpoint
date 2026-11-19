@@ -27,10 +27,20 @@ NOTIFICATION_BURST_LIMIT = 5
 NOTIFICATION_BURST_WINDOW = timedelta(minutes=1)
 
 _PROTOCOLS = frozenset({'cmp', 'est', 'rest', 'scep', 'manual'})
-_OPERATIONS = frozenset({
-    'simpleenroll', 'simplereenroll', 'enroll', 'reenroll', 'initialization',
-    'certification', 'revocation', 'certconf', 'pkcsreq', 'renewalreq',
-})
+_OPERATIONS = frozenset(
+    {
+        'simpleenroll',
+        'simplereenroll',
+        'enroll',
+        'reenroll',
+        'initialization',
+        'certification',
+        'revocation',
+        'certconf',
+        'pkcsreq',
+        'renewalreq',
+    }
+)
 
 
 def notify_request_failure(context: BaseRequestContext) -> None:
@@ -66,7 +76,8 @@ def notify_request_failure(context: BaseRequestContext) -> None:
                 event='REQUEST_FAILED',
                 notification_source=(
                     NotificationModel.NotificationSource.DEVICE
-                    if device else NotificationModel.NotificationSource.SYSTEM
+                    if device
+                    else NotificationModel.NotificationSource.SYSTEM
                 ),
                 notification_type=NotificationModel.NotificationTypes.WARNING,
                 message_type=NotificationModel.NotificationMessageType.REQUEST_FAILED,

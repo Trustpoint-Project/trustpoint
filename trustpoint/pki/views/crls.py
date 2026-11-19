@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db.models import ProtectedError, QuerySet
 from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -27,6 +28,8 @@ from shared.exports import ExportColumn, ExportConfig, ExportMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
+
+CRL_SERIAL_LOOKUP_BATCH_SIZE = 5000
 
 
 class CrlContextMixin(ContextDataMixin):
@@ -274,8 +277,16 @@ class CrlDetailView(CrlContextMixin, CrlObjectMixin):
 
         certificates_by_serial = {}
         if serial_numbers:
-            certificates = CertificateModel.objects.filter(serial_number__in=serial_numbers)
-            certificates_by_serial = {cert.serial_number: cert.id for cert in certificates}
+            # Only match serials issued by this CRL's CA, in bounded batches so a
+            # long revocation history does not exceed database parameter limits.
+            issuer_kwargs: dict[str, Any] = {}
+            ca_certificate = crl.ca.ca_certificate_model if crl.ca is not None else None
+            if ca_certificate is not None:
+                issuer_kwargs['issuer_id'] = ca_certificate
+            for start in range(0, len(serial_numbers), CRL_SERIAL_LOOKUP_BATCH_SIZE):
+                batch = serial_numbers[start : start + CRL_SERIAL_LOOKUP_BATCH_SIZE]
+                certificates = CertificateModel.objects.filter(serial_number__in=batch, **issuer_kwargs)
+                certificates_by_serial.update({cert.serial_number: cert.id for cert in certificates})
 
         for revoked_cert in crypto_crl:
             serial_hex = f'{revoked_cert.serial_number:x}'.upper()
@@ -289,7 +300,12 @@ class CrlDetailView(CrlContextMixin, CrlObjectMixin):
                     'certificate_id': cert_id,
                 }
             )
-        context['revoked_certificates'] = revoked_certs
+        paginator = Paginator(revoked_certs, UIConfig.paginate_by)
+        page_obj = paginator.get_page(self.request.GET.get('page'))
+        context['revoked_certificates'] = page_obj.object_list
+        context['revoked_certificates_total'] = paginator.count
+        context['page_obj'] = page_obj
+        context['is_paginated'] = page_obj.has_other_pages()
 
         extensions = [
             {

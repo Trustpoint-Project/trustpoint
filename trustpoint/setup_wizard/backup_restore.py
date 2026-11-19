@@ -15,10 +15,12 @@ import zipfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import psycopg
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from management.backup_artifacts import BackupManifestError, backup_manifest_path, verify_backup_manifest
+from setup_wizard.operational_attach import OperationalDatabaseConfig, OperationalTargetInspector
 
 if TYPE_CHECKING:
     from setup_wizard.models import SetupWizardConfigModel
@@ -297,6 +299,28 @@ def _extract_restore_bundle_if_needed(archive_path: Path) -> Path | None:
         raise DjangoValidationError(msg) from exc
 
 
+def _ensure_restore_target_is_empty(config_model: SetupWizardConfigModel) -> None:
+    """Refuse to overwrite a database that already contains a Trustpoint installation."""
+    if config_model.restore_backup_restored_at is not None:
+        # This wizard already restored into the target; an explicit re-upload may replace it.
+        return
+    target = OperationalDatabaseConfig(
+        host=config_model.operational_db_host,
+        port=config_model.operational_db_port,
+        name=config_model.operational_db_name,
+        user=config_model.operational_db_user,
+        password=config_model.operational_db_password,
+    )
+    try:
+        snapshot = OperationalTargetInspector().inspect_database(target)
+    except psycopg.Error as exception:
+        msg = f'Could not inspect the restore target database: {exception}'
+        raise DjangoValidationError(msg) from exception
+    if snapshot.app_version is not None or snapshot.setup_completed:
+        msg = 'The target database already contains a Trustpoint installation. Choose an empty database for a restore.'
+        raise DjangoValidationError(msg)
+
+
 def restore_operational_database_from_backup(
     config_model: SetupWizardConfigModel,
     *,
@@ -332,41 +356,37 @@ def restore_operational_database_from_backup(
             '--dbname',
             config_model.operational_db_name,
         ]
-        if _restore_archive_is_custom_pg_dump(materialized_restore_path):
-            command = [
-                'pg_restore',
-                '--format=custom',
-                '--exit-on-error',
-                '--single-transaction',
-                '--clean',
-                '--if-exists',
-                '--no-owner',
-                '--no-privileges',
-                *common_args,
-                str(materialized_restore_path),
-            ]
-            completed_process = subprocess.run(  # noqa: S603
-                command,
-                env=env,
-                capture_output=True,
-                check=False,
+        if not _restore_archive_is_custom_pg_dump(materialized_restore_path):
+            msg = (
+                'Restore requires a PostgreSQL custom-format dump (.dump, .dump.gz) or a '
+                'Trustpoint backup bundle. Plain SQL archives are not accepted.'
             )
-            if completed_process.returncode != 0 and _restore_failed_on_transaction_timeout(completed_process):
-                completed_process = _retry_custom_restore_without_transaction_timeout(
-                    materialized_restore_path=materialized_restore_path,
-                    common_args=common_args,
-                    env=env,
-                )
-        else:
-            command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
-            with materialized_restore_path.open('rb') as archive_file:
-                completed_process = subprocess.run(  # noqa: S603
-                    command,
-                    stdin=archive_file,
-                    env=env,
-                    capture_output=True,
-                    check=False,
-                )
+            raise DjangoValidationError(msg)
+        _ensure_restore_target_is_empty(config_model)
+        command = [
+            'pg_restore',
+            '--format=custom',
+            '--exit-on-error',
+            '--single-transaction',
+            '--clean',
+            '--if-exists',
+            '--no-owner',
+            '--no-privileges',
+            *common_args,
+            str(materialized_restore_path),
+        ]
+        completed_process = subprocess.run(  # noqa: S603
+            command,
+            env=env,
+            capture_output=True,
+            check=False,
+        )
+        if completed_process.returncode != 0 and _restore_failed_on_transaction_timeout(completed_process):
+            completed_process = _retry_custom_restore_without_transaction_timeout(
+                materialized_restore_path=materialized_restore_path,
+                common_args=common_args,
+                env=env,
+            )
     except FileNotFoundError as exception:
         error_message = f'Restore tool not available in this container: {exception.filename}.'
         raise DjangoValidationError(error_message) from exception

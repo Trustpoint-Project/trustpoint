@@ -45,6 +45,7 @@ VERSIONS = {
     'scep_challenge': 'scep_secret_version',
 }
 MAX_SECRET_LENGTH = 128
+MIN_SECRET_LENGTH = 16
 ASCII_PRINTABLE_MIN = 32
 ASCII_PRINTABLE_MAX = 126
 _ACTIVE_USES: ContextVar[frozenset[tuple[str, int, str, int | None]]] = ContextVar(
@@ -98,10 +99,10 @@ def validate_custom_secret(value: object) -> str:
     """Validate exact printable ASCII, including edge spaces, without echoing the value."""
     if (
         not isinstance(value, str)
-        or not 1 <= len(value) <= MAX_SECRET_LENGTH
+        or not MIN_SECRET_LENGTH <= len(value) <= MAX_SECRET_LENGTH
         or any(not ASCII_PRINTABLE_MIN <= ord(c) <= ASCII_PRINTABLE_MAX for c in value)
     ):
-        msg = 'Enter 1-128 printable ASCII characters. Spaces are preserved; controls are forbidden.'
+        msg = 'Enter 16-128 printable ASCII characters. Spaces are preserved; controls are forbidden.'
         raise ValidationError(msg)
     return value
 

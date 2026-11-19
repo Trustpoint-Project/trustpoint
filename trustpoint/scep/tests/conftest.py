@@ -15,6 +15,7 @@ from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.specs import EcKeySpec, RsaKeySpec
 from cryptography import x509
 from devices.models import DeviceModel, NoOnboardingConfigModel
+from management.models import SecurityConfig
 from onboarding.enums import NoOnboardingPkiProtocol
 from pki.models import CaModel
 from pki.models.cert_profile import CertificateProfileModel
@@ -69,11 +70,19 @@ def _create_env(settings: Any, key_spec: Any, key_kind: str) -> ScepEnv:
     domain = DomainModel.objects.create(unique_name=f'scep-{uuid.uuid4().hex[:8]}', issuing_ca=ca, is_active=True)
     profile, _ = CertificateProfileModel.objects.get_or_create(
         unique_name='tls_server',
-        defaults={'profile_json': '{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 10}}'},
+        defaults={
+            'profile_json': '{"type": "cert_profile", "subj": {"allow":"*"}, "ext": {}, "validity": {"days": 10}}'
+        },
     )
     DomainAllowedCertificateProfileModel.objects.update_or_create(
         domain=domain, certificate_profile=profile, defaults={'alias': ''}
     )
+    policy, _ = SecurityConfig.objects.get_or_create(pk=1)
+    permitted = list(policy.permitted_no_onboarding_pki_protocols or [])
+    if NoOnboardingPkiProtocol.SCEP.value not in permitted:
+        permitted.append(NoOnboardingPkiProtocol.SCEP.value)
+        policy.permitted_no_onboarding_pki_protocols = permitted
+        policy.save(update_fields=['permitted_no_onboarding_pki_protocols'])
     config = NoOnboardingConfigModel()
     config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.SCEP])
     config.save()

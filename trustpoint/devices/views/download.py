@@ -67,7 +67,6 @@ class DownloadTokenRequiredAuthenticationMixin:
             err_msg = 'Internal server error. Failed to get super().dispatch().'
             raise Http404(err_msg)
 
-        token = request.GET.get('token')
         try:
             self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
                 issued_credential_model=kwargs.get('pk')
@@ -76,6 +75,11 @@ class DownloadTokenRequiredAuthenticationMixin:
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
 
+        token = request.GET.get('token') or request.session.get(
+            RemoteDeviceCredentialDownloadModel.download_token_session_key(
+                self.credential_download.issued_credential_model_id
+            )
+        )
         if not token or not self.credential_download.check_token(token):
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
@@ -255,7 +259,10 @@ class DeviceBrowserCredentialDownloadView(
     @transaction.atomic
     def post(self, _request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Serialize token validation and the private-key response for one-time delivery."""
-        token = _request.GET.get('token', '')
+        session_key = RemoteDeviceCredentialDownloadModel.download_token_session_key(
+            self.credential_download.issued_credential_model_id
+        )
+        token = _request.GET.get('token') or _request.session.get(session_key, '')
         locked = (
             RemoteDeviceCredentialDownloadModel.objects.select_for_update()
             .filter(pk=self.credential_download.pk)
@@ -266,7 +273,11 @@ class DeviceBrowserCredentialDownloadView(
             return redirect('devices:browser_login')
 
         self.credential_download = locked
-        return super().post(_request, *args, **kwargs)
+        response = super().post(_request, *args, **kwargs)
+        if isinstance(response, FileResponse):
+            # Keep the token in the session while the password form is re-rendered.
+            _request.session.pop(session_key, None)
+        return response
 
 
 #  ----------------------------------- Certificate Lifecycle Management - Downloads ------------------------------------

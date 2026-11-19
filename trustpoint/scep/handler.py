@@ -28,6 +28,7 @@ from request.authorization import ScepAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.profile_validator import ProfileValidator
 from request.request_context import ScepCertificateRequestContext
+from request.security_hardening import require_single_security_config
 from scep.protocol.cms import (
     KeyTransRecipient,
     ParsedPkiMessage,
@@ -222,6 +223,7 @@ class ScepPkiOperationHandler(LoggerMixin):
             scep_signer_certificate=signer,
         )
         try:
+            require_single_security_config(ctx)
             ScepAuthorization().authorize(ctx)
         except ValueError as exc:
             raise ScepProtocolError(FailInfo.BAD_REQUEST, 'The request was rejected by the enrollment policy.') from exc

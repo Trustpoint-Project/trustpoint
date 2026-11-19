@@ -135,8 +135,10 @@ class WorkflowDispatchService:
         For inline drain we disable heartbeat to avoid concurrent DB writes.
         Also includes a small SQLite lock backoff.
         """
+        # Inline steps run inside a web request, so use an executor that caps their wait time.
+        inline_executor = WorkflowExecutor(inline=True)
         worker = Workflow2DbWorker(
-            runtime=self.runtime,
+            runtime=WorkflowRuntimeService(executor=inline_executor),
             worker_id=worker_id,
             lease_seconds=INLINE_WORKER_LEASE_SECONDS,
             batch_limit=max_jobs,
@@ -208,9 +210,7 @@ class WorkflowDispatchService:
                 )
             )
         else:
-            self._drain_after_commit(
-                run_id, max_ticks=max_ticks, max_jobs=max_jobs, raise_on_limit=raise_on_limit
-            )
+            self._drain_after_commit(run_id, max_ticks=max_ticks, max_jobs=max_jobs, raise_on_limit=raise_on_limit)
 
         return True
 

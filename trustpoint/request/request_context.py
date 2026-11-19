@@ -247,6 +247,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     cmp_body_type: str | None = None
     cmp_transaction_id: str | None = None
     cmp_transaction: CmpTransactionModel | None = None
+    cmp_authenticated: bool = False
 
     # Client-side fields
     cmp_server_host: str | None = None

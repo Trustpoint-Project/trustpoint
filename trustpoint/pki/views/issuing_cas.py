@@ -659,6 +659,12 @@ class IssuingCaExternalCsrView(LoggerMixin, IssuingCaContextMixin, FormView[Issu
     form_class = IssuingCaExternalCsrCertificateForm
     template_name = 'pki/issuing_cas/external_csr.html'
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Only CA managers may complete an external-CSR provisioning."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
     def get_ca(self) -> CaModel:
         """Get the pending external-CSR issuing CA."""
         return get_object_or_404(
@@ -1261,7 +1267,7 @@ class IssuingCaCrlGenerationView(UserPermissionRequiredMixin, IssuingCaContextMi
             )
             return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
-        if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
+        if issuing_ca.issue_crl(crl_validity_hours=issuing_ca.crl_validity_hours):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
@@ -1522,7 +1528,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         del pk  # not needed, but passed by DRF
         ca = self.get_object()
 
-        if ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours)):
+        if ca.issue_crl(crl_validity_hours=ca.crl_validity_hours):
             return Response(
                 {
                     'message': f'CRL generated successfully for Issuing CA "{ca.unique_name}".',

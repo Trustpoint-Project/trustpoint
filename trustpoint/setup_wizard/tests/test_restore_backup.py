@@ -9,13 +9,13 @@ import gzip
 import hashlib
 import json
 import subprocess
-import sys
 import zipfile
 from pathlib import Path
 from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 
 from setup_wizard import backup_restore as views
 from setup_wizard.models import SetupWizardConfigModel
@@ -33,6 +33,7 @@ def _restore_config(backup_path: Path) -> SetupWizardConfigModel:
     """Build a restore config model pointing at a staged backup path."""
     return SetupWizardConfigModel(
         restore_backup_archive_path=str(backup_path),
+        restore_backup_restored_at=timezone.now(),
         operational_db_host='localhost',
         operational_db_port=5432,
         operational_db_name='trustpoint_db',
@@ -85,50 +86,55 @@ def test_restore_dump_gz_uses_pg_restore_custom_format(monkeypatch: Any, tmp_pat
     assert calls[0]['env']['PGPASSWORD'] == 'testing321'
 
 
-def test_restore_plain_sql_uses_transactional_psql(monkeypatch: Any, tmp_path: Path) -> None:
-    """Plain SQL restore payloads are applied through psql in a single transaction."""
-    backup_path = tmp_path / 'backup.dump'
-    backup_path.write_bytes(b'CREATE TABLE restored(id integer);\n')
+def test_restore_rejects_plain_sql_payloads(monkeypatch: Any, tmp_path: Path) -> None:
+    """Plain SQL (and gzipped SQL) payloads are refused; only custom-format dumps are restored."""
     calls: list[dict[str, Any]] = []
-
     monkeypatch.setattr(views, 'restore_backup_staging_root', lambda: tmp_path)
     monkeypatch.setattr(views.subprocess, 'run', _successful_restore_recorder(calls))
 
-    views.restore_operational_database_from_backup(_restore_config(backup_path))
+    plain_path = tmp_path / 'backup.dump'
+    plain_path.write_bytes(b'CREATE TABLE restored(id integer);\n')
+    with pytest.raises(DjangoValidationError, match='Plain SQL archives are not accepted'):
+        views.restore_operational_database_from_backup(_restore_config(plain_path))
 
-    assert len(calls) == 1
-    assert calls[0]['command'][0] == 'psql'
-    assert '--set' in calls[0]['command']
-    assert 'ON_ERROR_STOP=1' in calls[0]['command']
-    assert '--single-transaction' in calls[0]['command']
-    assert calls[0]['payload'] == b'CREATE TABLE restored(id integer);\n'
+    gzipped_path = tmp_path / 'backup.dump.gz'
+    gzipped_path.write_bytes(gzip.compress(b'CREATE TABLE restored(id integer);\n'))
+    with pytest.raises(DjangoValidationError, match='Plain SQL archives are not accepted'):
+        views.restore_operational_database_from_backup(_restore_config(gzipped_path))
+
+    assert calls == []
 
 
-def test_gzipped_sql_reaches_child_as_plain_sql(monkeypatch, tmp_path):
-    """A real child reads the OS descriptor, rather than Python's gzip stream wrapper."""
-    payload = b'CREATE TABLE restored(id integer);\n'
+def test_restore_refuses_target_with_existing_installation(monkeypatch: Any, tmp_path: Path) -> None:
+    """A restore must not overwrite a database that already contains Trustpoint."""
     backup_path = tmp_path / 'backup.dump.gz'
-    backup_path.write_bytes(gzip.compress(payload))
-    run = subprocess.run
-    observed = []
+    backup_path.write_bytes(_gzip_payload())
+    config_model = _restore_config(backup_path)
+    config_model.restore_backup_restored_at = None
+    calls: list[dict[str, Any]] = []
 
-    def read_restore_input(command, **kwargs):
-        assert command[0] == 'psql'
-        result = run(
-            [sys.executable, '-c', 'import sys; sys.stdout.buffer.write(sys.stdin.buffer.read())'],
-            stdin=kwargs['stdin'],
-            capture_output=True,
-            check=True,
-        )
-        observed.append(result.stdout)
-        return subprocess.CompletedProcess(command, 0, stdout=b'', stderr=b'')
+    class _Snapshot:
+        app_version = '1.0.0'
+        setup_completed = True
 
     monkeypatch.setattr(views, 'restore_backup_staging_root', lambda: tmp_path)
-    monkeypatch.setattr(views.subprocess, 'run', read_restore_input)
-    views.restore_operational_database_from_backup(_restore_config(backup_path))
+    monkeypatch.setattr(
+        views,
+        'OperationalTargetInspector',
+        lambda: type(
+            '_Inspector',
+            (),
+            {
+                'inspect_database': lambda _self, _target: _Snapshot(),
+            },
+        )(),
+    )
+    monkeypatch.setattr(views.subprocess, 'run', _successful_restore_recorder(calls))
 
-    assert observed == [payload]
-    assert list(tmp_path.iterdir()) == [backup_path]
+    with pytest.raises(DjangoValidationError, match='already contains a Trustpoint installation'):
+        views.restore_operational_database_from_backup(config_model)
+
+    assert calls == []
 
 
 def test_restore_custom_dump_retries_without_transaction_timeout(monkeypatch: Any, tmp_path: Path) -> None:

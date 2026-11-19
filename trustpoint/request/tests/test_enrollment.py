@@ -28,9 +28,7 @@ CASES = {
 
 
 def _steps(case):
-    steps = ['validate', 'parse']
-    if case.startswith('est'):
-        steps.append('policy')
+    steps = ['validate', 'parse', 'policy']
     if case != 'management-api':
         steps.append('authenticate')
     steps += ['authorize', 'workflow']

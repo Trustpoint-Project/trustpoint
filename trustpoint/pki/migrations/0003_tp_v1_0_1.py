@@ -321,4 +321,21 @@ class Migration(migrations.Migration):
                 violation_error_message='Management CAs cannot use this CA type',
             ),
         ),
+        migrations.AlterUniqueTogether(
+            name='keyusageextension',
+            unique_together={
+                (
+                    'critical',
+                    'digital_signature',
+                    'content_commitment',
+                    'key_encipherment',
+                    'data_encipherment',
+                    'key_agreement',
+                    'key_cert_sign',
+                    'crl_sign',
+                    'encipher_only',
+                    'decipher_only',
+                )
+            },
+        ),
     ]

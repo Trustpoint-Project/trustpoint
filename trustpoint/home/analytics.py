@@ -38,12 +38,16 @@ def application_certificate_device_counts(now: datetime) -> dict[str, int]:
     devices = DeviceModel.objects.all()
     active = filter_devices_with_active_application_certificates(devices, now)
     bad = filter_devices_with_expired_or_revoked_application_certificates(devices, now).exclude(pk__in=active)
-    future = filter_credential_health(
-        devices,
-        IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-        ['not_yet_valid'],
-        as_of=now,
-    ).exclude(pk__in=active).exclude(pk__in=bad)
+    future = (
+        filter_credential_health(
+            devices,
+            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+            ['not_yet_valid'],
+            as_of=now,
+        )
+        .exclude(pk__in=active)
+        .exclude(pk__in=bad)
+    )
     active_count = active.count()
     bad_count = bad.count()
     future_count = future.count()

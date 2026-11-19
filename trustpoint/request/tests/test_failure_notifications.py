@@ -34,12 +34,14 @@ def notifications_enabled():
     config.save()
 
 
-@pytest.mark.parametrize('context_type,protocol', [(EstCertificateRequestContext, 'est'),
-                                                  (RestCertificateRequestContext, 'rest')])
+@pytest.mark.parametrize(
+    'context_type,protocol', [(EstCertificateRequestContext, 'est'), (RestCertificateRequestContext, 'rest')]
+)
 @pytest.mark.parametrize('status', [400, 403, 500])
 def test_failed_response_creates_one_warning(notifications_enabled, context_type, protocol, status):
-    context = context_type(protocol=protocol, operation='enroll', http_response_status=status,
-                           http_response_content='secret response body')
+    context = context_type(
+        protocol=protocol, operation='enroll', http_response_status=status, http_response_content='secret response body'
+    )
     response = context.to_http_response()
     context.to_http_response()
     notification = NotificationModel.objects.get(event='REQUEST_FAILED')
@@ -74,13 +76,17 @@ def test_disabled_notifications_are_respected():
 
 def test_context_secrets_and_unknown_operations_are_not_saved(notifications_enabled):
     context = EstCertificateRequestContext(
-        protocol='attacker-controlled-secret', operation='password=secret',
-        est_password='secret', raw_message=RequestFactory().post('/', {'secret': 'secret'}),
-        http_response_status=403, http_response_content='secret exception',
+        protocol='attacker-controlled-secret',
+        operation='password=secret',
+        est_password='secret',
+        raw_message=RequestFactory().post('/', {'secret': 'secret'}),
+        http_response_status=403,
+        http_response_content='secret exception',
     )
     context.to_http_response()
     assert NotificationModel.objects.get(event='REQUEST_FAILED').message_data == {
-        'protocol': 'unknown', 'operation': 'unknown',
+        'protocol': 'unknown',
+        'operation': 'unknown',
     }
 
 
@@ -117,7 +123,8 @@ def test_est_pipeline_exception_is_notified(notifications_enabled):
         response = EstSimpleEnrollmentMixin().process_enrollment(request, 'domain', 'tls_server')
     assert response.status_code == 500
     assert NotificationModel.objects.get(event='REQUEST_FAILED').message_data == {
-        'protocol': 'est', 'operation': 'simpleenroll',
+        'protocol': 'est',
+        'operation': 'simpleenroll',
     }
 
 
@@ -130,12 +137,18 @@ def test_cmp_error_with_http_200_notifies_once(notifications_enabled):
     assert NotificationModel.objects.filter(event='REQUEST_FAILED').count() == 1
 
 
-@pytest.mark.parametrize('status,expected', [(CmpTransactionModel.Status.WAITING, 0),
-                                           (CmpTransactionModel.Status.REJECTED, 1),
-                                           (CmpTransactionModel.Status.FAILED, 1)])
+@pytest.mark.parametrize(
+    'status,expected',
+    [
+        (CmpTransactionModel.Status.WAITING, 0),
+        (CmpTransactionModel.Status.REJECTED, 1),
+        (CmpTransactionModel.Status.FAILED, 1),
+    ],
+)
 def test_cmp_workflow_terminal_states_notify(notifications_enabled, status, expected):
     context = CmpCertificateRequestContext(
-        protocol='cmp', operation='initialization',
+        protocol='cmp',
+        operation='initialization',
         cmp_transaction=SimpleNamespace(status=status, detail=''),
     )
     with (
@@ -154,8 +167,11 @@ def test_scep_failures_notify(notifications_enabled, malformed):
     handler.domain = DomainModel.objects.create(unique_name='notification-test')
     message = SimpleNamespace(message_type=MessageType.RENEWAL_REQ, transaction_id='test')
     with (
-        patch('scep.handler.parse_pki_message', side_effect=ScepMalformedMessageError('bad') if malformed else None,
-              return_value=message),
+        patch(
+            'scep.handler.parse_pki_message',
+            side_effect=ScepMalformedMessageError('bad') if malformed else None,
+            return_value=message,
+        ),
         patch.object(handler, '_process', side_effect=ScepProtocolError(FailInfo.BAD_REQUEST, 'secret failure')),
         patch.object(handler, '_audit_rejection'),
         patch.object(handler, '_failure_response', return_value=ScepHttpResult(b'failure')),

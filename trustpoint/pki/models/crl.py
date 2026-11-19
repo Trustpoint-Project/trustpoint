@@ -235,7 +235,11 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         """Replace the active CRL atomically and report duplicate identifiers as validation errors."""
         try:
             with transaction.atomic():
-                if self.is_active:
+                if self.is_active and self.ca_id is not None:
+                    # Serialize the switch with CRL generation so two rows cannot stay active.
+                    from pki.models import CaModel  # noqa: PLC0415
+
+                    CaModel.objects.select_for_update().filter(pk=self.ca_id).first()
                     CrlModel.objects.filter(ca=self.ca, is_active=True).exclude(pk=self.pk).update(is_active=False)
                 super().save(*args, **kwargs)
         except IntegrityError:

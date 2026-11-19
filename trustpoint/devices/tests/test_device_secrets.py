@@ -54,7 +54,7 @@ def no_onboarding():
     return config
 
 
-@pytest.mark.parametrize('value', ['x', ' ', ' edge spaces ', 'a' * 128])
+@pytest.mark.parametrize('value', ['x' * 16, ' ' * 16, ' edge spaces    ', 'a' * 128])
 @pytest.mark.parametrize('field', ['cmp_shared_secret', 'est_password', 'scep_challenge'])
 def test_custom_exact_printable_ascii(policy, value, field):
     config = no_onboarding()
@@ -78,14 +78,14 @@ def test_invalid_custom_is_atomic_and_redacted(policy, value):
 
 def test_disabled_policy_preserves_value_and_allows_generated_replacement(policy):
     config = no_onboarding()
-    assign_secret(config, 'est_password', custom=True, value='chosen')
+    assign_secret(config, 'est_password', custom=True, value='chosen-chosen-xx')
     policy.allow_user_defined_device_secrets = False
     policy.save()
     with pytest.raises(ValidationError, match='disabled'):
-        assign_secret(config, 'est_password', custom=True, value='replacement')
+        assign_secret(config, 'est_password', custom=True, value='replacement-xxxx')
     config.refresh_from_db()
-    assert config.est_password == 'chosen'
-    assert assign_secret(config, 'est_password') != 'chosen'
+    assert config.est_password == 'chosen-chosen-xx'
+    assert assign_secret(config, 'est_password') != 'chosen-chosen-xx'
 
 
 def test_flag_and_ttl_conflict_at_model_and_database(policy):
@@ -118,7 +118,7 @@ def test_scep_null_expiry_and_consumed_never_reopens(policy):
     assert not config.consume_scep_challenge()
     for custom in (False, True):
         with pytest.raises(ValidationError, match='Consumed'):
-            assign_secret(config, 'scep_challenge', custom=custom, value='other')
+            assign_secret(config, 'scep_challenge', custom=custom, value='other-other-xxxx')
     config.refresh_from_db()
     assert config.scep_challenge == original
     assert config.scep_challenge_state() == 'consumed'
@@ -203,7 +203,7 @@ def test_stale_save_cannot_restore_generation_when_secret_is_unchanged(policy, f
 def test_stale_metadata_save_does_not_overwrite_credential_generation(policy):
     config = no_onboarding()
     stale = NoOnboardingConfigModel.objects.get(pk=config.pk)
-    assign_secret(config, 'est_password', custom=True, value=config.est_password)
+    assign_secret(config, 'est_password', custom=True, value='unchanged-password')
     current_version = config.est_password_version
     stale.save(update_fields=['trust_store'])
     config.refresh_from_db()
@@ -282,15 +282,15 @@ def test_api_custom_requires_flag(serializer_type, data):
 
 
 def test_api_custom_exact_spaces_and_unrelated_patch(policy):
-    serializer = OnboardingConfigSerializer(data={'onboarding_protocol': 4, 'est_password': ' exact '})
+    serializer = OnboardingConfigSerializer(data={'onboarding_protocol': 4, 'est_password': ' exact spaces   '})
     assert serializer.is_valid(), serializer.errors
     config = serializer.save()
-    assert config.est_password == ' exact '
+    assert config.est_password == ' exact spaces   '
     expiry = config.credential_expires_at
     update = OnboardingConfigSerializer(config, data={'pki_protocols': ['EST']}, partial=True)
     assert update.is_valid(), update.errors
     updated = update.save()
-    assert updated.est_password == ' exact '
+    assert updated.est_password == ' exact spaces   '
     assert updated.credential_expires_at == expiry
 
 
@@ -321,8 +321,8 @@ def test_creation_form_rejects_forged_custom_when_hidden():
             'common_name': 'forged',
             'no_onboarding_pki_protocols': ['4'],
             'est_password_action': 'custom',
-            'est_password_value': 'chosen',
-            'est_password_confirm': 'chosen',
+            'est_password_value': 'chosen-chosen-xx',
+            'est_password_confirm': 'chosen-chosen-xx',
         }
     )
     assert not form.is_valid()
@@ -335,13 +335,13 @@ def test_creation_form_custom_and_default_generation(policy):
             'common_name': 'custom-form-device',
             'no_onboarding_pki_protocols': ['4', '32'],
             'est_password_action': 'custom',
-            'est_password_value': ' exact ',
-            'est_password_confirm': ' exact ',
+            'est_password_value': ' exact spaces   ',
+            'est_password_confirm': ' exact spaces   ',
         }
     )
     assert custom.is_valid(), custom.errors
     device = custom.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
-    assert device.no_onboarding_config.est_password == ' exact '
+    assert device.no_onboarding_config.est_password == ' exact spaces   '
     generated = NoOnboardingCreateForm(
         data={
             'common_name': 'generated-form-device',
@@ -365,13 +365,13 @@ def test_management_api_replacement_and_permissions(policy, admin_user):
     endpoint = reverse('device-change-secret', args=[device.pk])
     assert client.post(endpoint, {'credential': 'est_password', 'action': 'generate'}).status_code == 401
     client.force_authenticate(user=admin_user)
-    response = client.post(endpoint, {'credential': 'est_password', 'action': 'custom', 'value': ' exact '})
+    response = client.post(endpoint, {'credential': 'est_password', 'action': 'custom', 'value': ' exact spaces   '})
     assert response.status_code == 200, response.data
     config.refresh_from_db()
-    assert config.est_password == response.data['value'] == ' exact '
+    assert config.est_password == response.data['value'] == ' exact spaces   '
     assert client.post(endpoint, {'credential': 'est_password', 'action': 'generate'}).status_code == 200
     config.refresh_from_db()
-    assert config.est_password != ' exact '
+    assert config.est_password != ' exact spaces   '
 
 
 def test_no_onboarding_api_expiry_override_nested_rejected(policy):
@@ -407,13 +407,13 @@ def test_clm_links_to_separate_replacement_page(policy, admin_client, admin_user
         {
             'credential': 'est_password',
             'action': 'custom',
-            'value': ' exact ',
-            'confirmation': ' exact ',
+            'value': ' exact spaces   ',
+            'confirmation': ' exact spaces   ',
         },
     )
     assert response.status_code == 302
     config.refresh_from_db()
-    assert config.est_password == ' exact '
+    assert config.est_password == ' exact spaces   '
     assert response.url == endpoint
 
 
@@ -442,14 +442,14 @@ def test_secret_page_displays_validation_errors(policy, admin_client, admin_user
         {
             'credential': 'est_password',
             'action': 'custom',
-            'value': 'chosen',
+            'value': 'chosen-chosen-xx',
             'confirmation': 'mismatch',
         },
     )
     assert response.status_code == 200
     assert b'The secret and confirmation do not match.' in response.content
     assert b'data-secret-replacement' in response.content
-    assert b'value="chosen"' not in response.content
+    assert b'value="chosen-chosen-xx"' not in response.content
     config.refresh_from_db()
     assert config.est_password == 'generated-est'
 
@@ -564,7 +564,7 @@ def test_api_assignment_audits_target_the_device(policy, admin_user):
         reverse('device-list'),
         {
             'common_name': 'device-audit',
-            'no_onboarding_config': {'pki_protocols': 4, 'est_password': ' private '},
+            'no_onboarding_config': {'pki_protocols': 4, 'est_password': ' private-private '},
         },
         format='json',
     )
@@ -572,7 +572,7 @@ def test_api_assignment_audits_target_the_device(policy, admin_user):
     audit = AuditLog.objects.filter(operation_type=AuditLog.OperationType.DEVICE_SECRET_CHANGED).latest('pk')
     assert audit.target == DeviceModel.objects.get(pk=response.data['id'])
     assert audit.actor == admin_user
-    assert ' private ' not in str(audit.details)
+    assert ' private-private ' not in str(audit.details)
 
 
 def test_manual_completion_reserves_pending_bootstrap_credentials(policy):
@@ -603,17 +603,17 @@ def test_shared_est_rest_custom_password_authentication_and_rotation(policy):
 
     config = no_onboarding()
     DeviceModel.objects.create(common_name='shared-password', no_onboarding_config=config)
-    assign_secret(config, 'est_password', custom=True, value=' exact ')
+    assign_secret(config, 'est_password', custom=True, value=' exact spaces   ')
     authenticators = [
         (
             UsernamePasswordAuthentication(),
             EstBaseRequestContext,
-            {'est_username': 'shared-password', 'est_password': ' exact '},
+            {'est_username': 'shared-password', 'est_password': ' exact spaces   '},
         ),
         (
             RestUsernamePasswordAuthentication(),
             RestBaseRequestContext,
-            {'rest_username': 'shared-password', 'rest_password': ' exact '},
+            {'rest_username': 'shared-password', 'rest_password': ' exact spaces   '},
         ),
     ]
     for authenticator, context_type, credentials in authenticators:
@@ -631,5 +631,5 @@ def test_custom_assignment_obeys_existing_protocol_policy(policy):
     policy.save()
     config = no_onboarding()
     with pytest.raises(ValidationError, match='not permitted'):
-        assign_secret(config, 'est_password', custom=True, value='chosen')
+        assign_secret(config, 'est_password', custom=True, value='chosen-chosen-xx')
     assert config.est_password == 'generated-est'

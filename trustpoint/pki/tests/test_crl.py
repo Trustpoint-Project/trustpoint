@@ -689,6 +689,7 @@ def test_crl_detail_view_with_revoked_certificates(
     assert response.status_code == 200
     revoked_certs = response.context['revoked_certificates']
     assert len(revoked_certs) > 0
+    assert response.context['revoked_certificates_total'] >= len(revoked_certs)
 
     # Check that revoked certificate data is present
     revoked_cert = revoked_certs[0]
