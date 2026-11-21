@@ -429,39 +429,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.certificates.clear()
         # CertificateChainOrderModel is deleted via CASCADE
 
-    @transaction.atomic
-    def force_delete(self) -> tuple[int, dict[str, int]]:
-        """Delete the credential without running ``pre_delete`` and then delete its certificates."""
-        certificates_to_delete: list[CertificateModel] = [
-            chain_entry.certificate for chain_entry in self.ordered_certificate_chain_queryset.order_by('-order')
-        ]
-        if self.certificate is not None:
-            certificates_to_delete.append(self.certificate)
-
-        count = models.Model.delete(self)
-        deleted_certificate_pks: set[int] = set()
-        for certificate in certificates_to_delete:
-            if certificate.pk in deleted_certificate_pks:
-                continue
-            deleted_certificate_pks.add(certificate.pk)
-            certificate_in_db = CertificateModel.objects.filter(pk=certificate.pk).first()
-            if certificate_in_db is None:
-                continue
-            if self._certificate_has_remaining_protected_references(certificate_in_db):
-                continue
-            certificate_in_db.delete()
-        return count
-
-    @staticmethod
-    def _certificate_has_remaining_protected_references(certificate: CertificateModel) -> bool:
-        """Return whether the certificate is still referenced through protected relations."""
-        return (
-            certificate.credential_set.exists()
-            or certificate.certificatechainordermodel_set.exists()
-            or certificate.primary_certificate_set.exists()
-            or certificate.keyless_cas.exists()
-        )
-
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.
 

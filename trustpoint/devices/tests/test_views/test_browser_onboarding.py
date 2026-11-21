@@ -119,6 +119,7 @@ def test_refreshing_otp_page_keeps_a_consumed_download_token(
     grant.refresh_from_db()
 
     assert grant.check_token(token)
+    assert grant.otp == '-'
 
 
 def test_invalid_export_form_does_not_consume_download_token(

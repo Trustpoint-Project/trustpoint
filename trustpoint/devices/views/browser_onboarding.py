@@ -84,7 +84,8 @@ class AbstractBrowserOnboardingOTPView(
         if cdm is None:
             cdm = RemoteDeviceCredentialDownloadModel(issued_credential_model=credential, device=device)
             cdm.save()
-        elif cdm.otp_is_expired():
+        elif cdm.otp != '-' and cdm.otp_is_expired():
+            # A consumed OTP ('-') still owns a live download token: never mint a new one.
             cdm.rotate_otp()
 
         context.update(

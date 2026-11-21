@@ -307,9 +307,12 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
 
 class Workflow2InlineDrainMiddleware(MiddlewareMixin):
-    """Let the web process drain queued workflow jobs when inline execution is active."""
+    """Let the web process drain a stuck workflow backlog when inline execution is active."""
 
     DRAIN_INTERVAL_SECONDS = 5
+    # Only jobs that stayed queued are a backlog; fresh work belongs to the worker
+    # or to the request that emitted it, never to an unrelated page load.
+    MIN_BACKLOG_AGE_SECONDS = 60
     # Keep a page request responsive; the worker (or the next request) handles the rest.
     MAX_TICKS_PER_REQUEST = 1
     MAX_JOBS_PER_REQUEST = 1
@@ -327,6 +330,7 @@ class Workflow2InlineDrainMiddleware(MiddlewareMixin):
                 max_ticks=self.MAX_TICKS_PER_REQUEST,
                 max_jobs=self.MAX_JOBS_PER_REQUEST,
                 raise_on_limit=False,
+                min_age_seconds=self.MIN_BACKLOG_AGE_SECONDS,
             )
         except Exception:
             logger.exception('Failed to drain queued Workflow jobs inline.')

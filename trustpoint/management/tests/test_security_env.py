@@ -80,6 +80,17 @@ class SecurityEnvironmentTest(TestCase):
         with self.assertRaisesRegex(SecurityConfigurationError, 'Invalid TP_SECURITY_MODE'):
             security_mode_from_environment({'TP_SECURITY_MODE': 'UNKNOWN'})
 
+    def test_unset_security_mode_keeps_stored_mode(self) -> None:
+        config = SecurityConfig.objects.create(
+            pk=1,
+            security_mode=SecurityConfig.SecurityModeChoices.HARDENED,
+        )
+        with patch.dict('os.environ', {}, clear=True):
+            self.assertTrue(synchronize_security_config())
+
+        config.refresh_from_db()
+        self.assertEqual(config.security_mode, SecurityConfig.SecurityModeChoices.HARDENED)
+
     def test_unset_restrictions_inherit_preset(self) -> None:
         defaults = effective_security_defaults(
             SecurityConfig.SecurityModeChoices.BROWNFIELD,

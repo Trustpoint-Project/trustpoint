@@ -107,12 +107,13 @@ class WorkflowDispatchService:
         """Return whether dispatch currently drains jobs inline."""
         return self._effective_mode() == 'inline'
 
-    def _has_pending_inline_backlog(self) -> bool:
+    def _has_pending_inline_backlog(self, *, min_age_seconds: int = 0) -> bool:
         """Return whether there are queued or stale jobs that inline execution can pick up."""
         now = timezone.now()
         if Workflow2Job.objects.filter(
             status=Workflow2Job.STATUS_QUEUED,
             run_after__lte=now,
+            instance__created_at__lte=now - timedelta(seconds=min_age_seconds),
         ).exists():
             return True
 
@@ -192,11 +193,12 @@ class WorkflowDispatchService:
         max_ticks: int = 200,
         max_jobs: int = 50,
         raise_on_limit: bool = True,
+        min_age_seconds: int = 0,
     ) -> bool:
         """Drain pending worker jobs when the current execution mode routes work inline."""
         if not self.runs_inline():
             return False
-        if not self._has_pending_inline_backlog():
+        if not self._has_pending_inline_backlog(min_age_seconds=min_age_seconds):
             return False
 
         if connection.in_atomic_block:

@@ -1150,6 +1150,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
     model = CertificateModel
     template_name = 'pki/issuing_cas/issued_certificates.html'
     context_object_name = 'issued_certificates'
+    paginate_by = UIConfig.paginate_by
 
     def get_queryset(self) -> QuerySet[CertificateModel, CertificateModel]:
         """Gets the required and filtered QuerySet.
@@ -1162,7 +1163,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
             pk=self.kwargs['pk'],
         )
 
-        return issuing_ca.get_issued_certificates().select_related('revoked_certificate')
+        return issuing_ca.get_issued_certificates().select_related('revoked_certificate').order_by('common_name', 'pk')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issuing ca model object to the context.

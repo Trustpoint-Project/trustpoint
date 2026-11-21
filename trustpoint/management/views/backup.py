@@ -558,18 +558,14 @@ class CanManageBackup(BasePermission):
 
 @extend_schema(tags=['Backup'])
 @extend_schema_view(
-    list=extend_schema(description='Retrieve a list of all backups.'),
-    retrieve=extend_schema(description='Retrieve a single backup by id.'),
-    create=extend_schema(description='Create a backup.'),
-    update=extend_schema(description='Update an existing backup.'),
-    partial_update=extend_schema(description='Partially update an existing backup.'),
-    destroy=extend_schema(description='Delete a backup.'),
+    list=extend_schema(description='Retrieve a list of all backup settings.'),
+    retrieve=extend_schema(description='Retrieve backup settings by id.'),
 )
-class BackupViewSet(viewsets.ModelViewSet[Any]):
-    """ViewSet for managing Backup instances.
+class BackupViewSet(viewsets.ReadOnlyModelViewSet[Any]):
+    """Read-only view of Backup instances.
 
-    Supports standard CRUD operations such as list, retrieve,
-    create, update, and delete.
+    Backup settings are written through the management UI, which owns every
+    field; this endpoint only exposes the non-secret view.
     """
 
     queryset = BackupOptions.objects.all().order_by('-user')

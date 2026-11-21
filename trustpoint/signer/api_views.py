@@ -32,7 +32,7 @@ from trustpoint.logger import LoggerMixin
 from users.permissions import AppPermissions
 
 
-class CanManageTruststores(BasePermission):
+class CanManageSigner(BasePermission):
     """Allow only users permitted to manage signer settings."""
 
     def has_permission(self, request: Request, _view: Any) -> bool:
@@ -48,7 +48,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
     queryset = SignerModel.objects.all()
     serializer_class = SignerSerializer
-    permission_classes = (CanManageTruststores,)
+    permission_classes = (CanManageSigner,)
 
     @extend_schema(
         methods=['post'],

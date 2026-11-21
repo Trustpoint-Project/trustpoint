@@ -16,6 +16,8 @@ from management.models import BackupOptions
 from util.ssh import parse_ssh_host_key
 
 SSH_DEFAULT_PORT = 22
+SFTP_CONNECT_TIMEOUT_SECONDS = 10
+SFTP_OPERATION_TIMEOUT_SECONDS = 60
 
 
 class SftpError(Exception):
@@ -133,11 +135,17 @@ class SftpClient:
                     pkey=pkey,
                     allow_agent=False,
                     look_for_keys=False,
+                    timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+                    banner_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+                    auth_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
                 )
                 sftp = ssh.open_sftp()
                 if sftp is None:
                     msg = 'Authentication failed.'
                     raise SftpError(msg)
+                channel = sftp.get_channel()
+                if channel is not None:
+                    channel.settimeout(SFTP_OPERATION_TIMEOUT_SECONDS)
                 stack.pop_all()  # The caller closes the connected SSH client.
                 return ssh, sftp
 

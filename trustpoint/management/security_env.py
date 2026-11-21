@@ -344,16 +344,20 @@ def effective_security_defaults(
 
 
 def synchronize_security_config() -> bool:
-    """Apply the current environment policy, retaining it when existing data conflicts."""
+    """Apply the environment policy; keep the stored mode when TP_SECURITY_MODE is unset."""
     from django.db import transaction
 
     from management.models import SecurityConfig
 
-    mode = security_mode_from_environment()
     restrictions = parse_security_restrictions()
-    effective = effective_security_defaults(mode, restrictions)
     with transaction.atomic():
         config = SecurityConfig.objects.select_for_update().filter(pk=1).first()
+        configured_mode = _raw_environment(None, 'TP_SECURITY_MODE')
+        if config is not None and (isinstance(configured_mode, _Unset) or not configured_mode):
+            mode = config.security_mode
+        else:
+            mode = security_mode_from_environment()
+        effective = effective_security_defaults(mode, restrictions)
         if config is not None and _is_unset(restrictions.allow_user_defined_device_secrets):
             effective['allow_user_defined_device_secrets'] = config.allow_user_defined_device_secrets
         if effective['allow_user_defined_device_secrets'] and effective['credential_ttl_seconds'] is not None:
