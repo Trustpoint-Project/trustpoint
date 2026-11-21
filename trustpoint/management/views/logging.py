@@ -138,7 +138,7 @@ class LoggingFilesTableView(  # type: ignore[misc]
 
     template_name = 'management/logging/logging_files.html'
     context_object_name = 'log_files'
-    default_sort_param = 'updated_at'
+    default_sort_param = '-updated_at'
     paginate_by = None
     permission_required = AppPermissions.VIEW_SYSTEM_LOGS
 
@@ -185,15 +185,8 @@ class LoggingFilesTableView(  # type: ignore[misc]
             )
 
         queryset: list[dict[str, str | dt.datetime | None]] = [data for data in file_data_list if data]
-
-        def sort_key(item: dict[str, str | dt.datetime | None]) -> dt.datetime:
-            updated_at = item.get('updated_at')
-            if not isinstance(updated_at, dt.datetime):
-                return dt.datetime.min.replace(tzinfo=dt.UTC)
-            return updated_at
-
-        queryset.sort(key=sort_key, reverse=True)
-        return queryset
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return self._sort_list_of_dicts(queryset, sort_param)
 
 
 class LoggingFilesDetailsView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, TemplateView):

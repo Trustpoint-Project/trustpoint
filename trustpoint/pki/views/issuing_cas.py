@@ -13,7 +13,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import FieldError, PermissionDenied, ValidationError
 from django.db import transaction
 from django.forms import Form
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -203,9 +203,12 @@ class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], Lis
         elif sort_param == '-common_name':
             sort_param = '-credential__certificate__common_name'
 
-        if hasattr(self.model, 'is_active'):
-            return queryset.order_by('-is_active', sort_param)
-        return queryset.order_by(sort_param)
+        try:
+            if hasattr(self.model, 'is_active'):
+                return queryset.order_by('-is_active', sort_param)
+            return queryset.order_by(sort_param)
+        except FieldError:
+            return queryset.order_by(self.default_sort_param)
 
 
 class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddMethodSelectForm]):

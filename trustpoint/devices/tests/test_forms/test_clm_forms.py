@@ -596,6 +596,35 @@ class TestClmDeviceModelOpcUaGdsPushOnboardingForm:
         assert device.opc_ua_gds_push_config.opc_trust_store is None
         assert device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
 
+    def test_blank_password_keeps_existing_opc_password(
+        self, device_instance_onboarding: dict[str, Any]
+    ) -> None:
+        """Submitting the form without a password must not erase the stored OPC password."""
+        device = device_instance_onboarding['device']
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        device.save()
+        device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
+        device.onboarding_config.set_pki_protocols([OnboardingPkiProtocol.OPC_GDS_PUSH])
+        device.onboarding_config.save()
+        device.opc_ua_gds_push_config.opc_password = 'existing-password'
+        device.opc_ua_gds_push_config.save(update_fields=['opc_password'])
+        form_data = {
+            'common_name': device.common_name,
+            'serial_number': device.serial_number,
+            'domain': device.domain.pk,
+            'ip_address': '192.168.1.150',
+            'opc_server_port': device.opc_ua_gds_push_config.opc_server_port,
+            'onboarding_status': OnboardingStatus.PENDING.label,
+            'pki_protocol_opc_gds_push': True,
+        }
+
+        form = ClmDeviceModelOpcUaGdsPushOnboardingForm(data=form_data, instance=device)
+
+        assert form.is_valid()
+        form.save()
+        device.refresh_from_db()
+        assert device.opc_ua_gds_push_config.opc_password == 'existing-password'
+
     def test_save_without_onboarding_config_raises_error(self, device_instance: dict[str, Any]) -> None:
         """Test save() raises ValidationError when device has no onboarding config."""
         device = device_instance['device']  # Regular device without onboarding

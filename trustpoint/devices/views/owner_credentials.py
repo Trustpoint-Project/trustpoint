@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import FieldError, PermissionDenied, ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
@@ -99,7 +99,11 @@ class OwnerCredentialTableView(
     def get_queryset(self) -> QuerySet[RemoteIssuedCredentialModel]:
         """Return DevOwnerID credential rows with their certificate information."""
         sort_param = self.request.GET.get('sort', self.default_sort_param)
-        return _dev_owner_id_credentials().select_related('credential__certificate', 'ca').order_by(sort_param)
+        queryset = _dev_owner_id_credentials().select_related('credential__certificate', 'ca')
+        try:
+            return queryset.order_by(sort_param)
+        except FieldError:
+            return queryset.order_by(self.default_sort_param)
 
 
 class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]):

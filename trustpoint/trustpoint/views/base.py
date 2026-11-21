@@ -222,7 +222,13 @@ class SortableTableFromListMixin:
         Returns:
             The sorted list of dictionaries.
         """
-        return sorted(list_of_dicts, key=lambda x: x[sort_param.lstrip('-')], reverse=sort_param.startswith('-'))
+        key = sort_param.lstrip('-')
+        if list_of_dicts and key not in list_of_dicts[0]:
+            return list(list_of_dicts)
+        present = [item for item in list_of_dicts if item.get(key) is not None]
+        missing = [item for item in list_of_dicts if item.get(key) is None]
+        present.sort(key=lambda x: x[key], reverse=sort_param.startswith('-'))
+        return present + missing
 
     def get_queryset(self) -> list[dict[str, str]]:
         """Get the queryset and apply sorting based on URL parameters."""

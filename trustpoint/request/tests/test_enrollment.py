@@ -31,9 +31,7 @@ def _steps(case):
     steps = ['validate', 'parse', 'policy']
     if case != 'management-api':
         steps.append('authenticate')
-    steps += ['authorize', 'workflow']
-    if case.startswith('est'):
-        steps.append('atomic')
+    steps += ['authorize', 'workflow', 'atomic']
     return steps + ['issue', 'respond', 'release']
 
 

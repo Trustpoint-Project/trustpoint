@@ -123,7 +123,7 @@ def _rest_enrollment(
         parse=lambda ctx: cast('RestCertificateRequestContext', RestMessageParser().parse(ctx)),
         authenticate=authenticate_with_policy,
         authorize=lambda ctx: RestAuthorization(allowed_operations=[operation]).authorize(ctx),
-        process=lambda ctx: OperationProcessor().process_operation(ctx),
+        process=lambda ctx: process_certificate_operation_atomically(ctx, OperationProcessor()),
         respond=RestMessageResponder.build_response,
     )
 

@@ -175,11 +175,20 @@ class TrustpointUserDetailsForm(forms.ModelForm[TrustpointUser]):
 class UserClientCertificateForm(forms.ModelForm[UserClientCertificate]):
     """Choose an identifier that is unique among the current user's certificates."""
 
+    p12_password = forms.CharField(
+        label=_('PKCS#12 password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
+        strip=False,
+        min_length=8,
+        max_length=128,
+        help_text=_('The downloaded PKCS#12 file is encrypted with this password.'),
+    )
+
     class Meta:
-        """Expose only the user-chosen identifier."""
+        """Expose only the user-chosen identifier and the download password."""
 
         model = UserClientCertificate
-        fields: ClassVar = ['identifier']
+        fields: ClassVar = ['identifier', 'p12_password']
 
     def clean_identifier(self) -> str:
         """Reject identifiers already assigned to this user, including disabled certificates."""

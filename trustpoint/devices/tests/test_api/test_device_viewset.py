@@ -282,6 +282,25 @@ class TestDeviceViewSetWithOnboardingConfig:
         assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET
         assert device.onboarding_config.cmp_shared_secret == 'my-secret-12345678'  # noqa: S105
 
+    def test_create_returns_generated_secret_once(self, authenticated_client: APIClient) -> None:
+        """An auto-generated CMP secret is returned in the create response, never in lists."""
+        payload = {
+            'common_name': 'device-generated-secret',
+            'onboarding_config': {
+                'onboarding_protocol': OnboardingProtocol.CMP_SHARED_SECRET,
+                'pki_protocols': [OnboardingPkiProtocol.CMP],
+            },
+        }
+
+        response = authenticated_client.post(reverse('device-list'), payload, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        secret = response.data['initial_secrets']['cmp_shared_secret']
+        assert secret
+
+        list_response = authenticated_client.get(reverse('device-list'))
+        assert all('initial_secrets' not in device for device in list_response.data['results'])
+
     def test_create_device_with_onboarding_config_est_username_password(self, authenticated_client: APIClient) -> None:
         """POST with EST username/password onboarding creates device correctly."""
         payload = {

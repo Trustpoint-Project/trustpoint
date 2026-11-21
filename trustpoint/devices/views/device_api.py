@@ -150,7 +150,7 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                 request_only=True,
                 description=(
                     'Uses CMP_SHARED_SECRET (2) protocol. '
-                    'Shared secret is automatically generated and returned in response.'
+                    'The generated secret is returned once in the create response as initial_secrets.'
                 ),
             ),
             OpenApiExample(
@@ -227,11 +227,20 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
             ),
         ],
     )
+    def get_serializer_context(self) -> dict[str, Any]:
+        """Expose generated enrollment secrets only in the create response."""
+        context = dict(super().get_serializer_context())
+        if getattr(self, 'action', None) == 'create':
+            context['include_initial_secrets'] = True
+        return context
+
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Create a new device, optionally with onboarding configuration."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+        response['Cache-Control'] = 'no-store'
+        return response
 
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Update an existing device, optionally with onboarding configuration."""

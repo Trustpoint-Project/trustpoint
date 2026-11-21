@@ -130,6 +130,7 @@ class BackupManageView(UserPermissionRequiredMixin, SortableTableFromListMixin, 
             return []
         backups = [f for f in files if f.startswith('backup_') and f.endswith('.dump.gz')]
         data: list[dict[str, Any]] = [get_backup_file_data(f) for f in backups]
+        data = self._sort_list_of_dicts(data, self.request.GET.get('sort', self.default_sort_param))
         self.object_list = data
         return data
 

@@ -1170,7 +1170,6 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
                 'ip_address': self.instance.ip_address,
                 'opc_server_port': config.opc_server_port if config else 4840,
                 'opc_user': (config.opc_user if config else ''),
-                'opc_password': (config.opc_password if config else ''),
                 'opc_trust_store': (config.opc_trust_store if config else None),
                 'onboarding_protocol': (
                     OnboardingProtocol(self.instance.onboarding_config.onboarding_protocol).label
@@ -1228,7 +1227,8 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.ip_address = self.cleaned_data['ip_address']
             self.instance.opc_ua_gds_push_config.opc_server_port = self.cleaned_data['opc_server_port']
             self.instance.opc_ua_gds_push_config.opc_user = self.cleaned_data['opc_user']
-            self.instance.opc_ua_gds_push_config.opc_password = self.cleaned_data['opc_password']
+            if self.cleaned_data['opc_password']:
+                self.instance.opc_ua_gds_push_config.opc_password = self.cleaned_data['opc_password']
             self.instance.opc_ua_gds_push_config.opc_trust_store = self.cleaned_data['opc_trust_store']
 
             self.instance.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH

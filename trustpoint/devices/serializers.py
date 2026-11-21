@@ -382,6 +382,27 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
     no_onboarding_config = NoOnboardingConfigSerializer(required=False)
     opc_ua_gds_push_config = OpcUaGdsPushConfigSerializer(required=False)
     opc_server_port = serializers.IntegerField(required=False, min_value=1, max_value=65535, write_only=True)
+    initial_secrets = serializers.SerializerMethodField()
+
+    def get_initial_secrets(self, obj: DeviceModel) -> dict[str, str]:
+        """Return generated enrollment secrets once, only for the create response."""
+        if not self.context.get('include_initial_secrets'):
+            return {}
+        config = obj.onboarding_config or obj.no_onboarding_config
+        if config is None:
+            return {}
+        return {
+            field: value
+            for field in ('est_password', 'cmp_shared_secret', 'scep_challenge')
+            if (value := getattr(config, field, ''))
+        }
+
+    def to_representation(self, instance: DeviceModel) -> dict[str, Any]:
+        """Keep generated secrets out of list and detail responses."""
+        data = super().to_representation(instance)
+        if not self.context.get('include_initial_secrets'):
+            data.pop('initial_secrets', None)
+        return data
 
     def _extract_gds_push_config(self, data: dict[str, Any]) -> dict[str, Any]:
         """Accept both the dedicated config and legacy OPC request field locations."""

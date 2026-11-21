@@ -5,8 +5,26 @@
 
 from __future__ import annotations
 
+import logging
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+
+
+def apply_persisted_log_level() -> None:
+    """Apply the stored log level to this process at startup."""
+    config = LoggingConfig.objects.only('log_level').first()
+    if config is None:
+        return
+    names = LoggingConfig.LogLevelChoices.names
+    if config.log_level in names:
+        level_name = config.log_level
+    else:
+        try:
+            level_name = LoggingConfig.LogLevelChoices(config.log_level).name
+        except ValueError:
+            return
+    logging.getLogger().setLevel(getattr(logging, level_name))
 
 
 class LoggingConfig(models.Model):

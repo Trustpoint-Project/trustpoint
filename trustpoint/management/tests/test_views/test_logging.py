@@ -84,7 +84,7 @@ class LoggingFilesTableViewTest(TestCase):
 
     def test_default_sort_param(self):
         """Test default sort parameter."""
-        self.assertEqual(self.view.default_sort_param, 'updated_at')
+        self.assertEqual(self.view.default_sort_param, '-updated_at')
 
     def test_page_category_and_name(self):
         """Test page category and name are set correctly."""

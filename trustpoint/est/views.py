@@ -24,6 +24,7 @@ from request.enrollment import est_enrollment
 from request.message_responder import EstErrorMessageResponder
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import LoggedHttpResponse
 from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
@@ -33,24 +34,6 @@ if TYPE_CHECKING:
 
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
-
-
-THRESHOLD_LOGGER: int = 400
-
-
-class LoggedHttpResponse(HttpResponse, LoggerMixin):
-    """Custom HttpResponse that logs and prints error messages automatically."""
-
-    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
-        """Initialize the LoggedHttpResponse instance."""
-        if status and status >= THRESHOLD_LOGGER:
-            if isinstance(content, bytes):
-                content = content.decode('utf-8')
-            self.logger.error('EST - ERROR - %s - %s', status, content)
-        else:
-            self.logger.info('EST - SUCCESS - %s', status)
-
-        super().__init__(content, *args, status=status, **kwargs)
 
 
 class EstRequestedDomainExtractorMixin:

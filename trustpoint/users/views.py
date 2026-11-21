@@ -327,7 +327,10 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, LoggerMixin, Fo
                     additional_certificates=[issuing_certificate] if issuing_certificate else [],
                 )
                 try:
-                    pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
+                    pkcs12_data = credential.as_pkcs12(
+                        password=form.cleaned_data['p12_password'].encode('utf-8'),
+                        friendly_name=identifier.encode('utf-8'),
+                    )
                 except TypeError as exc:
                     raise ValidationError(str(exc)) from exc
                 certificate_model = CertificateModel.save_certificate(certificate)
