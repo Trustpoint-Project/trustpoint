@@ -155,6 +155,16 @@ class TestDeviceViewSetCreate:
         response = authenticated_client.post(reverse('device-list'), payload, format='json')
         assert response.status_code == status.HTTP_201_CREATED
 
+    def test_create_without_configuration_returns_400(self, authenticated_client: APIClient) -> None:
+        """The model requires one configuration; the API must not create a device the UI cannot open."""
+        response = authenticated_client.post(
+            reverse('device-list'),
+            {'common_name': 'no-config-device', 'serial_number': 'SN-NO-CONFIG'},
+            format='json',
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert 'onboarding_config' in response.data
+
     def test_create_device_exists_in_database(
         self, authenticated_client: APIClient, no_onboarding_config: NoOnboardingConfigModel
     ) -> None:

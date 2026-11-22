@@ -13,7 +13,7 @@ from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Layout, Submit
 from django import forms
-from django.db import transaction
+from django.db import DataError, transaction
 from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
@@ -308,12 +308,14 @@ class BrowserLoginForm(forms.Form):
             credential_id = int(otp_parts[0])
         except ValueError as exception:
             raise forms.ValidationError(err_msg) from exception
+        if not 1 <= credential_id <= 2**31 - 1:
+            raise forms.ValidationError(err_msg)
         cleaned_data['credential_id'] = credential_id
         cleaned_data['otp'] = otp_parts[1]
 
         try:
             credential_download = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential_id)
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist as exception:
+        except (RemoteDeviceCredentialDownloadModel.DoesNotExist, DataError, OverflowError) as exception:
             raise forms.ValidationError(err_msg) from exception
         cleaned_data['credential_download'] = credential_download
 

@@ -36,7 +36,7 @@ class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     http_method_names = ('get',)
     permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
-    def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:
+    def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:  # noqa: C901
         """Apply filters to the device queryset and return filtered queryset and active status."""
         filters_active = False
         ip_address = request.GET.get('ip_address', '').strip()
@@ -64,16 +64,23 @@ class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
         if port:
             try:
                 port_num = int(port)
-                queryset = queryset.filter(open_ports__contains=[port_num])
-                filters_active = True
             except (ValueError, TypeError):
                 pass
+            else:
+                if connection.features.supports_json_field_contains:
+                    queryset = queryset.filter(open_ports__contains=[port_num])
+                else:
+                    matching_ids = [
+                        device.pk for device in queryset if port_num in (device.open_ports or [])
+                    ]
+                    queryset = queryset.filter(pk__in=matching_ids)
+                filters_active = True
 
         return queryset, filters_active
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the discovery dashboard."""
-        all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
+        all_devs = DiscoveredDevice.objects.select_related('certificate_record').order_by('-last_seen')
 
         # Apply filters
         all_devs, filters_active = self._apply_filters(all_devs, request)

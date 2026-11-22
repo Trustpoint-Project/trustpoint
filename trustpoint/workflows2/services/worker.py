@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 # Mechanical job rows are kept only long enough to debug recent runs.
 JOB_RETENTION_DAYS = 30
 JOB_PURGE_INTERVAL_SECONDS = 3600
+APPROVAL_EXPIRY_INTERVAL_SECONDS = 30
 _last_purge_at: float | None = None
+_last_approval_expiry_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -93,6 +95,7 @@ class Workflow2DbWorker:
         """Process up to one batch of queued jobs."""
         recovered = self._recover_stale_running_jobs()
         self._purge_old_jobs()
+        self._expire_due_approvals()
 
         claimed = 0
         processed = 0
@@ -118,6 +121,23 @@ class Workflow2DbWorker:
             recovered=recovered,
         )
 
+    def _expire_due_approvals(self) -> None:
+        """Expire due approvals at most once per interval for this process."""
+        global _last_approval_expiry_at  # noqa: PLW0603 - one throttle per process, not per worker instance
+        now = time.monotonic()
+        if (
+            _last_approval_expiry_at is not None
+            and now - _last_approval_expiry_at < APPROVAL_EXPIRY_INTERVAL_SECONDS
+        ):
+            return
+        _last_approval_expiry_at = now
+        from workflows2.services.runtime import expire_pending_approvals  # noqa: PLC0415
+
+        try:
+            expire_pending_approvals()
+        except Exception:
+            logger.exception('Failed to expire due Workflow 2 approvals.')
+
     def _purge_old_jobs(self) -> None:
         """Delete finished job rows past the retention window, at most once per interval."""
         global _last_purge_at  # noqa: PLW0603 - one throttle per process, not per worker instance
@@ -128,7 +148,11 @@ class Workflow2DbWorker:
         cutoff = timezone.now() - timedelta(days=JOB_RETENTION_DAYS)
         try:
             Workflow2Job.objects.filter(
-                status__in=[Workflow2Job.STATUS_DONE, Workflow2Job.STATUS_CANCELLED],
+                status__in=[
+                    Workflow2Job.STATUS_DONE,
+                    Workflow2Job.STATUS_CANCELLED,
+                    Workflow2Job.STATUS_FAILED,
+                ],
                 updated_at__lt=cutoff,
             ).delete()
         except Exception:

@@ -3,7 +3,7 @@
 
 """Provides the 'EstAuthorization' class using the Composite pattern for modular EST authorization."""
 
-from pki.models import IssuedCredentialModel
+from pki.models import get_credential_for_certificate
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 
 from .base import (
@@ -55,7 +55,7 @@ class EstAuthorization(CompositeAuthorization):
                 message = 'Reenrollment requires the existing client certificate.'
                 context.error(message, http_status=401)
                 raise ValueError(message)
-            issued = IssuedCredentialModel.get_credential_for_certificate(certificate)
+            issued = get_credential_for_certificate(certificate)
             if context.certificate_profile_model != issued.certificate_profile:
                 message = 'Reenrollment must use the existing credential certificate profile.'
                 context.error(message, http_status=403)

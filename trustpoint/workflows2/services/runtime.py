@@ -642,11 +642,18 @@ class WorkflowRuntimeService:
         if isinstance(timeout_seconds, int) and timeout_seconds > 0:
             expires_at = timezone.now() + timedelta(seconds=timeout_seconds)
 
-        obj, _ = Workflow2Approval.objects.get_or_create(
+        obj, created = Workflow2Approval.objects.get_or_create(
             instance=instance,
             step_id=step_id,
             defaults={'status': Workflow2Approval.STATUS_PENDING, 'expires_at': expires_at},
         )
+        if not created and obj.status != Workflow2Approval.STATUS_PENDING:
+            obj.status = Workflow2Approval.STATUS_PENDING
+            obj.expires_at = expires_at
+            obj.decided_at = None
+            obj.decided_by = ''
+            obj.comment = ''
+            obj.save(update_fields=['status', 'expires_at', 'decided_at', 'decided_by', 'comment'])
         return obj
 
     def _recompute_run_if_present(self, instance: Workflow2Instance) -> None:
@@ -668,3 +675,49 @@ class WorkflowRuntimeService:
         run.finalized = WorkflowRunTransitionService.is_finalized(run.status)
         run.save(update_fields=['status', 'finalized', 'updated_at'])
         CmpTransactionState.sync_from_workflow2_run(run=run)
+
+
+def expire_pending_approvals() -> None:
+    """Expire due approvals and continue their instances once each.
+
+    This runs from the worker as well as the approval pages, so a configured
+    timeout fires even when nobody opens the UI.
+    """
+    now = timezone.now()
+    approval_ids = list(
+        Workflow2Approval.objects.filter(
+            status=Workflow2Approval.STATUS_PENDING,
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        ).values_list('id', flat=True)
+    )
+    if not approval_ids:
+        return
+
+    from workflows2.engine.executor import WorkflowExecutor  # noqa: PLC0415
+    from workflows2.services.dispatch import WorkflowDispatchService  # noqa: PLC0415
+
+    executor = WorkflowExecutor()
+    runtime = WorkflowRuntimeService(executor=executor)
+    dispatch = WorkflowDispatchService(executor=executor)
+    for approval_id in approval_ids:
+        with transaction.atomic():
+            approval = (
+                Workflow2Approval.objects.select_for_update()
+                .select_related('instance', 'instance__run')
+                .get(id=approval_id)
+            )
+            if approval.status != Workflow2Approval.STATUS_PENDING:
+                continue
+
+            approval.status = Workflow2Approval.STATUS_EXPIRED
+            approval.decided_at = now
+            approval.decided_by = ''
+            approval.comment = ''
+            approval.save(update_fields=['status', 'decided_at', 'decided_by', 'comment'])
+
+            inst = approval.instance
+            if inst.status == Workflow2Instance.STATUS_AWAITING and inst.current_step == approval.step_id:
+                continued = runtime.record_approval_timeout_locked(inst=inst, approval=approval)
+                if continued:
+                    dispatch.continue_instance(instance=inst)

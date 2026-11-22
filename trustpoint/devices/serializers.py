@@ -469,13 +469,17 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         device = super().create(validated_data)
         self._check_protocol_policy(device)
         self._save_gds_push_config(device, config_data)
+        try:
+            device.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         for config in (device.onboarding_config, device.no_onboarding_config):
             if config is not None:
                 audit_assignments(config, device=device, actor=getattr(self.context.get('request'), 'user', None))
         return device
 
     @transaction.atomic
-    def update(self, instance: DeviceModel, validated_data: dict[str, Any]) -> DeviceModel:
+    def update(self, instance: DeviceModel, validated_data: dict[str, Any]) -> DeviceModel:  # noqa: C901
         """Update DeviceModel instance, handling nested onboarding_config updates."""
         config_data = self._extract_gds_push_config(validated_data)
         config_context = {**self.context, 'defer_secret_audit': True}
@@ -515,6 +519,10 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         if onboarding_config_data is not None or no_onboarding_data is not None:
             self._check_protocol_policy(device)
         self._save_gds_push_config(device, config_data)
+        try:
+            device.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         for config in (device.onboarding_config, device.no_onboarding_config):
             if config is not None:
                 audit_assignments(config, device=device, actor=getattr(self.context.get('request'), 'user', None))

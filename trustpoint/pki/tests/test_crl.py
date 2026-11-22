@@ -1003,7 +1003,7 @@ def test_duplicate_crl_web_import_preserves_active_list(
     )
 
     assert response.status_code == 200
-    assert 'already exists' in response.content.decode()
+    assert 'already exists' in response.content.decode() or 'older than the active CRL' in response.content.decode()
     assert ca.get_active_crl().pk == active.pk
     assert ca.crls.count() == 2
 

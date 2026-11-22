@@ -99,6 +99,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         raise ValidationError(_('The CRL signature is invalid. This CRL was not signed by this CA.'))
 
     @classmethod
+    @transaction.atomic
     def create_from_pem(
         cls,
         ca: CaModel | None,
@@ -151,6 +152,20 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
         if next_update_delta is not None:
             next_update = this_update + next_update_delta
+
+        if set_active and ca is not None:
+            active = (
+                cls.objects.select_for_update()
+                .filter(ca=ca, is_active=True)
+                .order_by('-this_update')
+                .first()
+            )
+            if active is not None and (
+                this_update < active.this_update
+                or (crl_number is not None and active.crl_number is not None and crl_number < active.crl_number)
+            ):
+                msg = _('The imported CRL is older than the active CRL for this CA.')
+                raise ValidationError(msg)
 
         crl_model = cls(
             ca=ca,

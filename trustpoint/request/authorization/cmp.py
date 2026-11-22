@@ -9,7 +9,13 @@ from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from cmp.models import CmpTransactionModel
 from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
-from pki.models import IssuedCredentialModel
+from pki.models import (
+    IssuedCredentialModel,
+    RemoteIssuedCredentialModel,
+    get_credential_for_certificate,
+    get_credential_for_certificate_model,
+    get_credential_for_serial_number,
+)
 from request.cmp_key_update import validate_key_update_identity
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
@@ -65,9 +71,17 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
         # Ensure that either A) the client_certificate (CMP signer) equals the cert to be revoked (self-revocation)
         # or B) the client_certificate is the domain credential for the device the cert was issued to.
         try:
-            signer_credential = IssuedCredentialModel.get_credential_for_certificate(context.client_certificate)
+            signer_credential = get_credential_for_certificate(context.client_certificate)
             signer_cert = signer_credential.credential.certificate_or_error
             if signer_cert.serial_number == str(context.cert_serial_number):
+                if (
+                    context.device is None
+                    or signer_credential.device_id != context.device.id
+                    or signer_credential.domain_id != context.domain.id
+                ):
+                    error_message = 'Unauthorized revocation request: Signer is outside the request device scope.'
+                    self.logger.warning('Revocation authorization failed: Signer is outside the request scope')
+                    self._raise_authorization_error(error_message, context)
                 context.credential_to_revoke = signer_credential
                 self.logger.debug(
                     'Revocation authorized: Self-revocation of credential %s', context.credential_to_revoke.common_name
@@ -96,7 +110,9 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
         raise ValueError(message)
 
     def _authorize_domain_credential_revocation(
-        self, context: CmpRevocationRequestContext, signer_credential: IssuedCredentialModel
+        self,
+        context: CmpRevocationRequestContext,
+        signer_credential: IssuedCredentialModel | RemoteIssuedCredentialModel,
     ) -> None:
         """Authorize revocation via a domain credential and set credential_to_revoke on the context."""
         signer_device = signer_credential.device
@@ -123,7 +139,7 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning('Revocation authorization failed: Certificate serial number is missing')
             self._raise_authorization_error(error_message, context)
 
-        context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
+        context.credential_to_revoke = get_credential_for_serial_number(
             context.domain, context.device, context.cert_serial_number
         )
         self.logger.info(
@@ -165,11 +181,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
         transaction = context.cmp_transaction
         if transaction is None or transaction.final_certificate is None:
             self._raise_authorization_error('certConf rejection is not bound to an issued CMP transaction.', context)
-        cert_model = (
-            IssuedCredentialModel.objects.filter(credential__certificate=transaction.final_certificate)
-            .select_related('domain', 'device', 'credential__certificate')
-            .first()
-        )
+        cert_model = get_credential_for_certificate_model(transaction.final_certificate)
 
         if cert_model is None:
             error_message = (

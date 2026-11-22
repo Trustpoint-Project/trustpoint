@@ -13,7 +13,6 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 
@@ -23,7 +22,7 @@ from users.permissions import AppPermissions
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance
 from workflows2.services.dispatch import WorkflowDispatchService
-from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.services.runtime import WorkflowRuntimeService, expire_pending_approvals
 from workflows2.views.presentation import (
     build_step_meta_from_ir,
     describe_event_context,
@@ -45,41 +44,8 @@ def _json_object(value: Any) -> dict[str, Any]:
 
 
 def _expire_pending_approvals() -> None:
-    now = timezone.now()
-    approval_ids = list(
-        Workflow2Approval.objects.filter(
-            status=Workflow2Approval.STATUS_PENDING,
-            expires_at__isnull=False,
-            expires_at__lte=now,
-        ).values_list('id', flat=True)
-    )
-    if not approval_ids:
-        return
-
-    executor = WorkflowExecutor()
-    runtime = WorkflowRuntimeService(executor=executor)
-    dispatch = WorkflowDispatchService(executor=executor)
-    for approval_id in approval_ids:
-        with transaction.atomic():
-            approval = (
-                Workflow2Approval.objects.select_for_update()
-                .select_related('instance', 'instance__run')
-                .get(id=approval_id)
-            )
-            if approval.status != Workflow2Approval.STATUS_PENDING:
-                continue
-
-            approval.status = Workflow2Approval.STATUS_EXPIRED
-            approval.decided_at = now
-            approval.decided_by = ''
-            approval.comment = ''
-            approval.save(update_fields=['status', 'decided_at', 'decided_by', 'comment'])
-
-            inst = approval.instance
-            if inst.status == Workflow2Instance.STATUS_AWAITING and inst.current_step == approval.step_id:
-                continued = runtime.record_approval_timeout_locked(inst=inst, approval=approval)
-                if continued:
-                    dispatch.continue_instance(instance=inst)
+    """Expire due approvals through the shared runtime service."""
+    expire_pending_approvals()
 
 
 def _build_timeout_context(

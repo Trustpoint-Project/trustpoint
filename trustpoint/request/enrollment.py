@@ -14,7 +14,12 @@ from request.message_parser import EstMessageParser, RestMessageParser
 from request.message_parser.base import CertProfileParsing
 from request.message_responder import EstMessageResponder, RestMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext, CmpCertificateRequestContext
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    CmpCertConfRequestContext,
+    CmpCertificateRequestContext,
+)
 from request.request_validator.http_req import EstHttpRequestValidator, RestHttpRequestValidator
 from request.security_hardening import (
     authenticate_est_request,
@@ -45,7 +50,7 @@ def process_workflow_operation[Context: BaseRequestContext](
         and context.protocol == 'cmp'
         and context.cmp_body_type in {'ir', 'cr', 'kur'}
     )
-    if not result.should_stop or cmp_certificate_request:
+    if not result.should_stop or cmp_certificate_request or isinstance(context, CmpCertConfRequestContext):
         process(context)
         Workflow2CertificateRequestHandler().handle_issued(context)
 

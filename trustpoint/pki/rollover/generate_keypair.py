@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from django.utils.datastructures import MultiValueDict
 
     from pki.models import CaModel
+    from pki.models.credential import CredentialModel
 
 
 class GenerateKeypairRolloverStrategy(RolloverStrategy):
@@ -88,6 +90,24 @@ class GenerateKeypairRolloverStrategy(RolloverStrategy):
 class GenerateKeypairEstRolloverForm(IssuingCaAddRequestEstForm):
     """Normal EST request form with rollover scheduling metadata."""
 
+    session_scope = 'issuing-ca-est'
+    credential: Any
+    _credential_scope: str
+
+    def _create_credential(self, *, alias: str | None = None) -> CredentialModel:
+        self._credential_scope = uuid4().hex
+        return super()._create_credential(alias=alias or f'{self.session_scope}/{self._credential_scope}')
+
+    def save(self, *, commit: bool = True) -> None:  # type: ignore[override]
+        """Create only the pending key; the CA is created after the certificate arrives."""
+        _ = commit
+        self.credential = self._create_credential()
+
+    @property
+    def credential_scope(self) -> str:
+        """Return the generated session scope for the pending credential."""
+        return self._credential_scope
+
     transition_scheduled_at = forms.DateTimeField(
         required=False,
         label=_('Scheduled Transition Time'),
@@ -98,6 +118,24 @@ class GenerateKeypairEstRolloverForm(IssuingCaAddRequestEstForm):
 
 class GenerateKeypairCmpRolloverForm(IssuingCaAddRequestCmpForm):
     """Normal CMP request form with rollover scheduling metadata."""
+
+    session_scope = 'issuing-ca-cmp'
+    credential: Any
+    _credential_scope: str
+
+    def _create_credential(self, *, alias: str | None = None) -> CredentialModel:
+        self._credential_scope = uuid4().hex
+        return super()._create_credential(alias=alias or f'{self.session_scope}/{self._credential_scope}')
+
+    def save(self, *, commit: bool = True) -> None:  # type: ignore[override]
+        """Create only the pending key; the CA is created after the certificate arrives."""
+        _ = commit
+        self.credential = self._create_credential()
+
+    @property
+    def credential_scope(self) -> str:
+        """Return the generated session scope for the pending credential."""
+        return self._credential_scope
 
     transition_scheduled_at = forms.DateTimeField(
         required=False,

@@ -96,3 +96,12 @@ def test_browser_login_form_missing_otp() -> None:
 
     assert 'otp' in form.errors, "The 'otp' field should have an error."
     assert form.errors['otp'][0] == 'This field is required.', 'Incorrect error message for missing OTP.'
+
+
+@pytest.mark.django_db
+def test_browser_login_form_rejects_out_of_range_credential_id() -> None:
+    """A huge numeric id is invalid input, not a database error."""
+    form = BrowserLoginForm(data={'otp': f'{"9" * 30}.otp'})
+
+    assert not form.is_valid()
+    assert '__all__' in form.errors

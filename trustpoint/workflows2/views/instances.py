@@ -270,6 +270,10 @@ class Workflow2InstanceCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
                 locked_until=None,
                 locked_by='',
             )
+            Workflow2Approval.objects.filter(
+                instance=inst,
+                status=Workflow2Approval.STATUS_PENDING,
+            ).update(status=Workflow2Approval.STATUS_EXPIRED, decided_at=timezone.now())
 
             WorkflowInstanceTransitionService.mark_cancelled(inst)
             save_instance_status(inst)

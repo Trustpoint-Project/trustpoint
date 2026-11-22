@@ -25,7 +25,14 @@ if TYPE_CHECKING:
     from cmp.models import CmpTransactionModel
     from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
+    from pki.models import (
+        CertificateProfileModel,
+        CredentialModel,
+        DomainModel,
+        IssuedCredentialModel,
+        RemoteIssuedCredentialModel,
+        TruststoreModel,
+    )
     from workflows2.events.request_events import Event
     from workflows2.services.dispatch import DispatchOutcome
 
@@ -187,7 +194,7 @@ class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
 
     cert_serial_number: str | None = None
-    credential_to_revoke: IssuedCredentialModel | None = None
+    credential_to_revoke: IssuedCredentialModel | RemoteIssuedCredentialModel | None = None
     revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
 

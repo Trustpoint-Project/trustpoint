@@ -16,12 +16,16 @@ from request.cmp_transaction_state import CmpTransactionState
 from request.enrollment import process_workflow_operation
 from request.operation_processor.cmp_certificate_request import CmpCertificateRequestProcessor
 from request.operation_processor.cmp_poll import CmpPollProcessor
-from request.request_context import CmpCertificateRequestContext, CmpPollRequestContext
+from request.request_context import (
+    CmpCertConfRequestContext,
+    CmpCertificateRequestContext,
+    CmpPollRequestContext,
+)
 from workflows2.events.request_events import Events
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
 from request.workflow2_issuance import Workflow2IssuanceDecision
-from request.workflows2_handler import Workflow2CertificateRequestHandler
+from request.workflows2_handler import Workflow2CertificateRequestHandler, Workflow2HandleResult
 from workflows2.services.request_decision import Workflow2RequestDecision
 
 
@@ -64,6 +68,26 @@ def test_cmp_workflow_gate_persists_response_transaction(body_type, run_status, 
     assert context.cmp_transaction.status == transaction_status
     if transaction_status == CmpTransactionModel.Status.WAITING:
         assert context.cmp_transaction.backend_reference == 'workflow-run'
+
+
+@pytest.mark.django_db
+def test_certconf_processing_runs_even_when_a_workflow_stops() -> None:
+    """A stopped certConf workflow must not suppress revocation or confirmation handling."""
+    context = CmpCertConfRequestContext(
+        protocol='cmp',
+        operation='certconf',
+        cert_hash=b'x' * 16,
+        cert_conf_status=2,
+    )
+    process = Mock()
+    with (
+        patch('request.enrollment.Workflow2Handler') as handler,
+        patch('request.enrollment.Workflow2CertificateRequestHandler'),
+    ):
+        handler.return_value.handle.return_value = Workflow2HandleResult.stop_processing()
+        process_workflow_operation(context, process)
+
+    process.assert_called_once_with(context)
 
 
 @pytest.mark.django_db

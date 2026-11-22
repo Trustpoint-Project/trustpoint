@@ -62,7 +62,10 @@ class WorkerTests(TestCase):
         new_job = Workflow2Job.objects.create(
             instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_DONE
         )
-        Workflow2Job.objects.filter(pk=old_job.pk).update(
+        old_failed_job = Workflow2Job.objects.create(
+            instance=inst, kind=Workflow2Job.KIND_RUN, status=Workflow2Job.STATUS_FAILED
+        )
+        Workflow2Job.objects.filter(pk__in=[old_job.pk, old_failed_job.pk]).update(
             updated_at=timezone.now() - timedelta(days=JOB_RETENTION_DAYS + 1)
         )
 
@@ -77,6 +80,7 @@ class WorkerTests(TestCase):
             job_filter.assert_not_called()
 
         self.assertFalse(Workflow2Job.objects.filter(pk=old_job.pk).exists())
+        self.assertFalse(Workflow2Job.objects.filter(pk=old_failed_job.pk).exists())
         self.assertTrue(Workflow2Job.objects.filter(pk=new_job.pk).exists())
 
     def test_worker_claims_and_runs_job(self) -> None:

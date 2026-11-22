@@ -9,7 +9,7 @@ from typing import Any, cast
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import DataError, transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase
 from django.http.request import HttpRequest
 from django.shortcuts import redirect
@@ -67,11 +67,15 @@ class DownloadTokenRequiredAuthenticationMixin:
             err_msg = 'Internal server error. Failed to get super().dispatch().'
             raise Http404(err_msg)
 
+        credential_id = kwargs.get('pk')
+        if not isinstance(credential_id, int) or not 1 <= credential_id <= 2**31 - 1:
+            messages.warning(request, 'Invalid download token.')
+            return redirect('devices:browser_login')
         try:
             self.credential_download = RemoteDeviceCredentialDownloadModel.objects.get(
-                issued_credential_model=kwargs.get('pk')
+                issued_credential_model=credential_id
             )
-        except RemoteDeviceCredentialDownloadModel.DoesNotExist:
+        except (RemoteDeviceCredentialDownloadModel.DoesNotExist, DataError, OverflowError):
             messages.warning(request, 'Invalid download token.')
             return redirect('devices:browser_login')
 

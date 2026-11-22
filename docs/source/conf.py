@@ -44,7 +44,6 @@ nitpicky = True
 extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
-    'sphinxcontrib.openapi',  # Generate APIs docs
     'sphinxcontrib.mermaid',  # Enables Mermaid diagrams
     'myst_parser',  # Supports Markdown files
 ]

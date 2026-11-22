@@ -110,9 +110,10 @@ The interactive documentation allows you to:
 Definition
 ----------
 
-.. openapi:: ../../_static/trustpoint-openapi-swagger.yaml
-   :group:
-   :examples:
+The running server is the source of truth. Fetch ``/schema/`` for the OpenAPI
+document generated from the deployed code, and use ``/swagger/`` or ``/redoc/``
+for the interactive view. Do not copy the schema into this repository; a static
+copy goes stale as soon as an endpoint changes.
 
 CA and CRL management
 ---------------------

@@ -132,9 +132,10 @@ class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
                 value={
                     'common_name': 'device-001',
                     'serial_number': 'SN123456789',
+                    'no_onboarding_config': {'pki_protocols': []},
                 },
                 request_only=True,
-                description='Minimal device creation without onboarding configuration',
+                description='Minimal device creation with an empty no-onboarding configuration',
             ),
             OpenApiExample(
                 'CMP with Auto-Generated Shared Secret',

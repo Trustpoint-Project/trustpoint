@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
@@ -796,3 +797,18 @@ class TestIssuingCaCrlCycleForm:
 
         assert not form.is_valid()
         assert 'crl_validity_hours' in form.errors
+
+
+def test_generate_keypair_rollover_form_creates_only_the_pending_credential() -> None:
+    """The rollover wizard must not create a certificate-less CA before enrollment."""
+    from pki.rollover.generate_keypair import GenerateKeypairEstRolloverForm
+
+    credential = Mock(pk=12)
+    form = GenerateKeypairEstRolloverForm()
+    form.cleaned_data = {'unique_name': 'rollover-ca', 'key_type': 'RSA-2048'}
+    with patch('pki.forms.issuing_cas.generate_pending_credential', return_value=credential) as generate:
+        assert form.save() is None
+
+    assert form.credential is credential
+    assert form.credential_scope
+    assert generate.call_args.kwargs['alias'] == f'issuing-ca-est/{form.credential_scope}'

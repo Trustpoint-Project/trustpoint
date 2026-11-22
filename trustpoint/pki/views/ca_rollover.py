@@ -24,6 +24,7 @@ from pki.rollover.generate_keypair import GenerateKeypairCmpRolloverForm, Genera
 from pki.rollover.import_ca import ImportCaRolloverForm, SeparateFilesCaRolloverForm
 from pki.rollover.registry import rollover_registry
 from pki.services.ca_rollover import CaRolloverError, CaRolloverService
+from pki.views.est_request import CertificateRequestStateMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -119,6 +120,33 @@ class RolloverRequestMethodSelectView(RolloverMethodSelectView):
         return redirect('pki:issuing_cas-rollover-method-select', pk=pk)
 
 
+def _store_rollover_request_state(
+    request: HttpRequest, form: Any, rollover: CaRolloverModel, protocol: str
+) -> None:
+    """Seed the normal certificate-request wizard with the rollover's pending key."""
+    credential = form.credential
+    cleaned = form.cleaned_data
+    state: dict[str, Any] = {
+        'scope': form.credential_scope,
+        'unique_name': cleaned['unique_name'],
+        'remote_host': cleaned['remote_host'],
+        'remote_port': cleaned['remote_port'],
+        'remote_path': cleaned['remote_path'],
+        'ca_role': int(getattr(form, 'ca_role', CaModel.CaRole.ISSUING)),
+        'rollover_pk': rollover.pk,
+    }
+    if protocol == 'est':
+        state['est_username'] = cleaned['est_username']
+        state['est_password'] = cleaned['est_password']
+    else:
+        state['cmp_shared_secret'] = cleaned['cmp_shared_secret']
+        sender_kid = cleaned.get('cmp_sender_kid')
+        state['cmp_sender_kid'] = int(sender_kid) if sender_kid not in (None, '') else None
+
+    session_scope = f'issuing-ca-{protocol}'
+    request.session[f'{session_scope}_{credential.pk}'] = CertificateRequestStateMixin._protect_state(state)  # noqa: SLF001
+
+
 class RolloverCredentialView(LoginRequiredMixin, View):
     """Create a pending replacement CA using a shared acquisition form."""
 
@@ -153,11 +181,14 @@ class RolloverCredentialView(LoginRequiredMixin, View):
             form.add_error(None, str(exc))
             return render(request, self.template_name, {'issuing_ca': issuing_ca, 'form': form})
         messages.success(request, _('Pending CA rollover credential created.'))
-        if self.request_protocol and rollover.new_issuing_ca is not None:
+        if self.request_protocol and getattr(form, 'credential', None) is not None:
+            _store_rollover_request_state(request, form, rollover, self.request_protocol)
             return redirect(
-                f'pki:issuing_cas-define-cert-content-{self.request_protocol}',
-                pk=rollover.new_issuing_ca.pk,
+                f'pki:issuing_cas-{self.request_protocol}-truststore-association',
+                pk=form.credential.pk,
             )
+        if rollover.new_issuing_ca is not None:
+            return redirect('pki:issuing_cas-config', pk=rollover.new_issuing_ca.pk)
         return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
 

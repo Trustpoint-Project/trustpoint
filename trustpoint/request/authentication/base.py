@@ -13,7 +13,12 @@ from django.utils.crypto import constant_time_compare
 from devices.models import DeviceModel
 from devices.secrets import remember_secret
 from onboarding.models import OnboardingConfigModel
-from pki.models import CredentialModel, IssuedCredentialModel
+from pki.models import (
+    CredentialModel,
+    IssuedCredentialModel,
+    RemoteIssuedCredentialModel,
+    get_credential_for_certificate,
+)
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -88,7 +93,7 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
         client_certificate = context.client_certificate
 
         try:
-            issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_certificate)
+            issued_credential = get_credential_for_certificate(client_certificate)
 
             if self.domain_credential_only:
                 is_valid, reason = issued_credential.is_valid_domain_credential()
@@ -179,10 +184,12 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
 
         return True
 
-    def _get_issued_credential(self, client_cert: x509.Certificate) -> IssuedCredentialModel:
-        """Retrieve the issued credential for the client certificate."""
+    def _get_issued_credential(
+        self, client_cert: x509.Certificate
+    ) -> IssuedCredentialModel | RemoteIssuedCredentialModel:
+        """Retrieve the local or remote issued credential for the client certificate."""
         try:
-            return IssuedCredentialModel.get_credential_for_certificate(client_cert)
+            return get_credential_for_certificate(client_cert)
         except IssuedCredentialModel.DoesNotExist:
             error_message = 'Issued credential not found for client certificate during reenrollment'
             self.logger.warning(error_message)

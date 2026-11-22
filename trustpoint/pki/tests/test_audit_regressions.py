@@ -73,6 +73,24 @@ def test_generated_rollover_clears_remote_fields(issuing_ca_model, second_issuin
     )
 
 
+def test_complete_rollover_for_request_links_the_new_ca(issuing_ca_model, second_issuing_ca_model):
+    from pki.views.issuing_cas import _complete_rollover_for_state
+
+    ca = second_issuing_ca_model
+    rollover = CaRolloverModel.objects.create(
+        old_issuing_ca=issuing_ca_model,
+        new_issuing_ca=None,
+        state=CaRolloverState.AWAITING_NEW_CA,
+        strategy_type=CaRolloverStrategyType.GENERATE_KEYPAIR,
+    )
+
+    _complete_rollover_for_state({'rollover_pk': rollover.pk}, ca)
+
+    rollover.refresh_from_db()
+    assert rollover.new_issuing_ca == ca
+    assert rollover.state == CaRolloverState.PLANNED
+
+
 def test_crl_schedule_preserves_other_ca_and_replaces_legacy_job(issuing_ca_model, second_issuing_ca_model):
     a, b = issuing_ca_model, second_issuing_ca_model
     a.unique_name, b.unique_name = 'ca', 'ca-backup'

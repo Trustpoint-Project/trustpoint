@@ -791,15 +791,19 @@ class IssuingCaExternalCsrView(LoggerMixin, IssuingCaContextMixin, FormView[Issu
         ca = self.get_ca()
         if ca.credential is None:
             raise ValidationError(_('The Issuing CA credential is missing.'))
+        if ca.credential.certificate is not None:
+            form.add_error(None, _('The Issuing CA already has a certificate. Use a CA rollover to replace it.'))
+            return self.form_invalid(form)
 
-        certificate_serializer = form.cleaned_data['certificate']
-        certificate_model = CertificateModel.save_certificate(certificate_serializer.as_crypto())
-        ca.credential.certificate = certificate_model
-        ca.credential.save()
-        PrimaryCredentialCertificate.objects.update_or_create(
-            credential=ca.credential,
-            defaults={'certificate': certificate_model, 'is_primary': True},
-        )
+        with transaction.atomic():
+            certificate_serializer = form.cleaned_data['certificate']
+            certificate_model = CertificateModel.save_certificate(certificate_serializer.as_crypto())
+            ca.credential.certificate = certificate_model
+            ca.credential.save()
+            PrimaryCredentialCertificate.objects.update_or_create(
+                credential=ca.credential,
+                defaults={'certificate': certificate_model, 'is_primary': True},
+            )
         messages.success(self.request, _('Successfully uploaded the externally issued Issuing CA certificate.'))
         return redirect('pki:issuing_cas-config', pk=ca.pk)
 
@@ -1030,6 +1034,23 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         return self.render_to_response(context)
 
 
+def _complete_rollover_for_state(state: dict[str, Any], ca: CaModel) -> None:
+    """Attach a certificate-request result to the rollover that started it."""
+    rollover_pk = state.get('rollover_pk')
+    if not rollover_pk:
+        return
+    rollover = CaRolloverModel.objects.filter(
+        pk=rollover_pk,
+        state=CaRolloverState.AWAITING_NEW_CA,
+        new_issuing_ca__isnull=True,
+    ).first()
+    if rollover is None:
+        return
+    rollover.new_issuing_ca = ca
+    rollover.save(update_fields=['new_issuing_ca'])
+    CaRolloverService.complete_awaiting_rollover_for_ca(ca)
+
+
 class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextMixin, EstRequestCertView):
     """Review the EST request, then create the Issuing CA from the issued certificate."""
 
@@ -1056,7 +1077,7 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
     ) -> CaModel:
         """Create the Issuing CA from the EST-issued certificate."""
         profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
-        return finalize_est_issuing_ca(
+        ca = finalize_est_issuing_ca(
             credential=credential,
             issued_cert=issued_cert,
             truststore=truststore,
@@ -1069,6 +1090,8 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
             est_password=self.state['est_password'],
             ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
+        _complete_rollover_for_state(self.state, ca)
+        return ca
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
         """Return to the created CA's configuration page."""
@@ -1101,7 +1124,7 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
     ) -> CaModel:
         """Create the Issuing CA from the CMP-issued certificate and chain."""
         profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
-        return finalize_cmp_issuing_ca(
+        ca = finalize_cmp_issuing_ca(
             credential=credential,
             issued_cert=issued_cert,
             chain_certs=extra_certs,
@@ -1115,6 +1138,8 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
             cmp_sender_kid=self.state.get('cmp_sender_kid'),
             ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
+        _complete_rollover_for_state(self.state, ca)
+        return ca
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
         """Return to the created CA's configuration page."""

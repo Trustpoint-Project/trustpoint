@@ -37,6 +37,12 @@ def resolve_request_decision(run: Workflow2Run | Any) -> Workflow2RequestDecisio
         decision = Workflow2RequestDecision.FAIL
     elif run_status == Workflow2Run.STATUS_REJECTED:
         decision = Workflow2RequestDecision.REJECT
+    elif run_status in {
+        Workflow2Run.STATUS_TIMED_OUT,
+        Workflow2Run.STATUS_CANCELLED,
+        Workflow2Run.STATUS_STOPPED,
+    }:
+        decision = Workflow2RequestDecision.FAIL
     elif (
         Workflow2Approval.STATUS_PENDING in approval_statuses
         or run_status in {
@@ -45,12 +51,6 @@ def resolve_request_decision(run: Workflow2Run | Any) -> Workflow2RequestDecisio
         }
     ):
         decision = Workflow2RequestDecision.WAIT
-    elif run_status in {
-        Workflow2Run.STATUS_TIMED_OUT,
-        Workflow2Run.STATUS_CANCELLED,
-        Workflow2Run.STATUS_STOPPED,
-    }:
-        decision = Workflow2RequestDecision.FAIL
     elif run_status in {
         Workflow2Run.STATUS_APPROVED,
         Workflow2Run.STATUS_FINISHED,
