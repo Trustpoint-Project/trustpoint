@@ -48,3 +48,25 @@ def test_https_requires_browsers_to_stay_on_tls() -> None:
     """Port 80 stays open for enrollment, so browsers must pin HTTPS."""
     https_server = CONFIG.read_text().split('# HTTPS server', 1)[1]
     assert 'add_header Strict-Transport-Security "max-age=31536000" always;' in https_server
+
+
+@pytest.mark.parametrize(
+    'location',
+    ['/crl/', '/.well-known/cmp/', '/.well-known/est/', '/.well-known/scep/'],
+)
+def test_unauthenticated_enrollment_paths_are_rate_limited(location: str) -> None:
+    """Each public enrollment path has its own per-client request limit."""
+    https_server = CONFIG.read_text().split('# HTTPS server', 1)[1]
+    body = https_server.split(f'location {location} {{', 1)[1].split('}', 1)[0]
+    assert 'limit_req zone=tp_enroll' in body
+    assert 'proxy_pass http://127.0.0.1:8000;' in body
+    # A local proxy_set_header would drop the server-level TLS assertions.
+    assert 'proxy_set_header' not in body
+
+
+def test_login_and_token_paths_are_rate_limited() -> None:
+    """Password and token endpoints get a much stricter limit."""
+    https_server = CONFIG.read_text().split('# HTTPS server', 1)[1]
+    for location in ('/api/token/', '/users/login/'):
+        body = https_server.split(f'location = {location} {{', 1)[1].split('}', 1)[0]
+        assert 'limit_req zone=tp_auth' in body

@@ -38,7 +38,7 @@ from workflows2.compiler.errors import CompileError
 from workflows2.engine.adapters import RequestsWebhookAdapter, WebhookResponse
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.events.payloads import build_enrollment_request_snapshot
-from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Run
+from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.dispatch import WorkflowDispatchService
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
@@ -361,7 +361,10 @@ def test_inline_webhook_failure_is_recorded_without_changing_issuance(enrollment
     assert enrollment_context.issued_certificate is certificate
     assert enrollment_context.workflow2_outcome is None
     instance = Workflow2Instance.objects.get()
-    assert instance.status == Workflow2Instance.STATUS_ERROR
+    assert instance.status == Workflow2Instance.STATUS_QUEUED
+    job = Workflow2Job.objects.get(instance=instance)
+    assert job.status == Workflow2Job.STATUS_QUEUED
+    assert job.attempts == 1
     assert instance.event_json['request']['subject']['serial_number'] == 'SN123456'
 
 

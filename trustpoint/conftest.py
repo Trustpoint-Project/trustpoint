@@ -70,6 +70,16 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 
 @pytest.fixture(autouse=True)
+def clear_throttle_cache_between_tests() -> Any:
+    """Keep DRF throttle counters from leaking between tests."""
+    from django.core.cache import cache  # noqa: PLC0415
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def set_advertised_port_for_tests(settings: Any) -> None:
     """Set TP_HTTPS_PORT in Django settings for tests that need it."""
     settings.TP_HTTPS_PORT = '8443'

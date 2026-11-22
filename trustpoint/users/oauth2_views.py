@@ -25,6 +25,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from management.models import PasswordPolicy
 
 from .models import MAX_TOKEN_LENGTH, TrustpointUser, UserOTPDevice
+from .throttling import SafeScopedRateThrottle
 
 if TYPE_CHECKING:
     from rest_framework.request import Request
@@ -83,7 +84,10 @@ class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
     def validate(self, attrs: dict[str, Any]) -> dict[str, str]:
         """Use the existing locked OTP verifier, retaining failed-attempt throttling."""
         super().validate(attrs)
-        if self.user is None or not self.user.has_perm('users.use_rest_api'):
+        if self.user is None or self.user.account_type != TrustpointUser.AccountType.HUMAN:
+            msg = 'Use the client_credentials grant for service accounts.'
+            raise AuthenticationFailed(msg)
+        if not self.user.has_perm('users.use_rest_api'):
             msg = 'User is not permitted to use the REST API.'
             raise PermissionDenied(msg)
 
@@ -199,6 +203,8 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
     """
 
     serializer_class = HumanUserTokenObtainPairSerializer
+    throttle_classes = (SafeScopedRateThrottle,)
+    throttle_scope = 'token'
 
     def post(self, request: Request, *args: tuple[Any, ...], **kwargs: dict[str, Any]) -> Response:
         """Handle token request for both human users and service accounts."""

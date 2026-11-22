@@ -36,6 +36,8 @@ DispatchStatus = Literal['completed', 'blocked', 'running']
 # Inline workers run inside a web request and do not renew a heartbeat, so the
 # lease must cover the longest possible step (webhook timeout) plus a margin.
 INLINE_WORKER_LEASE_SECONDS = MAX_WEBHOOK_TIMEOUT_SECONDS + 60
+# Keep an inline drain well below gunicorn's 300 s timeout.
+MAX_INLINE_DRAIN_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -130,6 +132,7 @@ class WorkflowDispatchService:
         max_ticks: int = 200,
         max_jobs: int = 50,
         raise_on_limit: bool = True,
+        run_id: str | None = None,
     ) -> None:
         """Drain runnable jobs until nothing is claimable (blocked or empty).
 
@@ -146,9 +149,12 @@ class WorkflowDispatchService:
             heartbeat_enabled=False,
         )
 
+        started = time.monotonic()
         for i in range(max_ticks):
+            if time.monotonic() - started >= MAX_INLINE_DRAIN_SECONDS:
+                return
             try:
-                stats = worker.tick()
+                stats = worker.tick(run_id=run_id)
             except OperationalError as e:
                 msg = str(e).lower()
                 if connection.vendor == 'sqlite' and 'database is locked' in msg:
@@ -179,6 +185,7 @@ class WorkflowDispatchService:
                 max_ticks=max_ticks,
                 max_jobs=max_jobs,
                 raise_on_limit=raise_on_limit,
+                run_id=run_id,
             )
         finally:
             with suppress(Exception):

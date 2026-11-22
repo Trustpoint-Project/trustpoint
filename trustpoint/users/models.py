@@ -331,6 +331,7 @@ class TrustpointUser(AbstractUser):
     previous_password = models.CharField(max_length=255, blank=True, default='')
     failed_login_attempts = models.PositiveIntegerField(default=0)
     blocked_by_failed_logins = models.BooleanField(default=False)
+    failed_login_locked_until = models.DateTimeField(null=True, blank=True, default=None)
 
     objects = TrustpointUserManager()  # type: ignore[misc]
 

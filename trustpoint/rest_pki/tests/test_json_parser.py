@@ -25,3 +25,11 @@ def test_invalid_json_raises_parse_error() -> None:
     """Malformed JSON still fails as a normal DRF parse error."""
     with pytest.raises(ParseError):
         LenientJSONParser().parse(BytesIO(b'{not json}'))
+
+
+def test_oversized_body_raises_parse_error(settings) -> None:
+    """The parser refuses a body larger than Django's upload limit."""
+    settings.DATA_UPLOAD_MAX_MEMORY_SIZE = 16
+
+    with pytest.raises(ParseError, match='too large'):
+        LenientJSONParser().parse(BytesIO(b'{"csr": "' + b'a' * 32 + b'"}'))

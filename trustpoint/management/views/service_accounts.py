@@ -112,7 +112,7 @@ class ServiceAccountCreateView(
         # Generate API credentials
         client_id = ServiceAccountCredential.generate_client_id()
         secret = ServiceAccountCredential.generate_secret()
-        hashed_secret = make_password(secret)
+        hashed_secret = make_password(secret, hasher='unsalted_sha256')
 
         ServiceAccountCredential.objects.create(
             service_account=service_account,
@@ -201,7 +201,7 @@ def generate_credential_view(request: HttpRequest, pk: int) -> HttpResponse:
     # Generate new API credentials
     client_id = ServiceAccountCredential.generate_client_id()
     secret = ServiceAccountCredential.generate_secret()
-    hashed_secret = make_password(secret)
+    hashed_secret = make_password(secret, hasher='unsalted_sha256')
 
     ServiceAccountCredential.objects.create(
         service_account=service_account,

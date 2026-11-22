@@ -15,7 +15,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend, ModelBackend
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -250,6 +250,12 @@ class ServiceAccountBackend(BaseBackend):
 
         if not check_password(secret, credential.hashed_secret):
             return None
+
+        # Upgrade legacy Argon2 secrets on first use; they are random, not user passwords.
+        if identify_hasher(credential.hashed_secret).algorithm != 'unsalted_sha256':
+            ServiceAccountCredential.objects.filter(pk=credential.pk).update(
+                hashed_secret=make_password(secret, hasher='unsalted_sha256'),
+            )
 
         credential.record_usage()
 

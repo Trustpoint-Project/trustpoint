@@ -326,8 +326,10 @@ class TestAokiInitializationRequestView:
                         request = request_factory.get('/aoki/init/')
                         view = AokiInitializationRequestView()
 
-                        with pytest.raises(TypeError, match='Unsupported private key type'):
-                            view.get(request)
+                        response = view.get(request)
+
+                        assert response.status_code == 501
+                        assert 'not supported' in response.content.decode()
 
     def test_http_method_names(self):
         """Test that only GET method is allowed."""

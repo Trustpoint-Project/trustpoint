@@ -14,6 +14,7 @@ from django_q.models import OrmQ
 from discovery.models import DiscoveredDevice, DiscoveryPort, DiscoveryScan
 from discovery.services import SCAN_RUN_TIMEOUT_SECONDS, SCAN_TIMEOUT_SECONDS, ScanManager
 from discovery.tasks import run_scan
+from pki.models import CertificateModel
 
 pytestmark = pytest.mark.django_db
 
@@ -116,16 +117,18 @@ def test_certificate_object_is_saved_and_removed_from_json(queued_scan):
         'ports': [443],
         'ssl_info': {'ssl_open': True, 'cert_object': sentinel.cert},
     }
+    saved_certificate = CertificateModel()
     with (
         patch('discovery.tasks.OTScanner') as scanner,
-        patch('discovery.tasks.CertificateModel.save_certificate', return_value=sentinel.saved) as save,
-        patch('discovery.tasks.DiscoveredDevice.objects.update_or_create') as update,
+        patch('discovery.tasks.CertificateModel.save_certificate', return_value=saved_certificate) as save,
+        patch('discovery.tasks._flush_batch') as flush,
     ):
         scanner.return_value.scan_network.return_value = [result]
         run_scan(str(queued_scan.scan_id))
     save.assert_called_once_with(sentinel.cert)
-    assert update.call_args.kwargs['defaults']['certificate_record'] is sentinel.saved
-    assert update.call_args.kwargs['defaults']['ssl_info'] == {'ssl_open': True}
+    written = flush.call_args.args[0][0]
+    assert written.certificate_record is saved_certificate
+    assert written.ssl_info == {'ssl_open': True}
 
 
 def test_certificate_save_failure_does_not_lose_discovered_device(queued_scan):

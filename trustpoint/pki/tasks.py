@@ -52,7 +52,7 @@ def generate_crl_for_ca(ca_id: int, *, attempt: int = 1) -> None:
             attempt=attempt + 1,
             schedule_type='O',
             next_run=timezone.now() + timedelta(minutes=1),
-            q_options={'ack_failure': True},
+            q_options={'ack_failure': True, 'timeout': 600},
         )
     msg = f'CRL generation failed for CA {ca.unique_name} (attempt {attempt}/{MAX_CRL_ATTEMPTS})'
     raise RuntimeError(msg)

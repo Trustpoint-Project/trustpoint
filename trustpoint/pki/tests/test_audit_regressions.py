@@ -122,7 +122,10 @@ def test_failed_crl_is_reported_and_retried_at_most_three_times(issuing_ca_model
             if attempt < 3:
                 retry = Schedule.objects.get(func='pki.tasks.generate_crl_for_ca')
                 assert literal_eval(retry.args) == (issuing_ca_model.pk,)
-                assert literal_eval(retry.kwargs) == {'attempt': attempt + 1, 'q_options': {'ack_failure': True}}
+                assert literal_eval(retry.kwargs) == {
+                    'attempt': attempt + 1,
+                    'q_options': {'ack_failure': True, 'timeout': 600},
+                }
                 assert retry.next_run > timezone.now()
             else:
                 assert not Schedule.objects.exists()

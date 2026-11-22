@@ -353,7 +353,7 @@ class Workflow2Job(models.Model):
     run_after = models.DateTimeField(default=timezone.now)
 
     attempts = models.PositiveIntegerField(default=0)
-    max_attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=3)
     last_error = models.TextField(blank=True, default='')
 
     locked_until = models.DateTimeField(null=True, blank=True)

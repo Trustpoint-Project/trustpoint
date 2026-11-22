@@ -891,17 +891,33 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         type(self).objects.select_for_update().get(pk=self.pk)
         base_name = f'crl_gen_{self.pk}'
-        # Match task arguments to replace legacy name-based schedules safely too.
-        Schedule.objects.filter(func='pki.tasks.generate_crl_for_ca', args=str((self.pk,))).delete()
+        q_options = {'ack_failure': True, 'timeout': 600}
 
-        schedule(
-            'pki.tasks.generate_crl_for_ca',
-            self.id,
-            schedule_type='O',
-            next_run=scheduled_time,
-            name=f'{base_name}_{scheduled_time.timestamp()}',
-            q_options={'ack_failure': True},
-        )
+        if post_revocation_crl:
+            # Keep the normal repeating cycle; replace the pending one-shot refresh.
+            Schedule.objects.filter(name=f'{base_name}_now').delete()
+            schedule(
+                'pki.tasks.generate_crl_for_ca',
+                self.id,
+                schedule_type=Schedule.ONCE,
+                next_run=scheduled_time,
+                name=f'{base_name}_now',
+                q_options=q_options,
+            )
+        else:
+            # A repeating schedule survives a crash or timeout; a one-shot chain does not.
+            # Match task arguments to replace legacy name-based schedules safely too.
+            Schedule.objects.filter(func='pki.tasks.generate_crl_for_ca', args=str((self.pk,))).delete()
+            schedule(
+                'pki.tasks.generate_crl_for_ca',
+                self.id,
+                schedule_type=Schedule.MINUTES,
+                minutes=max(1, round(float(self.crl_cycle_interval_hours) * 60)),
+                repeats=-1,
+                next_run=scheduled_time,
+                name=base_name,
+                q_options=q_options,
+            )
 
         self.last_crl_generation_started_at = scheduled_time
         self.save(update_fields=['last_crl_generation_started_at'])

@@ -317,7 +317,8 @@ def run_application(job: str) -> None:
             '--id',
             os.environ.get('WORKFLOWS2_WORKER_ID', os.uname().nodename),
             '--lease',
-            os.environ.get('WORKFLOWS2_WORKER_LEASE', '30'),
+            # Must exceed the 300 s maximum webhook step, or live jobs look crashed.
+            os.environ.get('WORKFLOWS2_WORKER_LEASE', '360'),
             '--batch',
             os.environ.get('WORKFLOWS2_WORKER_BATCH', '10'),
             '--sleep',

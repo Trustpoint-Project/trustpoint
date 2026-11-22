@@ -37,6 +37,24 @@ if TYPE_CHECKING:
     from request.request_context import EstCertificateRequestContext, RestCertificateRequestContext
 
 
+_BAD_REQUEST = 400
+_SERVER_ERROR = 500
+
+
+def _run_client_stage[Context: BaseRequestContext, Result](
+    context: Context,
+    stage: Callable[[Context], Result],
+) -> Result:
+    """Run a validation/parsing stage and report its failures as a client error."""
+    try:
+        return stage(context)
+    except ValueError:
+        # A failed validator means the request is wrong, not that the server broke.
+        if context.http_response_status is None or context.http_response_status >= _SERVER_ERROR:
+            context.http_response_status = _BAD_REQUEST
+        raise
+
+
 def process_workflow_operation[Context: BaseRequestContext](
     context: Context,
     process: Callable[[Context], None],
@@ -103,8 +121,11 @@ def est_enrollment(
     """Configure EST's fail-closed security checks and atomic issuance."""
     return EnrollmentOrchestrator(
         context=context,
-        validate=lambda ctx: EstHttpRequestValidator().validate(ctx),
-        parse=lambda ctx: cast('EstCertificateRequestContext', EstMessageParser().parse(ctx)),
+        validate=lambda ctx: _run_client_stage(ctx, EstHttpRequestValidator().validate),
+        parse=lambda ctx: _run_client_stage(
+            ctx,
+            lambda inner: cast('EstCertificateRequestContext', EstMessageParser().parse(inner)),
+        ),
         authenticate=_authenticate_est,
         authorize=lambda ctx: EstAuthorization(allowed_operations=[operation]).authorize(ctx),
         process=lambda ctx: process_certificate_operation_atomically(ctx, OperationProcessor()),
@@ -124,8 +145,11 @@ def _rest_enrollment(
 
     return EnrollmentOrchestrator(
         context=context,
-        validate=lambda ctx: RestHttpRequestValidator().validate(ctx),
-        parse=lambda ctx: cast('RestCertificateRequestContext', RestMessageParser().parse(ctx)),
+        validate=lambda ctx: _run_client_stage(ctx, RestHttpRequestValidator().validate),
+        parse=lambda ctx: _run_client_stage(
+            ctx,
+            lambda inner: cast('RestCertificateRequestContext', RestMessageParser().parse(inner)),
+        ),
         authenticate=authenticate_with_policy,
         authorize=lambda ctx: RestAuthorization(allowed_operations=[operation]).authorize(ctx),
         process=lambda ctx: process_certificate_operation_atomically(ctx, OperationProcessor()),

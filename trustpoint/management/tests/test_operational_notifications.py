@@ -109,7 +109,12 @@ def test_account_lock_is_immediate_and_recovers():
     assert 'wrong-password' not in str(notification.message_data)
     call_command('check_account_lockouts', stdout=StringIO())
     assert NotificationModel.objects.count() == 1
-    TrustpointUser.objects.filter(pk=user.pk).update(blocked_by_failed_logins=False, is_active=True)
+    TrustpointUser.objects.filter(pk=user.pk).update(
+        blocked_by_failed_logins=False,
+        is_active=True,
+        failed_login_attempts=0,
+        failed_login_locked_until=None,
+    )
     call_command('check_account_lockouts', stdout=StringIO())
     assert notification.statuses.filter(status='SOLV').exists()
     assert authenticate(username=user.username, password='wrong-password') is None

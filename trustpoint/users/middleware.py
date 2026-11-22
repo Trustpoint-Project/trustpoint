@@ -83,14 +83,11 @@ class ClientCertificateAuthenticationMiddleware:
         return user
 
     def _authentication_failed(self, request: HttpRequest, error: ValidationError) -> HttpResponse:
-        """Allow password fallback only for the same rejected certificate after a fresh password login."""
-        certificate_digest = hashlib.sha256(request.META.get('HTTP_SSL_CLIENT_CERT', '').encode('utf-8')).hexdigest()
-        if (
-            request.user.is_authenticated
-            and request.session.get(BACKEND_SESSION_KEY) == INTERACTIVE_BACKEND
-            and request.session.get(REJECTED_CERTIFICATE_SESSION_KEY) == certificate_digest
-        ):
+        """Ignore a bad client certificate for password sessions; log out certificate sessions."""
+        # A stale certificate in the browser must not end a password + OTP session.
+        if request.user.is_authenticated and request.session.get(BACKEND_SESSION_KEY) == INTERACTIVE_BACKEND:
             return self.get_response(request)
+        certificate_digest = hashlib.sha256(request.META.get('HTTP_SSL_CLIENT_CERT', '').encode('utf-8')).hexdigest()
         logout(request)
         request.session[REJECTED_CERTIFICATE_SESSION_KEY] = certificate_digest
         request.session[CERTIFICATE_LOGIN_ERROR_SESSION_KEY] = ' '.join(error.messages)

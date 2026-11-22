@@ -12,16 +12,21 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from workflows2.engine.executor import MAX_WEBHOOK_TIMEOUT_SECONDS
 from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.transitions import WorkflowInstanceTransitionService, save_instance_status
 
 if TYPE_CHECKING:
     from workflows2.services.runtime import WorkflowRuntimeService
+
+# A lease shorter than the longest step recovers jobs that are still running.
+DEFAULT_LEASE_SECONDS = MAX_WEBHOOK_TIMEOUT_SECONDS + 60
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,7 @@ class Workflow2DbWorker:
         *,
         runtime: WorkflowRuntimeService,
         worker_id: str,
-        lease_seconds: int = 30,
+        lease_seconds: int = DEFAULT_LEASE_SECONDS,
         batch_limit: int = 1,
         heartbeat_enabled: bool = True,
     ) -> None:
@@ -91,8 +96,8 @@ class Workflow2DbWorker:
         t.start()
         return t
 
-    def tick(self) -> WorkerStats:
-        """Process up to one batch of queued jobs."""
+    def tick(self, *, run_id: str | None = None) -> WorkerStats:
+        """Process up to one batch of queued jobs, optionally scoped to one run."""
         recovered = self._recover_stale_running_jobs()
         self._purge_old_jobs()
         self._expire_due_approvals()
@@ -103,7 +108,7 @@ class Workflow2DbWorker:
         skipped = 0
 
         for _ in range(self.batch_limit):
-            job = self._claim_one()
+            job = self._claim_one(run_id=run_id)
             if job is None:
                 break
             claimed += 1
@@ -125,10 +130,7 @@ class Workflow2DbWorker:
         """Expire due approvals at most once per interval for this process."""
         global _last_approval_expiry_at  # noqa: PLW0603 - one throttle per process, not per worker instance
         now = time.monotonic()
-        if (
-            _last_approval_expiry_at is not None
-            and now - _last_approval_expiry_at < APPROVAL_EXPIRY_INTERVAL_SECONDS
-        ):
+        if _last_approval_expiry_at is not None and now - _last_approval_expiry_at < APPROVAL_EXPIRY_INTERVAL_SECONDS:
             return
         _last_approval_expiry_at = now
         from workflows2.services.runtime import expire_pending_approvals  # noqa: PLC0415
@@ -236,7 +238,7 @@ class Workflow2DbWorker:
         return self.retry_instance(instance=instance)
 
     @transaction.atomic
-    def _claim_one(self) -> Workflow2Job | None:
+    def _claim_one(self, *, run_id: str | None = None) -> Workflow2Job | None:
         now = timezone.now()
         lease_until = now + timedelta(seconds=self.lease_seconds)
 
@@ -249,6 +251,8 @@ class Workflow2DbWorker:
             .filter(Q(locked_until__isnull=True) | Q(locked_until__lte=now))
             .order_by('run_after', 'created_at')
         )
+        if run_id:
+            qs = qs.filter(instance__run_id=UUID(str(run_id)))
 
         job = qs.first()
         if job is None:
@@ -295,6 +299,8 @@ class Workflow2DbWorker:
 
             # Important: execute step OUTSIDE the outer atomic to reduce SQLite lock duration.
             # run_one_step() has its own transaction handling and failure persistence.
+            # shortcut: a crash after the side effect but before the step row is written
+            # can still repeat the step; add a pre-write marker if that ever matters.
             step_res = self.runtime.run_one_step(inst)
 
             with transaction.atomic():

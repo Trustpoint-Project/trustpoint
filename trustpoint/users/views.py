@@ -135,8 +135,12 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         context['can_manage_account_security'] = context['can_change_password'] or self.request.user.has_perm(
             AppPermissions.MANAGE_USERS
         )
-        context['failed_login_blocked'] = bool(profile_user.blocked_by_failed_logins)
-        context['can_unblock_failed_login'] = profile_user.blocked_by_failed_logins and self.request.user.has_perm(
+        locked_until = profile_user.failed_login_locked_until
+        failed_login_blocked = bool(
+            profile_user.blocked_by_failed_logins or (locked_until is not None and locked_until > timezone.now())
+        )
+        context['failed_login_blocked'] = failed_login_blocked
+        context['can_unblock_failed_login'] = failed_login_blocked and self.request.user.has_perm(
             AppPermissions.MANAGE_USERS
         )
         context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
@@ -162,13 +166,20 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             self.object = self.get_object()
             if not request.user.has_perm(AppPermissions.MANAGE_USERS):
                 raise PermissionDenied
-            if self.object.blocked_by_failed_logins:
+            locked_until = self.object.failed_login_locked_until
+            if self.object.blocked_by_failed_logins or (locked_until is not None and locked_until > timezone.now()):
                 with transaction.atomic():
                     self.object.is_active = True
                     self.object.failed_login_attempts = 0
                     self.object.blocked_by_failed_logins = False
+                    self.object.failed_login_locked_until = None
                     self.object.save(
-                        update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
+                        update_fields=[
+                            'is_active',
+                            'failed_login_attempts',
+                            'blocked_by_failed_logins',
+                            'failed_login_locked_until',
+                        ],
                     )
                     resolve_operational_issue(f'ACCOUNT_LOCKED_{self.object.pk}')
                 messages.success(request, gettext('The user has been unblocked and can log in again.'))

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.http import HttpRequest
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -58,8 +59,13 @@ class LenientJSONParser(JSONParser):
     ) -> object:
         """Parse the stream with control characters allowed inside strings."""
         del media_type, parser_context
+        max_bytes = getattr(settings, 'DATA_UPLOAD_MAX_MEMORY_SIZE', 2_621_440)
+        data = stream.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            message = 'JSON body is too large.'
+            raise ParseError(message)
         try:
-            return json.loads(stream.read(), strict=False)
+            return json.loads(data, strict=False)
         except (UnicodeDecodeError, ValueError) as exc:
             message = f'JSON parse error - {exc}'
             raise ParseError(message) from exc

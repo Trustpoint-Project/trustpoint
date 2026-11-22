@@ -732,9 +732,12 @@ class NotificationConfig(models.Model):
         Schedule.objects.filter(func='management.tasks.execute_all_notifications').delete()
         schedule(
             'management.tasks.execute_all_notifications',
-            schedule_type='O',
+            schedule_type=Schedule.MINUTES,
+            minutes=max(1, round(interval * 60)),
+            repeats=-1,
             next_run=scheduled_time,
-            name=f'notification_check_{scheduled_time.timestamp()}',
+            name='notification_check',
+            q_options={'ack_failure': True, 'timeout': 900},
         )
 
         self.last_notification_check_started_at = scheduled_time

@@ -762,3 +762,20 @@ def test_est_csrattrs_view_get_with_domain(request_factory):
 
     assert response.status_code == 404
     assert b'Domain or certificate profile does not exist.' in response.content
+
+
+def test_validation_stage_marks_client_error():
+    """A validator failure becomes a 400, not a 500 from the error responder."""
+    from types import SimpleNamespace
+
+    from request.enrollment import _run_client_stage
+
+    context = SimpleNamespace(http_response_status=None)
+
+    def fail(_context):
+        raise ValueError('bad content type')
+
+    with pytest.raises(ValueError):
+        _run_client_stage(context, fail)
+
+    assert context.http_response_status == 400

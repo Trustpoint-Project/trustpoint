@@ -108,6 +108,8 @@ class Workflow2WaitingListView(WF2ApprovalPermReqMixin, PageContextMixin, LoginR
         if sort not in self.SORT_OPTIONS:
             sort = 'created'
 
+        # shortcut: the three queues are merged in Python; paginate each source at
+        # the DB if the waiting backlog ever grows past a few thousand rows.
         rows: list[dict[str, Any]] = []
         if kind in {'', 'approval'}:
             rows.extend(self._approval_rows(approval_qs))

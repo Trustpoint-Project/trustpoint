@@ -163,9 +163,19 @@ TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'admi
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    """Parse boolean environment variable with fallback to default for blank values."""
+    value = os.getenv(name)
+    if value is None or value.strip() == '':
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = not DOCKER_CONTAINER
-DEVELOPMENT_ENV = DEBUG
+# Debug output leaks settings and local variables, so it must be an explicit opt-in.
+DEBUG = _env_bool('TRUSTPOINT_DEBUG', default=False)
+DEVELOPMENT_ENV = not DOCKER_CONTAINER
 
 # Reverse proxy SSL header settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -305,42 +315,7 @@ TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME = os.environ.get(
 )
 
 
-def _env_flag(name: str, *, default: bool) -> bool:
-    """Return a boolean environment flag."""
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
-
-
-def _env_bool(name: str, *, default: bool) -> bool:
-    """Parse boolean environment variable with fallback to default for blank values."""
-    value = os.getenv(name)
-    if value is None or value.strip() == '':
-        return default
-    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
-
-
-def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
-    """Read environment value with optional Docker secret file fallback."""
-    # Direct env var takes precedence
-    direct_value = os.getenv(name)
-    if direct_value is not None:
-        return direct_value
-
-    # Try Docker secret file if specified
-    if file_var:
-        secret_file_path = os.getenv(file_var)
-        if secret_file_path:
-            try:
-                return Path(secret_file_path).read_text().strip()
-            except (FileNotFoundError, PermissionError, OSError):
-                pass
-
-    return default
-
-
-TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
+TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_bool(
     'TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND',
     default=(
         TRUSTPOINT_IS_OPERATIONAL
@@ -590,6 +565,7 @@ AUTH_PASSWORD_VALIDATORS = [{'NAME': 'management.password_validation.PasswordPol
 # Prefer Argon2 for new hashes; keep the older hashers so existing hashes still verify.
 PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'users.hashers.UnsaltedSHA256Hasher',
     'django.contrib.auth.hashers.PBKDF2PasswordHasher',
     'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
     'django.contrib.auth.hashers.ScryptPasswordHasher',
@@ -599,9 +575,9 @@ PASSWORD_HASHERS = [
 # https://docs.djangoproject.com/en/5.0/ref/settings/#authentication-backends
 AUTHENTICATION_BACKENDS = [
     'users.authentication.ServiceAccountBackend',  # Service account authentication
+    # TrustpointModelBackend subclasses ModelBackend and adds failed-login lockout.
     'users.management_backend.TrustpointModelBackend',
     'users.authentication.ClientCertificateBackend',  # TLS client certificate sessions
-    'django.contrib.auth.backends.ModelBackend',  # Default Django authentication
 ]
 
 # Only these direct peers may assert TLS client identity. They must overwrite the
@@ -672,9 +648,10 @@ else:
     raise RuntimeError(msg)
 
 
-# Production requires a provisioned, read-only secret; it never generates a key.
+# Container deployments require a provisioned, read-only secret; they never generate a key.
+# Local development keeps using a generated key under var/.
 _django_secret_key_file = os.getenv('DJANGO_SECRET_KEY_FILE')
-if _django_secret_key_file or not DEBUG:
+if _django_secret_key_file or DOCKER_CONTAINER:
     SECRET_KEY = load_secret_key(_django_secret_key_file or '/run/secrets/django_secret_key', strip_whitespace=False)
 else:
     SECRET_KEY = development_secret_key(REPO_ROOT / 'var' / 'development' / 'django_secret_key')
@@ -755,6 +732,15 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_THROTTLE_CLASSES': [
+        'users.throttling.SafeAnonRateThrottle',
+        'users.throttling.SafeUserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('TRUSTPOINT_ANON_RATE', '120/min'),
+        'user': os.getenv('TRUSTPOINT_USER_RATE', '600/min'),
+        'token': os.getenv('TRUSTPOINT_TOKEN_RATE', '10/min'),
+    },
     'PAGE_SIZE': 100,
 }
 

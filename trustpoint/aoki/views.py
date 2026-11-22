@@ -130,7 +130,9 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
 
     http_method_names = ('get',)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> LoggedHttpResponse | JsonResponse:
+    def get(  # noqa: PLR0911 - each failure has its own protocol status
+        self, request: HttpRequest, *args: Any, **kwargs: Any
+    ) -> LoggedHttpResponse | JsonResponse:
         """Handle GET requests for AOKI initialization."""
         del args, kwargs  # Unused
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
@@ -152,11 +154,18 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         except IDevIDAuthenticationError:
             self.logger.exception('IDevID authentication failed.')
             return LoggedHttpResponse('IDevID authentication failed.', status=403)
+        except (ValueError, TypeError):
+            self.logger.exception('IDevID truststore configuration is unusable.')
+            return LoggedHttpResponse('IDevID validation is unavailable.', status=503)
 
         owner_cred = self.get_owner_credential(client_cert)
         if not owner_cred:
             return LoggedHttpResponse('No DevOwnerID present for this IDevID.', status=422)
-        owner_pk = owner_cred.get_private_key()
+        try:
+            owner_pk = owner_cred.get_private_key()
+        except (RuntimeError, ValueError):
+            self.logger.exception('Owner private key is unavailable for AOKI initialization.')
+            return LoggedHttpResponse('The DevOwnerID private key is unavailable.', status=503)
 
         try:
             owner_id_cert = owner_cred.certificate_or_error
@@ -194,11 +203,17 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             )
             signature_algo = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
         else:
-            exc_msg = f'Unsupported private key type: {type(owner_pk)} for AOKI owner signing.'
-            raise TypeError(exc_msg)
+            self.logger.warning('Unsupported AOKI owner key type: %s', type(owner_pk).__name__)
+            return JsonResponse(
+                {'detail': 'This DevOwnerID key type is not supported for AOKI signing.'},
+                status=501,
+            )
 
         resp.headers['AOKI-Signature'] = base64.b64encode(owner_signature).decode()
         resp.headers['AOKI-Signature-Algorithm'] = signature_algo
-        self.logger.info(resp.content)
+        self.logger.info(
+            'AOKI initialization response signed for domain %s',
+            domain.unique_name,
+        )
 
         return resp

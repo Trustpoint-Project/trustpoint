@@ -38,9 +38,18 @@ def test_secure_cookie_defaults_follow_container_mode():
     assert settings.CSRF_COOKIE_SECURE is settings.DOCKER_CONTAINER
 
 
-def test_debug_setting():
-    """Ensure DEBUG tracks the configured container mode."""
-    assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
+def test_debug_setting(monkeypatch):
+    """Ensure DEBUG is off unless explicitly requested."""
+    monkeypatch.delenv('TRUSTPOINT_DEBUG', raising=False)
+    importlib.reload(settings)
+    try:
+        assert settings.DEBUG is False
+        monkeypatch.setenv('TRUSTPOINT_DEBUG', '1')
+        importlib.reload(settings)
+        assert settings.DEBUG is True
+    finally:
+        monkeypatch.delenv('TRUSTPOINT_DEBUG', raising=False)
+        importlib.reload(settings)
 
 
 def test_container_mode_comes_from_environment(monkeypatch, tmp_path):
@@ -194,49 +203,6 @@ def test_env_bool_treats_other_values_as_false(monkeypatch):
         monkeypatch.setenv('POSTGRESQL', value)
 
         assert settings._env_bool('POSTGRESQL', default=True) is False
-
-
-def test_env_value_prefers_direct_environment_variable(monkeypatch, tmp_path):
-    """Ensure direct environment variables win over Docker secret files."""
-    secret_file = tmp_path / 'db_user'
-    secret_file.write_text('secret-user\n')
-    monkeypatch.setenv('DATABASE_USER', 'env-user')
-    monkeypatch.setenv('DATABASE_USER_FILE', str(secret_file))
-
-    assert settings._env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE') == 'env-user'
-
-
-def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
-    """Ensure settings can be loaded from Docker secret files."""
-    secret_file = tmp_path / 'db_password'
-    secret_file.write_text('secret-password\n')
-    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
-    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
-
-    assert (
-        settings._env_value(
-            'DATABASE_PASSWORD',
-            'testing321',
-            file_var='DATABASE_PASSWORD_FILE',
-        )
-        == 'secret-password'
-    )
-
-
-def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
-    """Ensure unreadable Docker secret paths do not break settings import."""
-    missing_file = tmp_path / 'missing_secret'
-    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
-    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
-
-    assert (
-        settings._env_value(
-            'DATABASE_PASSWORD',
-            'testing321',
-            file_var='DATABASE_PASSWORD_FILE',
-        )
-        == 'testing321'
-    )
 
 
 def test_database_settings(monkeypatch):
