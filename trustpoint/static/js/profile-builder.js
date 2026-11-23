@@ -105,7 +105,7 @@ class CertificateProfileBuilder {
       let isHiddenChild = false;
       if (parts.length > 1) {
         const parentPath = parts.slice(0, -1).join('.');
-        const parentExists = this.allFields.some(f => f.fullPath === parentPath);
+        const parentExists = this.filteredFields.some(f => f.fullPath === parentPath);
         if (parentExists) isHiddenChild = true;
       }
       if (isHiddenChild) return;
@@ -162,6 +162,19 @@ class CertificateProfileBuilder {
       }
     }
     return { value: undefined, path: field.fullPath };
+  }
+
+  mergeChildUpdate(existing, value, isMutable) {
+    const base = (existing && typeof existing === 'object' && !Array.isArray(existing)) ? existing : {};
+    const merged = { ...base, mutable: isMutable };
+    if (isMutable) {
+      delete merged.value;
+      merged.default = value;
+    } else {
+      delete merged.default;
+      merged.value = value;
+    }
+    return merged;
   }
 
   escapeHtml(str) {
@@ -463,11 +476,16 @@ class CertificateProfileBuilder {
         modal.querySelectorAll('.pb-input-child').forEach(input => {
           const path = input.getAttribute('data-path');
           const type = input.getAttribute('data-type');
+          const existing = this.getValueAt(currentJson, path);
           let val = null;
 
           if (type === 'boolean') {
-            if (input.checked) updates[path] = true;
-            else updates[path] = undefined; // Remove unchecked bools
+            if (!input.checked) updates[path] = undefined; // Remove unchecked bools
+            else if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+              updates[path] = { ...existing, value: true };
+            } else {
+              updates[path] = true;
+            }
           } else {
             if (type === 'list') {
                 if (input.value.trim()) val = input.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -479,11 +497,7 @@ class CertificateProfileBuilder {
                 const mutBox = modal.querySelector(`.pb-child-mutable[data-path="${path}"]`);
                 const isMutable = mutBox ? mutBox.checked : false;
 
-                if (isMutable) {
-                    updates[path] = { default: val, mutable: true };
-                } else {
-                    updates[path] = { value: val, mutable: false };
-                }
+                updates[path] = this.mergeChildUpdate(existing, val, isMutable);
             } else {
                 updates[path] = undefined;
             }
@@ -554,11 +568,15 @@ class CertificateProfileBuilder {
   }
 
   batchUpdateJson(updates) {
+    let json;
     try {
-      let json = {};
-      try { json = JSON.parse(this.editor.value); } catch(e) {}
+      json = JSON.parse(this.editor.value);
+    } catch(e) {
+      alert("Invalid JSON in editor. Cannot insert.");
+      return;
+    }
 
-
+    try {
       for (const [pathStr, value] of Object.entries(updates)) {
           const keys = pathStr.split('.');
           let current = json;
