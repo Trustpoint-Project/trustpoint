@@ -67,7 +67,7 @@ class LenientJSONParser(JSONParser):
         try:
             return json.loads(data, strict=False)
         except (UnicodeDecodeError, ValueError) as exc:
-            message = f'JSON parse error - {exc}'
+            message = 'Malformed JSON body.'
             raise ParseError(message) from exc
 
 
