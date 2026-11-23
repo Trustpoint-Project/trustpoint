@@ -15,13 +15,18 @@ This document provides an automatically generated overview of the Trustpoint arc
 Statistics
 ----------
 
-- **Applications**: 18
-- **Models**: 106
-- **URL Routes**: 549
+- **Applications**: 21
+- **Models**: 131
+- **URL Routes**: 543
 
 
 Applications
 ------------
+
+**agents**
+
+   - Models: 3
+   - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/agents``
 
 **aoki**
 
@@ -45,13 +50,18 @@ Applications
 
 **crypto**
 
-   - Models: 12
+   - Models: 13
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/crypto``
 
 **devices**
 
-   - Models: 2
+   - Models: 3
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/devices``
+
+**discovery**
+
+   - Models: 3
+   - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/discovery``
 
 **est**
 
@@ -70,12 +80,12 @@ Applications
 
 **management**
 
-   - Models: 17
+   - Models: 24
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/management``
 
 **onboarding**
 
-   - Models: 2
+   - Models: 4
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/onboarding``
 
 **pki**
@@ -87,6 +97,11 @@ Applications
 
    - Models: 0
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/rest_pki``
+
+**scep**
+
+   - Models: 1
+   - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/scep``
 
 **setup_wizard**
 
@@ -105,7 +120,7 @@ Applications
 
 **users**
 
-   - Models: 0
+   - Models: 7
    - Path: ``/Users/florianhandke/PycharmProjects/trustpoint/trustpoint/users``
 
 **workflows2**

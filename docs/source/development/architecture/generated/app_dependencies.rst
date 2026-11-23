@@ -27,10 +27,13 @@ Key Applications
 - **pki**: Configuration for the PKI app.
 - **cmp**: Cmp Configuration.
 - **est**: EST Configuration.
+- **scep**: SCEP configuration.
 - **rest_pki**: REST PKI Configuration.
 - **signer**: Configuration for the Signer app.
 - **aoki**: Configuration for the AOKI app.
 - **crypto**: Register the crypto app for Django.
 - **management**: Management application configuration.
+- **agents**: Agents application configuration.
+- **discovery**: Configuration class for the discovery app.
 - **workflows2**: Register Workflow 2 startup hooks.
 - **behave_django**: Class representing a Django application and its configuration.

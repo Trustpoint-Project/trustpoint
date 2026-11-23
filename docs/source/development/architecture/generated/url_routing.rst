@@ -7,6 +7,51 @@ URL Patterns by App
 -------------------
 
 
+Agents
+^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - URL Pattern
+     - View
+     - Name
+   * - ``agents/<int:agent_id>/assigned-profiles/``
+     - ``view``
+     - ``assigned-profiles-list``
+   * - ``agents/<int:agent_id>/assigned-profiles/<int:pk>/edit/``
+     - ``view``
+     - ``assigned-profiles-edit``
+   * - ``agents/<int:agent_id>/assigned-profiles/<int:pk>/force-update/``
+     - ``view``
+     - ``assigned-profiles-force-update``
+   * - ``agents/<int:agent_id>/assigned-profiles/create/``
+     - ``view``
+     - ``assigned-profiles-create``
+   * - ``agents/^(?P<agent_id>[0-9]+)/assigned-profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$``
+     - ``view``
+     - ``assigned-profiles-delete_confirm``
+   * - ``agents/^profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$``
+     - ``view``
+     - ``profiles-delete_confirm``
+   * - ``agents/profiles/``
+     - ``view``
+     - ``profiles``
+   * - ``agents/profiles/<int:pk>/``
+     - ``view``
+     - ``profiles-config``
+   * - ``agents/profiles/create/``
+     - ``view``
+     - ``profiles-create``
+   * - ``api/agents/jobs/``
+     - ``view``
+     - ``agent-jobs``
+   * - ``api/agents/jobs/result/``
+     - ``view``
+     - ``agent-jobs-result``
+
+
 Aoki
 ^^^^
 
@@ -107,6 +152,12 @@ Devices
    * - ``api/^devices/(?P<pk>[^/.]+)/$``
      - ``DeviceViewSet``
      - ``device-detail``
+   * - ``api/^devices/(?P<pk>[^/.]+)/change-secret/$``
+     - ``DeviceViewSet``
+     - ``device-change-secret``
+   * - ``api/^devices/(?P<pk>[^/.]+)/change-secret\.(?P<format>[a-z0-9]+)/?$``
+     - ``DeviceViewSet``
+     - ``device-change-secret``
    * - ``api/^devices/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
      - ``DeviceViewSet``
      - ``device-detail``
@@ -116,6 +167,12 @@ Devices
    * - ``devices/``
      - ``view``
      - ``devices``
+   * - ``devices/^agents/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$``
+     - ``view``
+     - ``agents_device_delete``
+   * - ``devices/^agents/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$``
+     - ``view``
+     - ``agents_device_revoke``
    * - ``devices/^delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$``
      - ``view``
      - ``devices_device_delete``
@@ -124,13 +181,19 @@ Devices
      - ``devices_device_delete``
    * - ``devices/^opc-ua-gds-push/revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$``
      - ``view``
-     - ``devices_device_revoke``
+     - ``opc_ua_gds_push_device_revoke``
    * - ``devices/^revoke-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$``
      - ``view``
      - ``devices_device_revoke``
    * - ``devices/^zero-touch-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$``
      - ``view``
      - ``zero_touch_credentials-delete_confirm``
+   * - ``devices/agents/``
+     - ``view``
+     - ``agents``
+   * - ``devices/agents/create/1-to-1/``
+     - ``view``
+     - ``agents_create_one_to_one``
    * - ``devices/browser/``
      - ``view``
      - ``browser_login``
@@ -140,24 +203,54 @@ Devices
    * - ``devices/certificate-lifecycle-management/<int:pk>/``
      - ``view``
      - ``devices_certificate_lifecycle_management``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/agent/setup-profile/``
+     - ``view``
+     - ``devices_agent_setup_profile_help``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/agent/setup-profile/download-script/``
+     - ``view``
+     - ``devices_agent_setup_script_download``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/agent/setup-profile/download/``
+     - ``view``
+     - ``devices_agent_setup_profile_download``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/change-secret/``
+     - ``view``
+     - ``devices_change_secret``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/``
      - ``view``
      - ``devices_no_onboarding_clm_issue_application_credential``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/``
      - ``view``
      - ``devices_no_onboarding_cmp_shared_secret_help``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-webui/``
+     - ``view``
+     - ``devices_no_onboarding_cmp_webui_help``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-username-password/``
      - ``view``
      - ``devices_no_onboarding_est_username_password_help``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/est-webui/``
+     - ``view``
+     - ``devices_no_onboarding_est_webui_help``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/``
      - ``view``
      - ``devices_certificate_lifecycle_management_issue_profile_credential``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/choose-method/``
+     - ``view``
+     - ``devices_certificate_lifecycle_management_choose_issuance_method``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/csr/``
+     - ``view``
+     - ``devices_certificate_lifecycle_management_issue_csr_credential``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/manual/select-certificate-profile``
      - ``view``
      - ``devices_no_onboarding_select_certificate_profile``
    * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/``
      - ``view``
      - ``devices_no_onboarding_rest_username_password_help``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/``
+     - ``view``
+     - ``devices_no_onboarding_scep_help``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/scep/download-config/``
+     - ``view``
+     - ``scep_config_download``
    * - ``devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/``
      - ``view``
      - ``devices_onboarding_clm_issue_application_credential``
@@ -179,6 +272,9 @@ Devices
    * - ``devices/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/``
      - ``view``
      - ``devices_certificate_lifecycle_management_issue_domain_credential_rest_username_password``
+   * - ``devices/certificate-lifecycle-management/<int:pk>/revoke/cmp/``
+     - ``view``
+     - ``devices_device_revoke_cmp_help``
    * - ``devices/certificate/download/<int:pk>/``
      - ``view``
      - ``devices_certificate-download``
@@ -212,6 +308,9 @@ Devices
    * - ``devices/opc-ua-gds-push/<int:pk>/cert-renewal-settings/``
      - ``view``
      - ``devices_cert_renewal_settings``
+   * - ``devices/opc-ua-gds-push/<int:pk>/domain-credential-renewal-settings/``
+     - ``view``
+     - ``devices_domain_credential_renewal_settings``
    * - ``devices/opc-ua-gds-push/<int:pk>/update-server-certificate/``
      - ``view``
      - ``devices_update_server_certificate``
@@ -269,24 +368,30 @@ Devices
    * - ``devices/zero-touch-credentials/``
      - ``view``
      - ``zero_touch_credentials``
-   * - ``devices/zero-touch-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/``
+   * - ``devices/zero-touch-credentials/<int:pk>/delete/``
      - ``view``
-     - ``zero_touch_credentials-issued-credential-delete``
+     - ``zero_touch_credentials-delete``
    * - ``devices/zero-touch-credentials/add/``
      - ``view``
      - ``zero_touch_credentials-add``
-   * - ``devices/zero-touch-credentials/add/est/``
+   * - ``devices/zero-touch-credentials/add/external-csr/<int:pk>/``
      - ``view``
-     - ``zero_touch_credentials-add-est``
-   * - ``devices/zero-touch-credentials/add/est/no-onboarding/``
+     - ``zero_touch_credentials-external-csr``
+   * - ``devices/zero-touch-credentials/add/external-csr/<int:pk>/content/``
      - ``view``
-     - ``zero_touch_credentials-add-est-no-onboarding``
-   * - ``devices/zero-touch-credentials/add/est/onboarding/``
+     - ``zero_touch_credentials-external-csr-content``
+   * - ``devices/zero-touch-credentials/add/external-csr/key/``
      - ``view``
-     - ``zero_touch_credentials-add-est-onboarding``
+     - ``zero_touch_credentials-external-csr-key``
    * - ``devices/zero-touch-credentials/add/file-import/``
      - ``view``
      - ``zero_touch_credentials-add-file_import``
+   * - ``devices/zero-touch-credentials/add/file-import/pkcs12/``
+     - ``view``
+     - ``zero_touch_credentials-add-file_import-pkcs12``
+   * - ``devices/zero-touch-credentials/add/management-ca/``
+     - ``view``
+     - ``zero_touch_credentials-add-management-ca``
    * - ``devices/zero-touch-credentials/aoki-cmp-help/``
      - ``view``
      - ``zero_touch_credentials-aoki_cmp_help``
@@ -302,27 +407,57 @@ Devices
    * - ``devices/zero-touch-credentials/clm/<int:pk>/``
      - ``view``
      - ``zero_touch_credentials-clm``
-   * - ``devices/zero-touch-credentials/define-cert-content-domain-credential-est/<int:pk>/``
+   * - ``devices/zero-touch-credentials/define-cert-content-management-ca/<int:pk>/``
      - ``view``
-     - ``zero_touch_credentials-define-cert-content-domain-credential-est``
-   * - ``devices/zero-touch-credentials/define-cert-content-est/<int:pk>/``
-     - ``view``
-     - ``zero_touch_credentials-define-cert-content-est``
+     - ``zero_touch_credentials-define-cert-content-management-ca``
    * - ``devices/zero-touch-credentials/details/<int:pk>/``
      - ``view``
      - ``zero_touch_credentials-details``
    * - ``devices/zero-touch-credentials/onboarding-setup/<int:pk>/``
      - ``view``
      - ``zero_touch_credentials-onboarding-setup``
-   * - ``devices/zero-touch-credentials/request-cert-est/<int:pk>/``
+   * - ``devices/zero-touch-credentials/request-cert-management-ca/<int:pk>/``
      - ``view``
-     - ``zero_touch_credentials-request-cert-est``
-   * - ``devices/zero-touch-credentials/request-domain-credential-est/<int:pk>/``
+     - ``zero_touch_credentials-request-cert-management-ca``
+
+
+Discovery
+^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - URL Pattern
+     - View
+     - Name
+   * - ``discovery/``
      - ``view``
-     - ``zero_touch_credentials-request-domain-credential-est``
-   * - ``devices/zero-touch-credentials/truststore-association/<int:pk>/``
+     - ``device_list``
+   * - ``discovery/clear/``
      - ``view``
-     - ``zero_touch_credentials-truststore-association``
+     - ``clear_devices``
+   * - ``discovery/device/<int:device_id>/``
+     - ``view``
+     - ``device_detail``
+   * - ``discovery/export-csv/``
+     - ``view``
+     - ``export_csv``
+   * - ``discovery/port-config/``
+     - ``view``
+     - ``port_config``
+   * - ``discovery/port/add/``
+     - ``view``
+     - ``add_port``
+   * - ``discovery/port/delete/<int:port_id>/``
+     - ``view``
+     - ``delete_port``
+   * - ``discovery/start-scan/``
+     - ``view``
+     - ``start_scan``
+   * - ``discovery/stop-scan/``
+     - ``view``
+     - ``stop_scan``
 
 
 Django
@@ -335,528 +470,6 @@ Django
    * - URL Pattern
      - View
      - Name
-   * - ``^media/(?P<path>.*)$``
-     - ``serve``
-     - ``-``
-   * - ``admin/``
-     - ``index``
-     - ``index``
-   * - ``admin/(?P<url>.*)$``
-     - ``catch_all_view``
-     - ``-``
-   * - ``admin/^(?P<app_label>devices\|onboarding\|pki\|signer\|auth\|django_q\|workflows2)/$``
-     - ``app_index``
-     - ``app_list``
-   * - ``admin/auth/group/``
-     - ``changelist_view``
-     - ``auth_group_changelist``
-   * - ``admin/auth/group/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/auth/group/<path:object_id>/change/``
-     - ``change_view``
-     - ``auth_group_change``
-   * - ``admin/auth/group/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``auth_group_delete``
-   * - ``admin/auth/group/<path:object_id>/history/``
-     - ``history_view``
-     - ``auth_group_history``
-   * - ``admin/auth/group/add/``
-     - ``add_view``
-     - ``auth_group_add``
-   * - ``admin/auth/user/``
-     - ``changelist_view``
-     - ``auth_user_changelist``
-   * - ``admin/auth/user/<id>/password/``
-     - ``user_change_password``
-     - ``auth_user_password_change``
-   * - ``admin/auth/user/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/auth/user/<path:object_id>/change/``
-     - ``change_view``
-     - ``auth_user_change``
-   * - ``admin/auth/user/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``auth_user_delete``
-   * - ``admin/auth/user/<path:object_id>/history/``
-     - ``history_view``
-     - ``auth_user_history``
-   * - ``admin/auth/user/add/``
-     - ``add_view``
-     - ``auth_user_add``
-   * - ``admin/autocomplete/``
-     - ``autocomplete_view``
-     - ``autocomplete``
-   * - ``admin/devices/devicemodel/``
-     - ``changelist_view``
-     - ``devices_devicemodel_changelist``
-   * - ``admin/devices/devicemodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/devices/devicemodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``devices_devicemodel_change``
-   * - ``admin/devices/devicemodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``devices_devicemodel_delete``
-   * - ``admin/devices/devicemodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``devices_devicemodel_history``
-   * - ``admin/devices/devicemodel/add/``
-     - ``add_view``
-     - ``devices_devicemodel_add``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/``
-     - ``changelist_view``
-     - ``devices_remotedevicecredentialdownloadmodel_changelist``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``devices_remotedevicecredentialdownloadmodel_change``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``devices_remotedevicecredentialdownloadmodel_delete``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``devices_remotedevicecredentialdownloadmodel_history``
-   * - ``admin/devices/remotedevicecredentialdownloadmodel/add/``
-     - ``add_view``
-     - ``devices_remotedevicecredentialdownloadmodel_add``
-   * - ``admin/django_q/failure/``
-     - ``changelist_view``
-     - ``django_q_failure_changelist``
-   * - ``admin/django_q/failure/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/django_q/failure/<path:object_id>/change/``
-     - ``change_view``
-     - ``django_q_failure_change``
-   * - ``admin/django_q/failure/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``django_q_failure_delete``
-   * - ``admin/django_q/failure/<path:object_id>/history/``
-     - ``history_view``
-     - ``django_q_failure_history``
-   * - ``admin/django_q/failure/add/``
-     - ``add_view``
-     - ``django_q_failure_add``
-   * - ``admin/django_q/ormq/``
-     - ``changelist_view``
-     - ``django_q_ormq_changelist``
-   * - ``admin/django_q/ormq/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/django_q/ormq/<path:object_id>/change/``
-     - ``change_view``
-     - ``django_q_ormq_change``
-   * - ``admin/django_q/ormq/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``django_q_ormq_delete``
-   * - ``admin/django_q/ormq/<path:object_id>/history/``
-     - ``history_view``
-     - ``django_q_ormq_history``
-   * - ``admin/django_q/ormq/add/``
-     - ``add_view``
-     - ``django_q_ormq_add``
-   * - ``admin/django_q/schedule/``
-     - ``changelist_view``
-     - ``django_q_schedule_changelist``
-   * - ``admin/django_q/schedule/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/django_q/schedule/<path:object_id>/change/``
-     - ``change_view``
-     - ``django_q_schedule_change``
-   * - ``admin/django_q/schedule/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``django_q_schedule_delete``
-   * - ``admin/django_q/schedule/<path:object_id>/history/``
-     - ``history_view``
-     - ``django_q_schedule_history``
-   * - ``admin/django_q/schedule/add/``
-     - ``add_view``
-     - ``django_q_schedule_add``
-   * - ``admin/django_q/success/``
-     - ``changelist_view``
-     - ``django_q_success_changelist``
-   * - ``admin/django_q/success/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/django_q/success/<path:object_id>/change/``
-     - ``change_view``
-     - ``django_q_success_change``
-   * - ``admin/django_q/success/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``django_q_success_delete``
-   * - ``admin/django_q/success/<path:object_id>/history/``
-     - ``history_view``
-     - ``django_q_success_history``
-   * - ``admin/django_q/success/add/``
-     - ``add_view``
-     - ``django_q_success_add``
-   * - ``admin/jsi18n/``
-     - ``i18n_javascript``
-     - ``jsi18n``
-   * - ``admin/login/``
-     - ``login``
-     - ``login``
-   * - ``admin/logout/``
-     - ``logout``
-     - ``logout``
-   * - ``admin/onboarding/noonboardingconfigmodel/``
-     - ``changelist_view``
-     - ``onboarding_noonboardingconfigmodel_changelist``
-   * - ``admin/onboarding/noonboardingconfigmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/onboarding/noonboardingconfigmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``onboarding_noonboardingconfigmodel_change``
-   * - ``admin/onboarding/noonboardingconfigmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``onboarding_noonboardingconfigmodel_delete``
-   * - ``admin/onboarding/noonboardingconfigmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``onboarding_noonboardingconfigmodel_history``
-   * - ``admin/onboarding/noonboardingconfigmodel/add/``
-     - ``add_view``
-     - ``onboarding_noonboardingconfigmodel_add``
-   * - ``admin/onboarding/onboardingconfigmodel/``
-     - ``changelist_view``
-     - ``onboarding_onboardingconfigmodel_changelist``
-   * - ``admin/onboarding/onboardingconfigmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/onboarding/onboardingconfigmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``onboarding_onboardingconfigmodel_change``
-   * - ``admin/onboarding/onboardingconfigmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``onboarding_onboardingconfigmodel_delete``
-   * - ``admin/onboarding/onboardingconfigmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``onboarding_onboardingconfigmodel_history``
-   * - ``admin/onboarding/onboardingconfigmodel/add/``
-     - ``add_view``
-     - ``onboarding_onboardingconfigmodel_add``
-   * - ``admin/password_change/``
-     - ``password_change``
-     - ``password_change``
-   * - ``admin/password_change/done/``
-     - ``password_change_done``
-     - ``password_change_done``
-   * - ``admin/pki/camodel/``
-     - ``changelist_view``
-     - ``pki_camodel_changelist``
-   * - ``admin/pki/camodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/camodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_camodel_change``
-   * - ``admin/pki/camodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_camodel_delete``
-   * - ``admin/pki/camodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_camodel_history``
-   * - ``admin/pki/camodel/add/``
-     - ``add_view``
-     - ``pki_camodel_add``
-   * - ``admin/pki/certificatechainordermodel/``
-     - ``changelist_view``
-     - ``pki_certificatechainordermodel_changelist``
-   * - ``admin/pki/certificatechainordermodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/certificatechainordermodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_certificatechainordermodel_change``
-   * - ``admin/pki/certificatechainordermodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_certificatechainordermodel_delete``
-   * - ``admin/pki/certificatechainordermodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_certificatechainordermodel_history``
-   * - ``admin/pki/certificatechainordermodel/add/``
-     - ``add_view``
-     - ``pki_certificatechainordermodel_add``
-   * - ``admin/pki/certificatemodel/``
-     - ``changelist_view``
-     - ``pki_certificatemodel_changelist``
-   * - ``admin/pki/certificatemodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/certificatemodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_certificatemodel_change``
-   * - ``admin/pki/certificatemodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_certificatemodel_delete``
-   * - ``admin/pki/certificatemodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_certificatemodel_history``
-   * - ``admin/pki/certificatemodel/add/``
-     - ``add_view``
-     - ``pki_certificatemodel_add``
-   * - ``admin/pki/credentialmodel/``
-     - ``changelist_view``
-     - ``pki_credentialmodel_changelist``
-   * - ``admin/pki/credentialmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/credentialmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_credentialmodel_change``
-   * - ``admin/pki/credentialmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_credentialmodel_delete``
-   * - ``admin/pki/credentialmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_credentialmodel_history``
-   * - ``admin/pki/credentialmodel/add/``
-     - ``add_view``
-     - ``pki_credentialmodel_add``
-   * - ``admin/pki/devidregistration/``
-     - ``changelist_view``
-     - ``pki_devidregistration_changelist``
-   * - ``admin/pki/devidregistration/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/devidregistration/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_devidregistration_change``
-   * - ``admin/pki/devidregistration/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_devidregistration_delete``
-   * - ``admin/pki/devidregistration/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_devidregistration_history``
-   * - ``admin/pki/devidregistration/add/``
-     - ``add_view``
-     - ``pki_devidregistration_add``
-   * - ``admin/pki/issuedcredentialmodel/``
-     - ``changelist_view``
-     - ``pki_issuedcredentialmodel_changelist``
-   * - ``admin/pki/issuedcredentialmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/issuedcredentialmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_issuedcredentialmodel_change``
-   * - ``admin/pki/issuedcredentialmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_issuedcredentialmodel_delete``
-   * - ``admin/pki/issuedcredentialmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_issuedcredentialmodel_history``
-   * - ``admin/pki/issuedcredentialmodel/add/``
-     - ``add_view``
-     - ``pki_issuedcredentialmodel_add``
-   * - ``admin/pki/remoteissuedcredentialmodel/``
-     - ``changelist_view``
-     - ``pki_remoteissuedcredentialmodel_changelist``
-   * - ``admin/pki/remoteissuedcredentialmodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/pki/remoteissuedcredentialmodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``pki_remoteissuedcredentialmodel_change``
-   * - ``admin/pki/remoteissuedcredentialmodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``pki_remoteissuedcredentialmodel_delete``
-   * - ``admin/pki/remoteissuedcredentialmodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``pki_remoteissuedcredentialmodel_history``
-   * - ``admin/pki/remoteissuedcredentialmodel/add/``
-     - ``add_view``
-     - ``pki_remoteissuedcredentialmodel_add``
-   * - ``admin/r/<path:content_type_id>/<path:object_id>/``
-     - ``shortcut``
-     - ``view_on_site``
-   * - ``admin/signer/signedmessagemodel/``
-     - ``changelist_view``
-     - ``signer_signedmessagemodel_changelist``
-   * - ``admin/signer/signedmessagemodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/signer/signedmessagemodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``signer_signedmessagemodel_change``
-   * - ``admin/signer/signedmessagemodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``signer_signedmessagemodel_delete``
-   * - ``admin/signer/signedmessagemodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``signer_signedmessagemodel_history``
-   * - ``admin/signer/signedmessagemodel/add/``
-     - ``add_view``
-     - ``signer_signedmessagemodel_add``
-   * - ``admin/signer/signermodel/``
-     - ``changelist_view``
-     - ``signer_signermodel_changelist``
-   * - ``admin/signer/signermodel/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/signer/signermodel/<path:object_id>/change/``
-     - ``change_view``
-     - ``signer_signermodel_change``
-   * - ``admin/signer/signermodel/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``signer_signermodel_delete``
-   * - ``admin/signer/signermodel/<path:object_id>/history/``
-     - ``history_view``
-     - ``signer_signermodel_history``
-   * - ``admin/signer/signermodel/add/``
-     - ``add_view``
-     - ``signer_signermodel_add``
-   * - ``admin/workflows2/workflow2approval/``
-     - ``changelist_view``
-     - ``workflows2_workflow2approval_changelist``
-   * - ``admin/workflows2/workflow2approval/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2approval/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2approval_change``
-   * - ``admin/workflows2/workflow2approval/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2approval_delete``
-   * - ``admin/workflows2/workflow2approval/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2approval_history``
-   * - ``admin/workflows2/workflow2approval/add/``
-     - ``add_view``
-     - ``workflows2_workflow2approval_add``
-   * - ``admin/workflows2/workflow2definition/``
-     - ``changelist_view``
-     - ``workflows2_workflow2definition_changelist``
-   * - ``admin/workflows2/workflow2definition/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2definition/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2definition_change``
-   * - ``admin/workflows2/workflow2definition/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2definition_delete``
-   * - ``admin/workflows2/workflow2definition/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2definition_history``
-   * - ``admin/workflows2/workflow2definition/add/``
-     - ``add_view``
-     - ``workflows2_workflow2definition_add``
-   * - ``admin/workflows2/workflow2definitionuistate/``
-     - ``changelist_view``
-     - ``workflows2_workflow2definitionuistate_changelist``
-   * - ``admin/workflows2/workflow2definitionuistate/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2definitionuistate/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2definitionuistate_change``
-   * - ``admin/workflows2/workflow2definitionuistate/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2definitionuistate_delete``
-   * - ``admin/workflows2/workflow2definitionuistate/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2definitionuistate_history``
-   * - ``admin/workflows2/workflow2definitionuistate/add/``
-     - ``add_view``
-     - ``workflows2_workflow2definitionuistate_add``
-   * - ``admin/workflows2/workflow2instance/``
-     - ``changelist_view``
-     - ``workflows2_workflow2instance_changelist``
-   * - ``admin/workflows2/workflow2instance/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2instance/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2instance_change``
-   * - ``admin/workflows2/workflow2instance/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2instance_delete``
-   * - ``admin/workflows2/workflow2instance/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2instance_history``
-   * - ``admin/workflows2/workflow2instance/add/``
-     - ``add_view``
-     - ``workflows2_workflow2instance_add``
-   * - ``admin/workflows2/workflow2job/``
-     - ``changelist_view``
-     - ``workflows2_workflow2job_changelist``
-   * - ``admin/workflows2/workflow2job/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2job/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2job_change``
-   * - ``admin/workflows2/workflow2job/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2job_delete``
-   * - ``admin/workflows2/workflow2job/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2job_history``
-   * - ``admin/workflows2/workflow2job/add/``
-     - ``add_view``
-     - ``workflows2_workflow2job_add``
-   * - ``admin/workflows2/workflow2run/``
-     - ``changelist_view``
-     - ``workflows2_workflow2run_changelist``
-   * - ``admin/workflows2/workflow2run/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2run/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2run_change``
-   * - ``admin/workflows2/workflow2run/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2run_delete``
-   * - ``admin/workflows2/workflow2run/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2run_history``
-   * - ``admin/workflows2/workflow2run/add/``
-     - ``add_view``
-     - ``workflows2_workflow2run_add``
-   * - ``admin/workflows2/workflow2steprun/``
-     - ``changelist_view``
-     - ``workflows2_workflow2steprun_changelist``
-   * - ``admin/workflows2/workflow2steprun/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2steprun/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2steprun_change``
-   * - ``admin/workflows2/workflow2steprun/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2steprun_delete``
-   * - ``admin/workflows2/workflow2steprun/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2steprun_history``
-   * - ``admin/workflows2/workflow2steprun/add/``
-     - ``add_view``
-     - ``workflows2_workflow2steprun_add``
-   * - ``admin/workflows2/workflow2workerheartbeat/``
-     - ``changelist_view``
-     - ``workflows2_workflow2workerheartbeat_changelist``
-   * - ``admin/workflows2/workflow2workerheartbeat/<path:object_id>/``
-     - ``view``
-     - ``-``
-   * - ``admin/workflows2/workflow2workerheartbeat/<path:object_id>/change/``
-     - ``change_view``
-     - ``workflows2_workflow2workerheartbeat_change``
-   * - ``admin/workflows2/workflow2workerheartbeat/<path:object_id>/delete/``
-     - ``delete_view``
-     - ``workflows2_workflow2workerheartbeat_delete``
-   * - ``admin/workflows2/workflow2workerheartbeat/<path:object_id>/history/``
-     - ``history_view``
-     - ``workflows2_workflow2workerheartbeat_history``
-   * - ``admin/workflows2/workflow2workerheartbeat/add/``
-     - ``add_view``
-     - ``workflows2_workflow2workerheartbeat_add``
    * - ``i18n/setlang/``
      - ``set_language``
      - ``set_language``
@@ -896,27 +509,33 @@ Est
    * - URL Pattern
      - View
      - Name
-   * - ``.well-known/est/<str:domain>/<str:cert_profile>/csrattrs/``
+   * - ``.well-known/est/^(?P<cert_profile>~[^/]+)/csrattrs/?$``
      - ``view``
-     - ``csrattrs``
-   * - ``.well-known/est/<str:domain>/<str:cert_profile>/csrattrs/``
-     - ``view``
-     - ``csrattrs``
+     - ``csrattrs-profile``
    * - ``.well-known/est/^(?P<cert_profile>~[^/]+)/simpleenroll/?$``
      - ``view``
      - ``simple-enrollment-post-nodomain``
    * - ``.well-known/est/^(?P<cert_profile>~[^/]+)/simplereenroll/?$``
      - ``view``
      - ``simple-reenrollment-post-nodomain``
-   * - ``.well-known/est/^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/cacerts/$``
+   * - ``.well-known/est/^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/cacerts/?$``
      - ``view``
      - ``ca-certs-post``
+   * - ``.well-known/est/^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/csrattrs/?$``
+     - ``view``
+     - ``csrattrs``
    * - ``.well-known/est/^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/simpleenroll/?$``
      - ``view``
      - ``simple-enrollment-post``
    * - ``.well-known/est/^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/simplereenroll/?$``
      - ``view``
      - ``simple-reenrollment-post``
+   * - ``.well-known/est/^cacerts/?$``
+     - ``view``
+     - ``ca-certs-default``
+   * - ``.well-known/est/^csrattrs/?$``
+     - ``view``
+     - ``csrattrs-default``
    * - ``.well-known/est/^simpleenroll/?$``
      - ``view``
      - ``simple-enrollment-default``
@@ -941,6 +560,18 @@ Home
    * - ``home/dashboard/``
      - ``view``
      - ``dashboard``
+   * - ``home/dashboard/analytics/``
+     - ``view``
+     - ``dashboard_analytics``
+   * - ``home/dashboard/notifications/``
+     - ``view``
+     - ``dashboard_notifications``
+   * - ``home/dashboard/overview/``
+     - ``view``
+     - ``dashboard_overview``
+   * - ``home/dashboard/security/``
+     - ``view``
+     - ``dashboard_security``
    * - ``home/dashboard_data/``
      - ``view``
      - ``dashboard_data``
@@ -962,6 +593,12 @@ Management
    * - URL Pattern
      - View
      - Name
+   * - ``api/^audit-logs/$``
+     - ``AuditLogViewSet``
+     - ``audit-log-list``
+   * - ``api/^audit-logs\.(?P<format>[a-z0-9]+)/?$``
+     - ``AuditLogViewSet``
+     - ``audit-log-list``
    * - ``api/^backups/$``
      - ``BackupViewSet``
      - ``backup-list``
@@ -974,6 +611,18 @@ Management
    * - ``api/^backups\.(?P<format>[a-z0-9]+)/?$``
      - ``BackupViewSet``
      - ``backup-list``
+   * - ``api/^capabilities/$``
+     - ``CapabilitiesViewSet``
+     - ``capabilities-list``
+   * - ``api/^capabilities\.(?P<format>[a-z0-9]+)/?$``
+     - ``CapabilitiesViewSet``
+     - ``capabilities-list``
+   * - ``api/^health/$``
+     - ``HealthViewSet``
+     - ``health-list``
+   * - ``api/^health\.(?P<format>[a-z0-9]+)/?$``
+     - ``HealthViewSet``
+     - ``health-list``
    * - ``api/^logging/delete/(?P<file_name>[^/]+)/$``
      - ``LoggingViewSet``
      - ``logging-delete``
@@ -992,6 +641,24 @@ Management
    * - ``api/^logging/list_files\.(?P<format>[a-z0-9]+)/?$``
      - ``LoggingViewSet``
      - ``logging-list-files``
+   * - ``api/^roles/$``
+     - ``RoleViewSet``
+     - ``roles-list``
+   * - ``api/^roles/(?P<pk>[^/.]+)/$``
+     - ``RoleViewSet``
+     - ``roles-detail``
+   * - ``api/^roles/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
+     - ``RoleViewSet``
+     - ``roles-detail``
+   * - ``api/^roles/available-permissions/$``
+     - ``RoleViewSet``
+     - ``roles-available-permissions``
+   * - ``api/^roles/available-permissions\.(?P<format>[a-z0-9]+)/?$``
+     - ``RoleViewSet``
+     - ``roles-available-permissions``
+   * - ``api/^roles\.(?P<format>[a-z0-9]+)/?$``
+     - ``RoleViewSet``
+     - ``roles-list``
    * - ``api/^tls/$``
      - ``TlsViewSet``
      - ``tls-list``
@@ -1004,6 +671,18 @@ Management
    * - ``api/^tls\.(?P<format>[a-z0-9]+)/?$``
      - ``TlsViewSet``
      - ``tls-list``
+   * - ``api/^users/$``
+     - ``UserViewSet``
+     - ``users-list``
+   * - ``api/^users/(?P<pk>[^/.]+)/$``
+     - ``UserViewSet``
+     - ``users-detail``
+   * - ``api/^users/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
+     - ``UserViewSet``
+     - ``users-detail``
+   * - ``api/^users\.(?P<format>[a-z0-9]+)/?$``
+     - ``UserViewSet``
+     - ``users-list``
    * - ``management/``
      - ``view``
      - ``index``
@@ -1022,9 +701,24 @@ Management
    * - ``management/audit-log/``
      - ``view``
      - ``audit-log``
+   * - ``management/audit-log/export/``
+     - ``view``
+     - ``audit-log-export``
+   * - ``management/audit-log/export/download/``
+     - ``view``
+     - ``audit-log-export-download``
+   * - ``management/audit-log/signing/``
+     - ``view``
+     - ``audit-log-signing``
+   * - ``management/audit-log/verify/``
+     - ``view``
+     - ``audit-log-verify``
    * - ``management/backend-configuration/``
      - ``view``
      - ``backend_configuration``
+   * - ``management/backend-configuration/pkcs11-assets/<str:asset>/download/``
+     - ``view``
+     - ``backend_configuration_pkcs11_asset_download``
    * - ``management/backups/``
      - ``view``
      - ``backups``
@@ -1073,12 +767,57 @@ Management
    * - ``management/notifications/refresh/``
      - ``view``
      - ``refresh_notifications``
+   * - ``management/organization/``
+     - ``view``
+     - ``organization``
+   * - ``management/organization/<int:pk>/delete/``
+     - ``view``
+     - ``delete_organization``
+   * - ``management/organization/<int:pk>/edit/``
+     - ``view``
+     - ``edit_organization``
+   * - ``management/organization/add/``
+     - ``view``
+     - ``add_organization``
+   * - ``management/role_management/``
+     - ``view``
+     - ``role_management``
+   * - ``management/role_management/<int:pk>/delete/``
+     - ``view``
+     - ``delete_role``
+   * - ``management/role_management/<int:pk>/edit/``
+     - ``view``
+     - ``edit_role``
+   * - ``management/role_management/add/``
+     - ``view``
+     - ``add_role``
+   * - ``management/service-accounts/``
+     - ``view``
+     - ``service_account_list``
+   * - ``management/service-accounts/<int:pk>/``
+     - ``view``
+     - ``service_account_detail``
+   * - ``management/service-accounts/<int:pk>/delete/``
+     - ``view``
+     - ``delete_service_account``
+   * - ``management/service-accounts/<int:pk>/generate-credential/``
+     - ``generate_credential_view``
+     - ``generate_credential``
+   * - ``management/service-accounts/create/``
+     - ``view``
+     - ``service_account_create``
+   * - ``management/service-accounts/created/``
+     - ``service_account_created_view``
+     - ``service_account_created``
+   * - ``management/service-accounts/credentials/<int:pk>/revoke/``
+     - ``revoke_credential_view``
+     - ``revoke_credential``
    * - ``management/settings/``
      - ``view``
      - ``settings``
-   * - ``management/settings/internationalization/``
+   * - ``management/settings/account-security/``
      - ``view``
-     - ``settings-internationalization``
+     - ``settings-account-security``
    * - ``management/settings/logging/``
      - ``view``
      - ``settings-logging``
@@ -1091,15 +830,24 @@ Management
    * - ``management/settings/security/``
      - ``view``
      - ``settings-security``
-   * - ``management/settings/ui/``
-     - ``view``
-     - ``settings-ui``
    * - ``management/tls/``
      - ``view``
      - ``tls``
    * - ``management/tls/activate/<int:pk>``
      - ``view``
      - ``activate-tls``
+   * - ``management/tls/add/external-csr/<int:pk>/``
+     - ``view``
+     - ``tls-external-csr``
+   * - ``management/tls/add/external-csr/<int:pk>/content/``
+     - ``view``
+     - ``tls-external-csr-content``
+   * - ``management/tls/add/external-csr/<int:pk>/truststore/``
+     - ``view``
+     - ``tls-external-csr-truststore``
+   * - ``management/tls/add/external-csr/key/``
+     - ``view``
+     - ``tls-external-csr-key``
    * - ``management/tls/add/file-import/pkcs12``
      - ``view``
      - ``tls-add-file_import-pkcs12``
@@ -1109,9 +857,99 @@ Management
    * - ``management/tls/add/generate-tls``
      - ``view``
      - ``tls-generate``
+   * - ``management/tls/add/local/<int:pk>/content/``
+     - ``view``
+     - ``tls-local-content``
+   * - ``management/tls/add/local/<int:pk>/request/``
+     - ``view``
+     - ``tls-local-request``
+   * - ``management/tls/add/local/key/``
+     - ``view``
+     - ``tls-local-key``
    * - ``management/tls/add/method-select/``
      - ``view``
      - ``tls-add-method_select``
+   * - ``management/tls/add/request-cmp/``
+     - ``view``
+     - ``tls-request-cmp``
+   * - ``management/tls/add/request-est/``
+     - ``view``
+     - ``tls-request-est``
+   * - ``management/tls/cmp-truststore-association/<int:pk>/``
+     - ``view``
+     - ``tls-cmp-truststore-association``
+   * - ``management/tls/define-cert-content-cmp/<int:pk>/``
+     - ``view``
+     - ``tls-define-cert-content-cmp``
+   * - ``management/tls/define-cert-content-est/<int:pk>/``
+     - ``view``
+     - ``tls-define-cert-content-est``
+   * - ``management/tls/request-cert-cmp/<int:pk>/``
+     - ``view``
+     - ``tls-request-cert-cmp``
+   * - ``management/tls/request-cert-est/<int:pk>/``
+     - ``view``
+     - ``tls-request-cert-est``
+   * - ``management/tls/truststore-association/<int:pk>/``
+     - ``view``
+     - ``tls-truststore-association``
+   * - ``management/traceability-credentials/``
+     - ``view``
+     - ``traceability_credentials``
+   * - ``management/traceability-credentials/<int:pk>/``
+     - ``view``
+     - ``traceability_credential_detail``
+   * - ``management/traceability-credentials/<int:pk>/edit/``
+     - ``view``
+     - ``traceability_credential_edit``
+   * - ``management/traceability-credentials/<int:pk>/retire/``
+     - ``view``
+     - ``traceability_credential_retire``
+   * - ``management/traceability-credentials/<int:pk>/rotate/``
+     - ``view``
+     - ``traceability_credential_rotate``
+   * - ``management/traceability-credentials/create/``
+     - ``view``
+     - ``traceability_credential_create``
+   * - ``management/traceability-credentials/create/<str:method>/``
+     - ``view``
+     - ``traceability_credential_configure``
+   * - ``management/user-authentication/``
+     - ``view``
+     - ``user_authentication``
+   * - ``management/user-authentication/certificate/``
+     - ``view``
+     - ``certificate_authentication``
+   * - ``management/user-authentication/password/``
+     - ``view``
+     - ``password_policy``
+   * - ``management/user-authentication/password/list/download/``
+     - ``view``
+     - ``password_policy_list_download``
+   * - ``management/user-management/``
+     - ``view``
+     - ``user_management``
+   * - ``management/user-management/<int:pk>/change_password/``
+     - ``view``
+     - ``change_password``
+   * - ``management/user-management/<int:pk>/change_role/``
+     - ``view``
+     - ``change_role``
+   * - ``management/user-management/<int:pk>/configure/``
+     - ``view``
+     - ``configure_user``
+   * - ``management/user-management/<int:pk>/delete/``
+     - ``view``
+     - ``delete_user``
+   * - ``management/user-management/<int:pk>/details/``
+     - ``view``
+     - ``user_details``
+   * - ``management/user-management/<int:pk>/reset_otp/``
+     - ``view``
+     - ``reset_otp``
+   * - ``management/user-management/add_user/``
+     - ``view``
+     - ``add_user``
 
 
 Pki
@@ -1124,6 +962,66 @@ Pki
    * - URL Pattern
      - View
      - Name
+   * - ``api/^ca-rollovers/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-list``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-detail``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/cancel/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-cancel``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/cancel\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-cancel``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/complete/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-complete``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/complete\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-complete``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/start/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-start``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/start\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-start``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/transition/$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-transition``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)/transition\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-transition``
+   * - ``api/^ca-rollovers/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-detail``
+   * - ``api/^ca-rollovers\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaRolloverViewSet``
+     - ``ca-rollover-list``
+   * - ``api/^cas/$``
+     - ``CaViewSet``
+     - ``ca-list``
+   * - ``api/^cas/(?P<pk>[^/.]+)/$``
+     - ``CaViewSet``
+     - ``ca-detail``
+   * - ``api/^cas/(?P<pk>[^/.]+)/certificate/$``
+     - ``CaViewSet``
+     - ``ca-certificate``
+   * - ``api/^cas/(?P<pk>[^/.]+)/certificate\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaViewSet``
+     - ``ca-certificate``
+   * - ``api/^cas/(?P<pk>[^/.]+)/issued-certificates/$``
+     - ``CaViewSet``
+     - ``ca-issued-certificates``
+   * - ``api/^cas/(?P<pk>[^/.]+)/issued-certificates\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaViewSet``
+     - ``ca-issued-certificates``
+   * - ``api/^cas/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaViewSet``
+     - ``ca-detail``
+   * - ``api/^cas\.(?P<format>[a-z0-9]+)/?$``
+     - ``CaViewSet``
+     - ``ca-list``
    * - ``api/^cert-profiles/$``
      - ``CertProfileViewSet``
      - ``cert-profiles-list``
@@ -1142,12 +1040,42 @@ Pki
    * - ``api/^certificates/(?P<pk>[^/.]+)/$``
      - ``CertificateViewSet``
      - ``certificate-detail``
+   * - ``api/^certificates/(?P<pk>[^/.]+)/download/$``
+     - ``CertificateViewSet``
+     - ``certificate-download``
+   * - ``api/^certificates/(?P<pk>[^/.]+)/download\.(?P<format>[a-z0-9]+)/?$``
+     - ``CertificateViewSet``
+     - ``certificate-download``
    * - ``api/^certificates/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
      - ``CertificateViewSet``
      - ``certificate-detail``
+   * - ``api/^certificates/download/$``
+     - ``CertificateViewSet``
+     - ``certificate-download-multiple``
+   * - ``api/^certificates/download\.(?P<format>[a-z0-9]+)/?$``
+     - ``CertificateViewSet``
+     - ``certificate-download-multiple``
    * - ``api/^certificates\.(?P<format>[a-z0-9]+)/?$``
      - ``CertificateViewSet``
      - ``certificate-list``
+   * - ``api/^crls/$``
+     - ``CrlViewSet``
+     - ``crl-api-list``
+   * - ``api/^crls/(?P<pk>[^/.]+)/$``
+     - ``CrlViewSet``
+     - ``crl-api-detail``
+   * - ``api/^crls/(?P<pk>[^/.]+)/download/$``
+     - ``CrlViewSet``
+     - ``crl-api-download``
+   * - ``api/^crls/(?P<pk>[^/.]+)/download\.(?P<format>[a-z0-9]+)/?$``
+     - ``CrlViewSet``
+     - ``crl-api-download``
+   * - ``api/^crls/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
+     - ``CrlViewSet``
+     - ``crl-api-detail``
+   * - ``api/^crls\.(?P<format>[a-z0-9]+)/?$``
+     - ``CrlViewSet``
+     - ``crl-api-list``
    * - ``api/^devid-registrations/$``
      - ``DevIdRegistrationViewSet``
      - ``devid-registration-list``
@@ -1166,18 +1094,6 @@ Pki
    * - ``api/^devownerid/(?P<pk>[^/.]+)/$``
      - ``DevOwnerIdViewSet``
      - ``devownerid-detail``
-   * - ``api/^devownerid/(?P<pk>[^/.]+)/request/devownerid/$``
-     - ``DevOwnerIdViewSet``
-     - ``devownerid-request-devownerid``
-   * - ``api/^devownerid/(?P<pk>[^/.]+)/request/devownerid\.(?P<format>[a-z0-9]+)/?$``
-     - ``DevOwnerIdViewSet``
-     - ``devownerid-request-devownerid``
-   * - ``api/^devownerid/(?P<pk>[^/.]+)/request/domain_credential/$``
-     - ``DevOwnerIdViewSet``
-     - ``devownerid-request-domain-credential``
-   * - ``api/^devownerid/(?P<pk>[^/.]+)/request/domain_credential\.(?P<format>[a-z0-9]+)/?$``
-     - ``DevOwnerIdViewSet``
-     - ``devownerid-request-domain-credential``
    * - ``api/^devownerid/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
      - ``DevOwnerIdViewSet``
      - ``devownerid-detail``
@@ -1197,28 +1113,100 @@ Pki
      - ``DomainViewSet``
      - ``domain-list``
    * - ``api/^issuing-cas/$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-list``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)/$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-detail``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/certificate/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-certificate``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/certificate\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-certificate``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/crl-settings/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-crl-settings``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/crl-settings\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-crl-settings``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)/crl/$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-crl``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)/crl\.(?P<format>[a-z0-9]+)/?$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-crl``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/csr/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-csr``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/csr\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-csr``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/enroll/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-enroll``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/enroll\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-enroll``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)/generate-crl/$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-generate-crl``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)/generate-crl\.(?P<format>[a-z0-9]+)/?$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-generate-crl``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/import-certificate/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-import-certificate``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/import-certificate\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-import-certificate``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/issued-certificates/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-issued-certificates``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/issued-certificates\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-issued-certificates``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/truststore/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-truststore``
+   * - ``api/^issuing-cas/(?P<pk>[^/.]+)/truststore\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-truststore``
    * - ``api/^issuing-cas/(?P<pk>[^/.]+)\.(?P<format>[a-z0-9]+)/?$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-detail``
+   * - ``api/^issuing-cas/configure-cmp/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-cmp``
+   * - ``api/^issuing-cas/configure-cmp\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-cmp``
+   * - ``api/^issuing-cas/configure-est/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-est``
+   * - ``api/^issuing-cas/configure-est\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-est``
+   * - ``api/^issuing-cas/configure-external-csr/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-external-csr``
+   * - ``api/^issuing-cas/configure-external-csr\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-configure-external-csr``
+   * - ``api/^issuing-cas/generate/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-generate``
+   * - ``api/^issuing-cas/generate\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-generate``
+   * - ``api/^issuing-cas/import-pkcs12/$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-import-pkcs12``
+   * - ``api/^issuing-cas/import-pkcs12\.(?P<format>[a-z0-9]+)/?$``
+     - ``IssuingCaManagementViewSet``
+     - ``issuing-ca-import-pkcs12``
    * - ``api/^issuing-cas\.(?P<format>[a-z0-9]+)/?$``
-     - ``IssuingCaViewSet``
+     - ``IssuingCaManagementViewSet``
      - ``issuing-ca-list``
    * - ``api/^truststores/$``
      - ``TruststoreViewSet``
@@ -1232,6 +1220,9 @@ Pki
    * - ``api/^truststores\.(?P<format>[a-z0-9]+)/?$``
      - ``TruststoreViewSet``
      - ``truststore-list``
+   * - ``crl/<int:pk>.crl``
+     - ``view``
+     - ``crl-download-file``
    * - ``crl/<int:pk>/``
      - ``view``
      - ``crl-download``
@@ -1364,6 +1355,12 @@ Pki
    * - ``pki/issuing-cas/``
      - ``view``
      - ``issuing_cas``
+   * - ``pki/issuing-cas/add/``
+     - ``view``
+     - ``issuing_cas-add-role_select``
+   * - ``pki/issuing-cas/add/autogen/``
+     - ``view``
+     - ``issuing_cas-add-autogen``
    * - ``pki/issuing-cas/add/cmp-ra/``
      - ``view``
      - ``issuing_cas-add-cmp-ra``
@@ -1385,24 +1382,78 @@ Pki
    * - ``pki/issuing-cas/add/request-est/``
      - ``view``
      - ``issuing_cas-add-request-est``
+   * - ``pki/issuing-cas/add/request-external-csr/``
+     - ``view``
+     - ``issuing_cas-add-request-external-csr``
+   * - ``pki/issuing-cas/add/self-signed-management-ca/``
+     - ``view``
+     - ``issuing_cas-add-self_signed_management_ca``
+   * - ``pki/issuing-cas/cmp-truststore-association/<int:pk>/``
+     - ``view``
+     - ``issuing_cas-cmp-truststore-association``
    * - ``pki/issuing-cas/config/<int:pk>/``
      - ``view``
      - ``issuing_cas-config``
    * - ``pki/issuing-cas/config/<int:pk>/help/crl-download/``
      - ``view``
      - ``help_issuing_cas_crl_download``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/cancel/``
+     - ``view``
+     - ``issuing_cas-rollover-cancel``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/complete/``
+     - ``view``
+     - ``issuing_cas-rollover-complete``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/start/``
+     - ``view``
+     - ``issuing_cas-rollover-start``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/transition/``
+     - ``view``
+     - ``issuing_cas-rollover-transition``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/file-method-select/``
+     - ``view``
+     - ``issuing_cas-rollover-file-method-select``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/import-pkcs12/``
+     - ``view``
+     - ``issuing_cas-rollover-import-pkcs12``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/import-separate-files/``
+     - ``view``
+     - ``issuing_cas-rollover-import-separate-files``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/method-select/``
+     - ``view``
+     - ``issuing_cas-rollover-method-select``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/plan/``
+     - ``view``
+     - ``issuing_cas-rollover-plan``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/request-cmp/``
+     - ``view``
+     - ``issuing_cas-rollover-request-cmp``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/request-est/``
+     - ``view``
+     - ``issuing_cas-rollover-request-est``
+   * - ``pki/issuing-cas/config/<int:pk>/rollover/request-method-select/``
+     - ``view``
+     - ``issuing_cas-rollover-request-method-select``
    * - ``pki/issuing-cas/crl-gen/<int:pk>/``
      - ``view``
      - ``issuing_cas-crl-gen``
    * - ``pki/issuing-cas/define-cert-content-cmp/<int:pk>/``
      - ``view``
      - ``issuing_cas-define-cert-content-cmp``
+   * - ``pki/issuing-cas/define-cert-content-csr/<int:pk>/``
+     - ``view``
+     - ``issuing_cas-define-cert-content-csr``
    * - ``pki/issuing-cas/define-cert-content-est/<int:pk>/``
      - ``view``
      - ``issuing_cas-define-cert-content-est``
    * - ``pki/issuing-cas/detail/<int:pk>/``
      - ``view``
      - ``issuing_cas-detail``
+   * - ``pki/issuing-cas/est-truststore-association/<int:pk>/``
+     - ``view``
+     - ``issuing_cas-est-truststore-association``
+   * - ``pki/issuing-cas/external-csr/<int:pk>/``
+     - ``view``
+     - ``issuing_cas-external-csr``
    * - ``pki/issuing-cas/issued-certificates/<int:pk>``
      - ``view``
      - ``issuing_ca-issued_certificates``
@@ -1421,45 +1472,30 @@ Pki
    * - ``pki/owner-credentials/``
      - ``view``
      - ``owner_credentials``
-   * - ``pki/owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/``
+   * - ``pki/owner-credentials/<int:pk>/delete/``
      - ``view``
-     - ``owner_credentials-issued-credential-delete``
+     - ``owner_credentials-delete``
    * - ``pki/owner-credentials/add/``
      - ``view``
      - ``owner_credentials-add``
-   * - ``pki/owner-credentials/add/est/``
-     - ``view``
-     - ``owner_credentials-add-est``
-   * - ``pki/owner-credentials/add/est/no-onboarding/``
-     - ``view``
-     - ``owner_credentials-add-est-no-onboarding``
-   * - ``pki/owner-credentials/add/est/onboarding/``
-     - ``view``
-     - ``owner_credentials-add-est-onboarding``
    * - ``pki/owner-credentials/add/file-import/``
      - ``view``
      - ``owner_credentials-add-file_import``
+   * - ``pki/owner-credentials/add/management-ca/``
+     - ``view``
+     - ``owner_credentials-add-management-ca``
    * - ``pki/owner-credentials/clm/<int:pk>/``
      - ``view``
      - ``owner_credentials-clm``
-   * - ``pki/owner-credentials/define-cert-content-domain-credential-est/<int:pk>/``
+   * - ``pki/owner-credentials/define-cert-content-management-ca/<int:pk>/``
      - ``view``
-     - ``owner_credentials-define-cert-content-domain-credential-est``
-   * - ``pki/owner-credentials/define-cert-content-est/<int:pk>/``
-     - ``view``
-     - ``owner_credentials-define-cert-content-est``
+     - ``owner_credentials-define-cert-content-management-ca``
    * - ``pki/owner-credentials/details/<int:pk>/``
      - ``view``
      - ``owner_credentials-details``
-   * - ``pki/owner-credentials/request-cert-est/<int:pk>/``
+   * - ``pki/owner-credentials/request-cert-management-ca/<int:pk>/``
      - ``view``
-     - ``owner_credentials-request-cert-est``
-   * - ``pki/owner-credentials/request-domain-credential-est/<int:pk>/``
-     - ``view``
-     - ``owner_credentials-request-domain-credential-est``
-   * - ``pki/owner-credentials/truststore-association/<int:pk>/``
-     - ``view``
-     - ``owner_credentials-truststore-association``
+     - ``owner_credentials-request-cert-management-ca``
    * - ``pki/trustpoint/download/tls-server/``
      - ``view``
      - ``trustpoint-tls-server-download``
@@ -1535,6 +1571,9 @@ Rest Pki
    * - ``api/rest-pki/enroll/``
      - ``view``
      - ``rest-pki-enroll``
+   * - ``api/rest-pki/revoke/``
+     - ``view``
+     - ``rest-pki-revoke``
    * - ``rest/^(?P<domain>[^/]+)/(?P<cert_profile>[^/]+)/enroll/?$``
      - ``view``
      - ``enroll``
@@ -1544,6 +1583,24 @@ Rest Pki
    * - ``rest/^(?P<domain>[^/]+)/enroll/?$``
      - ``view``
      - ``enroll-default-profile``
+
+
+Scep
+^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 30 30
+
+   * - URL Pattern
+     - View
+     - Name
+   * - ``.well-known/scep/^(?P<domain>[^/]+)/$``
+     - ``view``
+     - ``endpoint``
+   * - ``.well-known/scep/^(?P<domain>[^/]+)/(?P<cert_profile>[^/]+)/$``
+     - ``view``
+     - ``endpoint-profile``
 
 
 Signer
@@ -1640,9 +1697,6 @@ Trustpoint
    * - ``/``
      - ``view``
      - ``-``
-   * - ``api/token/``
-     - ``view``
-     - ``token_obtain_pair``
    * - ``api/token/refresh/``
      - ``view``
      - ``token_refresh``
@@ -1661,12 +1715,54 @@ Users
    * - URL Pattern
      - View
      - Name
+   * - ``api/token/``
+     - ``view``
+     - ``token_obtain_pair``
    * - ``users/login/``
      - ``view``
      - ``login``
+   * - ``users/login/otp/``
+     - ``view``
+     - ``otp``
    * - ``users/logout/``
      - ``view``
      - ``logout``
+   * - ``users/password-change-required/``
+     - ``view``
+     - ``password-change-required``
+   * - ``users/profile/``
+     - ``view``
+     - ``profile``
+   * - ``users/profile/<int:pk>/``
+     - ``view``
+     - ``user-profile``
+   * - ``users/profile/<int:pk>/delete/``
+     - ``view``
+     - ``user-profile-delete``
+   * - ``users/profile/<int:pk>/password/``
+     - ``view``
+     - ``user-profile-password``
+   * - ``users/profile/certificate-authentication/``
+     - ``view``
+     - ``profile_certificate_authentication``
+   * - ``users/profile/certificate-authentication/<int:pk>/<str:action>/``
+     - ``view``
+     - ``profile_client_certificate_action``
+   * - ``users/profile/delete/``
+     - ``view``
+     - ``profile_delete``
+   * - ``users/profile/details/``
+     - ``view``
+     - ``profile_details``
+   * - ``users/profile/password/``
+     - ``view``
+     - ``profile_password``
+   * - ``users/profile/reset-otp/``
+     - ``view``
+     - ``profile_reset_otp``
+   * - ``users/profile/role/``
+     - ``view``
+     - ``profile_role``
 
 
 Workflows2
