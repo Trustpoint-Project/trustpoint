@@ -107,9 +107,7 @@ def test_postgres_reset_closes_existing_connections_before_terminating():
 
     events = []
     maintenance_conn = MagicMock()
-    maintenance_conn.cursor.return_value.execute.side_effect = (
-        lambda sql, *_args: events.append(sql.split()[0])
-    )
+    maintenance_conn.cursor.return_value.execute.side_effect = lambda sql, *_args: events.append(sql.split()[0])
 
     with (
         patch.object(reset_db.connections, 'close_all', side_effect=lambda: events.append('close_all')),
