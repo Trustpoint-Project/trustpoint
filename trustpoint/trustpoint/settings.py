@@ -14,6 +14,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 import logging
 import os
+import sys
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -176,6 +177,11 @@ def _env_bool(name: str, *, default: bool) -> bool:
 # Debug output leaks settings and local variables, so it must be an explicit opt-in.
 DEBUG = _env_bool('TRUSTPOINT_DEBUG', default=False)
 DEVELOPMENT_ENV = not DOCKER_CONTAINER
+_management_command = sys.argv[1] if len(sys.argv) > 1 else None
+TRUSTPOINT_DEVELOPMENT_SERVER = not DOCKER_CONTAINER and (
+    _management_command in {'runserver', 'runserver_plus', 'runserver_with_qcluster'}
+    or (_management_command == 'qcluster' and os.getenv('_TRUSTPOINT_DEVELOPMENT_SERVER') == '1')
+)
 
 # Reverse proxy SSL header settings
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -717,6 +723,9 @@ class UIConfig:
 SIMPLE_JWT = {
     'USER_AUTHENTICATION_RULE': 'users.oauth2_views.api_user_authentication_rule',
 }
+
+# Pagination is enabled per view while PAGE_SIZE is shared globally.
+SILENCED_SYSTEM_CHECKS = ['rest_framework.W001']
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

@@ -198,7 +198,8 @@ recovery of encrypted fields. PKCS#11-only deployments use the HSM KEK instead a
 must select the documented Compose overrides to omit the software-secret mount.
 Pre-1.0 encrypted database migration and key rotation are unsupported.
 
-For local development with `DEBUG=True` outside Docker, leaving
+For native development-server commands (including their bundled task worker),
+or local development with `DEBUG=True` outside Docker, leaving
 `TRUSTPOINT_SOFTWARE_KEK_FILE` unset uses `var/development/software_kek`. A fresh
 backend creates this ignored, developer-owned file atomically with mode `0600`;
 later commands reuse it. A missing file in an initialized installation is never

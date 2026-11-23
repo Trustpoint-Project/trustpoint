@@ -114,16 +114,16 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
             os_path=agent_os_path,
         )
 
-        default_wf = AgentProfileDefinition.objects.filter(
-            name='Domain Credential Update', is_active=True
-        ).first()
+        default_wf = AgentProfileDefinition.objects.filter(name='Domain Credential Update', is_active=True).first()
         if default_wf is not None:
             AgentAssignedProfile.objects.get_or_create(
                 agent=agent,
                 workflow_definition=default_wf,
+                # Give the freshly onboarded credential a short grace period. The first
+                # acknowledgement then schedules the next renewal from the certificate expiry.
                 defaults={
                     'renewal_threshold_days': 30,
-                    'next_certificate_update_scheduled': timezone.now() + timedelta(days=30),
+                    'next_certificate_update_scheduled': timezone.now() + timedelta(days=1),
                 },
             )
 

@@ -44,11 +44,13 @@ from agent import (
     LocalStorage,
     PollParams,
     _backoff_delay,
+    _commit_staged_credentials,
     _expect_non_empty_str,
     _expect_object,
     _optional_str,
     _pem_join,
     _retry_after_delay,
+    _verify_cert_key_pair,
     acknowledge_job,
     atomic_copy,
     atomic_write_bytes,
@@ -68,6 +70,7 @@ from agent import (
     parse_subject,
     parse_subject_alt_name,
     read_profile,
+    recover_interrupted_rotations,
     request_with_retries,
     require_success,
     response_json_object,
@@ -131,7 +134,7 @@ def valid_private_key() -> rsa.RSAPrivateKey:
 def valid_cert_pem(valid_private_key: rsa.RSAPrivateKey) -> str:
     """Generate a valid certificate PEM for testing."""
     import datetime
-    
+
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Test')])
     cert = (
         x509.CertificateBuilder()
@@ -866,7 +869,7 @@ class TestDeterministicPaths:
             max_backoff=10.0,
         )
 
-        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, 'domain_credential')
+        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, 'domain_credential', 7)
 
         assert key_path == storage.private_key_path
         assert csr_path == storage.csr_path
@@ -893,12 +896,38 @@ class TestDeterministicPaths:
             max_backoff=10.0,
         )
 
-        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, 'tls_server')
+        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, 'tls_server', 7)
 
-        assert key_path == temp_dir / 'tls_server-key.pem'
-        assert csr_path == temp_dir / 'tls_server-csr.pem'
-        assert cert_path == temp_dir / 'tls_server-certificate.pem'
-        assert chain_path == temp_dir / 'tls_server-chain.pem'
+        assert key_path == temp_dir / 'tls_server-7-key.pem'
+        assert csr_path == temp_dir / 'tls_server-7-csr.pem'
+        assert cert_path == temp_dir / 'tls_server-7-certificate.pem'
+        assert chain_path == temp_dir / 'tls_server-7-chain.pem'
+
+    def test_deterministic_paths_for_different_assignments_do_not_collide(self, temp_dir: Path):
+        """Two assignments with the same certificate profile must use different files."""
+        storage = LocalStorage(
+            private_key_path=temp_dir / 'domain-key.pem',
+            csr_path=temp_dir / 'domain-csr.pem',
+            tls_cert_path=temp_dir / 'tls.pem',
+            certificate_path=temp_dir / 'domain-cert.pem',
+            certificate_chain_path=temp_dir / 'domain-chain.pem',
+        )
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=temp_dir / 'ca.pem',
+            active_credential=ActiveCredential(cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'),
+            local_storage=storage,
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+
+        first = deterministic_paths_for_job(params, 'tls_server', 1)
+        second = deterministic_paths_for_job(params, 'tls_server', 2)
+
+        assert first[2] != second[2]
+        assert first[0] != second[0]
 
 
 # ============================================================================
@@ -993,8 +1022,15 @@ class TestJobExecution:
         assert result.success is False
         assert 'must be an integer' in result.error_message
 
+    @patch('agent._verify_cert_key_pair')
     @patch('agent.request_with_retries')
-    def test_execute_renewal_job_success(self, mock_request: Mock, temp_dir: Path, valid_cert_pem: str):
+    def test_execute_renewal_job_success(
+        self,
+        mock_request: Mock,
+        _mock_verify: Mock,
+        temp_dir: Path,
+        valid_cert_pem: str,
+    ):
         """Test successful job execution."""
         # Setup storage paths
         storage = LocalStorage(
@@ -1008,9 +1044,7 @@ class TestJobExecution:
         params = PollParams(
             base_url='https://example.com',
             ca_cert_path=temp_dir / 'ca.pem',
-            active_credential=ActiveCredential(
-                cert_path=storage.certificate_path, key_path=storage.private_key_path
-            ),
+            active_credential=ActiveCredential(cert_path=storage.certificate_path, key_path=storage.private_key_path),
             local_storage=storage,
             request_timeout=30,
             max_retries=3,
@@ -1270,7 +1304,7 @@ class TestEnrollment:
         # Setup mocks - create actual files as side effects
         def mock_gen_key_side_effect(key_path, **kwargs):
             Path(key_path).write_text('MOCK_PRIVATE_KEY')
-        
+
         mock_gen_key.side_effect = mock_gen_key_side_effect
 
         mock_csr = Mock()
@@ -1282,9 +1316,7 @@ class TestEnrollment:
         response.headers = {'Content-Type': 'application/json'}
         response.json.return_value = {
             'certificate': '-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----',
-            'chain': [
-                '-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----'
-            ],
+            'chain': ['-----BEGIN CERTIFICATE-----\nCA\n-----END CERTIFICATE-----'],
         }
         mock_request.return_value = response
 
@@ -1649,13 +1681,11 @@ class TestMainEntryPoint:
         # Setup mocks
         profile_path = temp_dir / 'profile.json'
         profile_path.write_text(json.dumps(mock_profile_data))
-        
+
         profile = read_profile(profile_path)
         mock_read.return_value = profile
 
-        mock_enroll.return_value = ActiveCredential(
-            cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'
-        )
+        mock_enroll.return_value = ActiveCredential(cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem')
 
         # Execute
         exit_code = main(['--profile', str(profile_path), '--once'])
@@ -1704,7 +1734,7 @@ class TestMainEntryPoint:
         # Setup mocks
         profile_path = temp_dir / 'profile.json'
         profile_path.write_text(json.dumps(mock_profile_data))
-        
+
         profile = read_profile(profile_path)
         mock_read.return_value = profile
 
@@ -1733,7 +1763,7 @@ class TestMainEntryPoint:
         # Setup mocks
         profile_path = temp_dir / 'profile.json'
         profile_path.write_text(json.dumps(mock_profile_data))
-        
+
         profile = read_profile(profile_path)
         mock_read.return_value = profile
         mock_enroll.side_effect = AgentError('Enrollment failed')
@@ -1744,3 +1774,173 @@ class TestMainEntryPoint:
 
         # Verify error exit
         assert exc_info.value.code == 1
+
+
+# ============================================================================
+# Rotation recovery and job-token tests
+# ============================================================================
+
+
+class TestRotationRecovery:
+    """Interrupted credential rotation must not leave a mismatched pair."""
+
+    @pytest.mark.parametrize('interrupted_cleanup', [0, 1])
+    def test_recovery_keeps_committed_pair_after_cleanup_interruption(
+        self,
+        temp_dir: Path,
+        interrupted_cleanup: int,
+    ) -> None:
+        """A completed rotation survives interruption at each backup deletion."""
+        cert, key = temp_dir / 'domain-cert.pem', temp_dir / 'domain-key.pem'
+        cert.write_text('old-cert')
+        key.write_text('old-key')
+        staged_cert, staged_key = temp_dir / 'staged-cert.pem', temp_dir / 'staged-key.pem'
+        staged_cert.write_text('new-cert')
+        staged_key.write_text('new-key')
+        interrupted_backup = [cert, key][interrupted_cleanup].with_suffix('.pem.bak').resolve()
+        original_unlink = Path.unlink
+
+        def interrupt_cleanup(path: Path, *args: Any, **kwargs: Any) -> None:
+            if path == interrupted_backup:
+                raise KeyboardInterrupt
+            original_unlink(path, *args, **kwargs)
+
+        with (
+            patch.object(Path, 'unlink', interrupt_cleanup),
+            patch('agent._verify_cert_key_pair'),
+            pytest.raises(KeyboardInterrupt),
+        ):
+            _commit_staged_credentials(
+                [(staged_cert, cert, 0o644), (staged_key, key, 0o600)],
+                cert,
+                key,
+            )
+
+        recover_interrupted_rotations(temp_dir)
+
+        assert cert.read_text() == 'new-cert'
+        assert key.read_text() == 'new-key'
+        assert not list(temp_dir.glob('*.bak'))
+        assert not list(temp_dir.glob('*.rotation-committed'))
+
+    def test_recovery_preserves_custom_private_key_permissions(self, temp_dir: Path) -> None:
+        """Private keys stay private even when their name does not contain 'key'."""
+        target = temp_dir / 'private.pem'
+        backup = temp_dir / 'private.pem.bak'
+        backup.write_text('old-key')
+        private_mode = 0o600
+        backup.chmod(private_mode)
+
+        recover_interrupted_rotations(temp_dir)
+
+        assert target.read_text() == 'old-key'
+        assert target.stat().st_mode & 0o777 == private_mode
+
+    def test_recover_interrupted_rotation_restores_backup(self, temp_dir: Path):
+        target = temp_dir / 'domain-key.pem'
+        target.write_text('new-key')
+        backup = target.with_name(target.name + '.bak')
+        backup.write_text('old-key')
+
+        recover_interrupted_rotations(temp_dir)
+
+        assert target.read_text() == 'old-key'
+        assert not backup.exists()
+
+    def test_commit_rolls_back_when_pair_verification_fails(self, temp_dir: Path):
+        old_key = temp_dir / 'domain-key.pem'
+        old_cert = temp_dir / 'domain-cert.pem'
+        old_key.write_text('old-key')
+        old_cert.write_text('old-cert')
+        new_key = temp_dir / 'staged-key.pem'
+        new_cert = temp_dir / 'staged-cert.pem'
+        new_key.write_text('new-key')
+        new_cert.write_text('new-cert')
+
+        with patch('agent._verify_cert_key_pair', side_effect=AgentError('mismatch')):
+            with pytest.raises(AgentError):
+                _commit_staged_credentials(
+                    [
+                        (new_cert, old_cert, 0o644),
+                        (new_key, old_key, 0o600),
+                    ],
+                    old_cert,
+                    old_key,
+                )
+
+        assert old_key.read_text() == 'old-key'
+        assert old_cert.read_text() == 'old-cert'
+        assert not (temp_dir / 'domain-key.pem.bak').exists()
+        assert not (temp_dir / 'domain-cert.pem.bak').exists()
+
+    def test_verify_cert_key_pair_rejects_mismatch(self, temp_dir: Path):
+        import datetime
+
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        other_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'test')])
+        now = datetime.datetime.now(datetime.timezone.utc)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(1)
+            .not_valid_before(now)
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
+        cert_path = temp_dir / 'cert.pem'
+        key_path = temp_dir / 'key.pem'
+        other_key_path = temp_dir / 'other-key.pem'
+        cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+        key_path.write_bytes(
+            key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            )
+        )
+        other_key_path.write_bytes(
+            other_key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            )
+        )
+
+        _verify_cert_key_pair(cert_path, key_path)
+        with pytest.raises(AgentError):
+            _verify_cert_key_pair(cert_path, other_key_path)
+
+
+class TestJobToken:
+    """The agent must echo the claim token when acknowledging a job."""
+
+    @patch('agent.request_with_retries')
+    def test_acknowledge_job_sends_token(self, mock_request: Mock, temp_dir: Path):
+        params = PollParams(
+            base_url='https://example.com',
+            ca_cert_path=temp_dir / 'ca.pem',
+            active_credential=ActiveCredential(cert_path=temp_dir / 'cert.pem', key_path=temp_dir / 'key.pem'),
+            local_storage=LocalStorage.from_mapping({}),
+            request_timeout=30,
+            max_retries=3,
+            initial_backoff=1.0,
+            max_backoff=10.0,
+        )
+        response = Mock()
+        response.status_code = 200
+        response.headers = {'Content-Type': 'application/json'}
+        response.json.return_value = {'next_certificate_update': '2026-12-31'}
+        mock_request.return_value = response
+
+        acknowledge_job(
+            params,
+            Mock(),
+            JobResult(profile_id=1, success=True),
+            'cert',
+            job_token='6f3f1e0e-5b8a-4c1f-9f3a-3f1c2b7a9d10',
+        )
+
+        assert mock_request.call_args.kwargs['json']['job_token'] == ('6f3f1e0e-5b8a-4c1f-9f3a-3f1c2b7a9d10')

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """API URL configuration for the agents application."""
+
 from django.urls import path
 
 from agents.api_views import AgentJobResultView, AgentJobsView

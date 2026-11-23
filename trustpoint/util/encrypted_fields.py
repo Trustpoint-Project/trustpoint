@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any, Never
 
+from django import forms
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -66,7 +68,18 @@ class _EncryptedFieldMixin:
         """Convert the Python representation to the database representation."""
         if value is None:
             return value
+        if isinstance(value, str) and value.startswith(CIPHERTEXT_PREFIX):
+            # Values written by dumpdata are already ciphertext; do not encrypt twice.
+            return value
         return self.encrypt_value(str(value))
+
+    def value_to_string(self, obj: Any) -> str:
+        """Serialize the stored ciphertext so dumpdata does not expose plaintext."""
+        value = self.value_from_object(obj)  # type: ignore[attr-defined]
+        if value is None:
+            return ''
+        serialized = self.get_prep_value(value)
+        return serialized if serialized is not None else ''
 
 
 class EncryptedTextField(_EncryptedFieldMixin, models.TextField[str, str]):
@@ -108,3 +121,50 @@ class EncryptedCharField(_EncryptedFieldMixin, models.CharField[str, str]):
             return db_type_result
         encrypted_length = self._calculate_encrypted_length(self._plaintext_max_length)
         return f'varchar({encrypted_length})'
+
+
+class EncryptedJSONField(_EncryptedFieldMixin, models.TextField[Any, Any]):
+    """JSON field whose serialized value is encrypted via the app-secret subsystem."""
+
+    description = 'Encrypted JSON field using Trustpoint application secrets'
+
+    def from_db_value(self, value: Any, expression: Any, connection: Any) -> Any:
+        """Decrypt the stored text and parse it as JSON."""
+        plaintext = _EncryptedFieldMixin.from_db_value(self, value, expression, connection)
+        return self._parse_json(plaintext)
+
+    def to_python(self, value: Any) -> Any:
+        """Accept a Python value, a JSON string, or ciphertext from loaddata."""
+        if value is None or isinstance(value, (dict, list, bool, int, float)):
+            return value
+        if isinstance(value, str) and value.startswith(CIPHERTEXT_PREFIX):
+            return value
+        return self._parse_json(value)
+
+    def get_prep_value(self, value: Any) -> str | None:
+        """Serialize the value as JSON and encrypt it for storage."""
+        if value is None or value == {}:
+            return None
+        serialized = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, separators=(',', ':'))
+        return super().get_prep_value(serialized)
+
+    def formfield(self, **kwargs: Any) -> forms.Field | None:
+        """Render the field as a JSON textarea in model forms."""
+        defaults: dict[str, Any] = {
+            'form_class': forms.JSONField,
+            'required': False,
+            'widget': forms.Textarea(attrs={'rows': 8, 'class': 'form-control font-monospace', 'spellcheck': 'false'}),
+        }
+        defaults.update(kwargs)
+        return super().formfield(**defaults)
+
+    @staticmethod
+    def _parse_json(value: Any) -> Any:
+        """Parse a JSON string, preserving the field's validation error type."""
+        if value in (None, ''):
+            return None
+        try:
+            return json.loads(str(value))
+        except (TypeError, ValueError) as exc:
+            msg = _('Failed to decode encrypted JSON field value.')
+            raise ValidationError(msg) from exc

@@ -58,8 +58,9 @@ Never point local development or destructive test commands at a production datab
 Local development KEK
 ---------------------
 
-With the default debug-only SQLite settings, no manual KEK provisioning is
-required before using ``runserver``. The software backend creates
+With SQLite, native ``runserver``, ``runserver_plus``, and
+``runserver_with_qcluster`` need no manual KEK provisioning or debug setting.
+The software backend creates
 ``var/development/software_kek`` when it is first initialized during development
 use, then reuses that file. Initialization is lazy: starting ``runserver`` alone
 does not guarantee that a crypto backend has already been requested. Other
@@ -74,7 +75,7 @@ original keys with any database you want to reuse.
 Docker secret provisioning
 --------------------------
 
-Docker and non-debug deployments do not use automatic development-key creation.
+Docker and production deployments do not use automatic development-key creation.
 Use the existing host-side initializer before starting Compose:
 
 .. code-block:: bash
@@ -120,6 +121,13 @@ fixture credentials:
      --cert-file tests/data/x509/https_server.crt \
      --key-file tests/data/x509/https_server.pem
 
+These native development-server commands automatically use
+``var/development/software_kek`` when ``TRUSTPOINT_SOFTWARE_KEK_FILE`` is unset.
+An explicit key path always takes precedence; leave Docker's ``/run/secrets/``
+path unset for native development. Debug pages remain disabled unless you
+explicitly enable ``TRUSTPOINT_DEBUG=1``. The bundled task worker inherits the
+server's development-key context.
+
 These committed keys and certificates are public test fixtures, never production
 identities. ``runserver_plus`` also prepares the active development TLS credential
 and starts Django-Q2. ``runserver_with_qcluster`` provides an HTTP server with that
@@ -129,6 +137,10 @@ worker. Both accept ``--no-qcluster`` when you run a separate worker:
 
    # In another terminal, with the same database and KEK configuration:
    uv run trustpoint/manage.py qcluster
+
+An independently launched worker does not inherit the development-server context.
+Configure ``TRUSTPOINT_SOFTWARE_KEK_FILE`` to point to the server's original key
+before launching that worker.
 
 The worker is not restarted automatically when server code reloads. Workflow
 execution has its own inline/worker configuration; see

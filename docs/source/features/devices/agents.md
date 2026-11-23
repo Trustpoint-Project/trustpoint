@@ -45,6 +45,31 @@ A workflow profile contains:
 - **Local storage**: Onformation on where files are located and stored
 - **Certificate Request**: Profile name, enrollment URL, subject/SAN parameters
 
+Passwords and other credentials must not be written into the profile JSON. Put
+them in the encrypted **Secret Values** object instead, and reference them from
+a step as `{{ secret:name }}`. After upgrading an installation that already has
+literal password values in a profile, run:
+
+```bash
+python manage.py encrypt_agent_profile_secrets
+```
+
+Use `--dry-run` first to list affected profiles.
+
+Renewal dates from older versions are based on a fixed interval. After upgrading,
+recompute them from the issued certificate expiry so short-lived certificates do
+not expire before the first new acknowledgement:
+
+```bash
+python manage.py recalculate_agent_renewal_schedules --dry-run
+python manage.py recalculate_agent_renewal_schedules
+```
+
+The bundled agent adds the assignment ID to non-domain credential filenames
+(`<certificate-profile>-<assignment-id>-certificate.pem`, and so on) so two
+assignments cannot overwrite each other's key material. Update any service
+that reads the old filenames directly.
+
 
 ### Example Workflow
 

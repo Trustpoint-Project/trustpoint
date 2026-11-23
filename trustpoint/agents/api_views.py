@@ -6,11 +6,14 @@
 from __future__ import annotations
 
 import copy
+import re
 import urllib.parse
-from datetime import timedelta
+import uuid
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
+from django.db.models import Q
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
@@ -27,7 +30,14 @@ from request.request_validator.http_req import TrustedProxyHeadersValidation
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from rest_framework.request import Request
+
+JOB_LEASE_SECONDS = 1800
+MAX_ERROR_LENGTH = 2000
+_SECRET_PLACEHOLDER = re.compile(r'\{\{\s*secret:([A-Za-z0-9_.-]+)\s*\}\}')
+_PLACEHOLDER = re.compile(r'\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}')
 
 
 def _parse_client_cert(request: Request) -> x509.Certificate | None:
@@ -112,24 +122,54 @@ def _resolve_enrollment_url(agent: TrustpointAgent, cert_profile: str) -> str | 
     return f'/rest/{domain.unique_name}/{cert_profile}/enroll/'
 
 
-def _build_resolved_profile(
+def _map_strings(value: Any, mapper: Callable[[str], str]) -> Any:
+    """Recursively apply *mapper* to every string in a JSON-like value."""
+    if isinstance(value, str):
+        return mapper(value)
+    if isinstance(value, list):
+        return [_map_strings(item, mapper) for item in value]
+    if isinstance(value, dict):
+        return {key: _map_strings(item, mapper) for key, item in value.items()}
+    return value
+
+
+def _resolve_named_placeholders(value: Any, mapping: dict[str, Any]) -> Any:
+    """Recursively replace known ``{{ name }}`` placeholders."""
+    return _map_strings(
+        value,
+        lambda text: _PLACEHOLDER.sub(lambda match: str(mapping.get(match.group(1), match.group(0))), text),
+    )
+
+
+def _resolve_secrets(value: Any, secrets: dict[str, str]) -> Any:
+    """Recursively replace ``{{ secret:name }}`` references with decrypted values."""
+    return _map_strings(
+        value,
+        lambda text: _SECRET_PLACEHOLDER.sub(lambda match: str(secrets.get(match.group(1), '')), text),
+    )
+
+
+def _build_resolved_profile(  # noqa: C901, PLR0912 - one pass over the profile's known fields.
     agent: TrustpointAgent,
     raw_profile: dict[str, Any],
     assigned_profile: AgentAssignedProfile,
 ) -> dict[str, Any]:
-    """Return a deep copy of *raw_profile* with placeholders resolved.
+    """Return a deep copy of *raw_profile* with placeholders and secrets resolved.
 
     Resolves:
     - ``certificate_request.path`` → enrollment endpoint path
     - ``certificate_request.subject`` → subject DN from assigned_profile
     - ``certificate_request.subject_alt_name`` → SAN extension from assigned_profile
     - ``certificate_request.public_key_algorithm_oid`` → OID from domain's issuing CA
-    - ``certificate_request.key_size`` → RSA key size (if RSA)
-    - ``certificate_request.named_curve`` → ECC curve name (if ECC)
+    - ``certificate_request.key_parameter`` → RSA key size or ECC curve name
+    - ``local_storage`` paths → ``os_path``, ``certificate_profile``, and ``profile_id``
+    - ``{{ secret:name }}`` → decrypted value from the profile's encrypted secrets
     """
-    profile = copy.deepcopy(raw_profile)
-    cert_req: dict[str, Any] = profile.get('certificate_request', {})
-    cert_profile: str = cert_req.get('certificate_profile', 'domain_credential')
+    profile = copy.deepcopy(raw_profile) if isinstance(raw_profile, dict) else {}
+    raw_cert_req = profile.get('certificate_request')
+    cert_req: dict[str, Any] = raw_cert_req if isinstance(raw_cert_req, dict) else {}
+    cert_profile_value = cert_req.get('certificate_profile', 'domain_credential')
+    cert_profile: str = cert_profile_value if isinstance(cert_profile_value, str) else 'domain_credential'
 
     enrollment_path = _resolve_enrollment_url(agent, cert_profile)
     if enrollment_path is not None:
@@ -161,8 +201,48 @@ def _build_resolved_profile(
         for key in ('public_key_algorithm_oid', 'key_parameter'):
             cert_req.pop(key, None)
 
-    profile['certificate_request'] = cert_req
-    return profile
+    domain_name = agent.device.domain.unique_name if agent.device and agent.device.domain else ''
+    mapping = {
+        'os_path': agent.os_path,
+        'certificate_profile': cert_profile,
+        'profile_id': assigned_profile.pk,
+        'agent_id': agent.agent_id,
+        'domain': domain_name,
+    }
+    if isinstance(cert_req.get('url'), str) and '{{' in cert_req['url']:
+        cert_req.pop('url', None)
+    profile['certificate_request'] = _resolve_named_placeholders(cert_req, mapping)
+
+    local_storage = profile.get('local_storage')
+    if isinstance(local_storage, dict):
+        resolved_storage = _resolve_named_placeholders(local_storage, mapping)
+        profile['local_storage'] = {
+            key: value for key, value in resolved_storage.items() if not (isinstance(value, str) and '{{' in value)
+        }
+
+    workflow_definition = getattr(assigned_profile, 'workflow_definition', None)
+    secrets = getattr(workflow_definition, 'secrets', None) if workflow_definition is not None else None
+    if not isinstance(secrets, dict):
+        secrets = {}
+    resolved = _resolve_secrets(profile, secrets)
+    return resolved if isinstance(resolved, dict) else {}
+
+
+def next_update_after_success(
+    assigned_profile: AgentAssignedProfile,
+    now: datetime,
+) -> datetime:
+    """Schedule the next renewal from certificate expiry, with a safe fallback."""
+    next_update = assigned_profile.next_update_from_certificate(now)
+    if next_update is not None:
+        return next_update
+    return now + timedelta(days=max(int(assigned_profile.renewal_threshold_days), 1))
+
+
+def _failure_backoff_seconds(assigned_profile: AgentAssignedProfile) -> int:
+    """Return an increasing retry delay capped at one hour."""
+    poll_interval = max(int(assigned_profile.agent.poll_interval_seconds), 60)
+    return int(min(2 ** min(assigned_profile.failure_count, 6) * poll_interval, 3600))
 
 
 class IsAuthenticatedAgent(BasePermission):
@@ -192,6 +272,11 @@ class AgentJobSerializer(serializers.Serializer):  # type: ignore[type-arg]
     next_certificate_update = serializers.DateTimeField(
         help_text='ISO-8601 datetime at which renewal was / is due.',
     )
+    job_token = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text='Return this token in the job-result request to acknowledge this claim.',
+    )
 
 
 class AgentJobsResponseSerializer(serializers.Serializer):  # type: ignore[type-arg]
@@ -220,16 +305,17 @@ class AgentJobsView(LoggerMixin, APIView):
         summary='Poll for pending certificate-renewal jobs',
         description=(
             'Returns all enabled AgentAssignedProfile records that are due for renewal '
-            '(next_certificate_update ≤ now).  The agent should authenticate using its '
-            'domain credential certificate; the TLS terminator must forward the '
-            'SHA-256 fingerprint via the X-SSL-Client-Fingerprint header.\n\n'
-            'After processing the returned jobs the agent should call the '
-            'job-acknowledgement endpoint so that last_certificate_update is updated '
-            'and the job leaves the pending queue.'
+            '(next_certificate_update ≤ now).  The agent authenticates with its '
+            'domain credential using mutual TLS.  The trusted TLS terminator must forward '
+            'the URL-encoded client certificate PEM in the SSL-Client-Cert header, and '
+            'the direct peer must be listed in TRUSTPOINT_TRUSTED_PROXY_IPS.\n\n'
+            'Each returned job is claimed by the agent.  After processing it, call the '
+            'job-acknowledgement endpoint with the returned job_token so that '
+            'last_certificate_update is updated and the job leaves the pending queue.'
         ),
         responses={
             200: AgentJobsResponseSerializer,
-            401: OpenApiResponse(description='Unauthenticated - missing or unknown client certificate fingerprint'),
+            401: OpenApiResponse(description='Unauthenticated - missing or unknown client certificate'),
             403: OpenApiResponse(description='Forbidden - principal is not an active agent'),
         },
         examples=[
@@ -254,6 +340,7 @@ class AgentJobsView(LoggerMixin, APIView):
                                 'steps': [],
                             },
                             'next_certificate_update': '2024-01-15T10:00:00Z',
+                            'job_token': '6f3f1e0e-5b8a-4c1f-9f3a-3f1c2b7a9d10',
                         }
                     ],
                 },
@@ -275,31 +362,64 @@ class AgentJobsView(LoggerMixin, APIView):
 
         now = timezone.now()
 
-        assigned_profiles = AgentAssignedProfile.objects.filter(agent=agent, enabled=True).select_related(
-            'workflow_definition', 'agent__device__domain'
+        assigned_profiles = (
+            AgentAssignedProfile.objects.filter(
+                agent=agent,
+                enabled=True,
+                workflow_definition__is_active=True,
+            )
+            .select_related('workflow_definition', 'agent__device__domain')
+            .defer('workflow_definition__secrets')
         )
 
+        lease_cutoff = now - timedelta(seconds=JOB_LEASE_SECONDS)
         pending_jobs: list[dict[str, Any]] = []
         for profile in assigned_profiles:
             due_at = profile.next_certificate_update
-            if due_at <= now:
-                self.logger.debug(
-                    'Agent %s: profile %d (%s) is due since %s',
-                    agent.agent_id,
-                    profile.pk,
-                    profile.workflow_definition.name,
-                    due_at.isoformat(),
+            if due_at > now:
+                continue
+            claim_token = uuid.uuid4()
+            claimed = (
+                AgentAssignedProfile.objects.filter(
+                    pk=profile.pk,
+                    enabled=True,
+                    workflow_definition__is_active=True,
                 )
+                .filter(Q(claimed_at__isnull=True) | Q(claimed_at__lt=lease_cutoff))
+                .update(claimed_at=now, claim_token=claim_token)
+            )
+            if not claimed:
+                continue
+
+            self.logger.debug(
+                'Agent %s: profile %d (%s) is due since %s',
+                agent.agent_id,
+                profile.pk,
+                profile.workflow_definition.name,
+                due_at.isoformat(),
+            )
+            try:
                 resolved_profile = _build_resolved_profile(agent, profile.workflow_definition.profile, profile)
-                pending_jobs.append(
-                    {
-                        'profile_id': profile.pk,
-                        'workflow_definition_id': profile.workflow_definition.pk,
-                        'workflow_definition_name': profile.workflow_definition.name,
-                        'workflow_profile': resolved_profile,
-                        'next_certificate_update': due_at,
-                    }
+            except Exception:
+                AgentAssignedProfile.objects.filter(pk=profile.pk, claim_token=claim_token).update(
+                    claimed_at=None,
+                    claim_token=None,
                 )
+                self.logger.exception('Agent %s: could not build profile %d', agent.agent_id, profile.pk)
+                continue
+
+            pending_jobs.append(
+                {
+                    'profile_id': profile.pk,
+                    'workflow_definition_id': profile.workflow_definition.pk,
+                    'workflow_definition_name': profile.workflow_definition.name,
+                    'workflow_profile': resolved_profile,
+                    'next_certificate_update': due_at,
+                    'job_token': claim_token,
+                }
+            )
+            # One claim per poll: a slow first job must not let later claims expire.
+            break
 
         self.logger.info(
             'Agent %s checked in: %d pending job(s)',
@@ -334,6 +454,11 @@ class AgentJobResultRequestSerializer(serializers.Serializer):  # type: ignore[t
         default='',
         help_text='Human-readable error description. Only relevant when success is False.',
     )
+    job_token = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text='Claim token returned by the jobs endpoint. Required for claimed jobs.',
+    )
 
 
 class AgentJobResultResponseSerializer(serializers.Serializer):  # type: ignore[type-arg]
@@ -361,10 +486,11 @@ class AgentJobResultView(LoggerMixin, APIView):
     @extend_schema(
         summary='Report the result of a job execution',
         description=(
-            'The agent calls this endpoint after attempting to execute a job. '
-            'On success Trustpoint stamps last_certificate_update and clears the '
-            'scheduled override so the profile moves to its normal renewal cadence. '
-            'On failure the profile remains due and will reappear on the next poll.'
+            'The agent calls this endpoint after attempting to execute a claimed job. '
+            'On success Trustpoint stamps last_certificate_update, clears the claim, and '
+            'schedules the next renewal from the certificate expiry minus the threshold. '
+            'On failure the claim is cleared, the error is stored, and the job is retried '
+            'with exponential backoff.'
         ),
         request=AgentJobResultRequestSerializer,
         responses={
@@ -373,11 +499,16 @@ class AgentJobResultView(LoggerMixin, APIView):
             401: OpenApiResponse(description='Unauthenticated - missing or unrecognised client certificate'),
             403: OpenApiResponse(description='Forbidden - profile does not belong to this agent'),
             404: OpenApiResponse(description='Not Found - profile_id does not exist'),
+            409: OpenApiResponse(description='Conflict - the job claim token is stale'),
         },
         examples=[
             OpenApiExample(
                 name='Successful job result',
-                value={'profile_id': 42, 'success': True},
+                value={
+                    'profile_id': 42,
+                    'success': True,
+                    'job_token': '6f3f1e0e-5b8a-4c1f-9f3a-3f1c2b7a9d10',
+                },
                 request_only=True,
             ),
             OpenApiExample(
@@ -386,6 +517,7 @@ class AgentJobResultView(LoggerMixin, APIView):
                     'profile_id': 42,
                     'success': False,
                     'error_message': 'WBM login timed out after 30 s',
+                    'job_token': '6f3f1e0e-5b8a-4c1f-9f3a-3f1c2b7a9d10',
                 },
                 request_only=True,
             ),
@@ -400,7 +532,7 @@ class AgentJobResultView(LoggerMixin, APIView):
             ),
         ],
     )
-    def post(self, request: Request) -> Response:
+    def post(self, request: Request) -> Response:  # noqa: PLR0911 - explicit HTTP error responses.
         """Process a job result posted by the authenticated agent."""
         if not AgentSecurity.is_agent_protocol_permitted():
             return Response(
@@ -419,9 +551,13 @@ class AgentJobResultView(LoggerMixin, APIView):
         profile_id: int = serializer.validated_data['profile_id']
         success: bool = serializer.validated_data['success']
         error_message: str = serializer.validated_data.get('error_message', '')
+        job_token = serializer.validated_data.get('job_token')
 
         profile: AgentAssignedProfile | None = (
-            AgentAssignedProfile.objects.filter(pk=profile_id).select_related('workflow_definition').first()
+            AgentAssignedProfile.objects.filter(pk=profile_id)
+            .select_related('workflow_definition', 'agent__device__domain')
+            .defer('workflow_definition__secrets')
+            .first()
         )
 
         if profile is None:
@@ -442,13 +578,48 @@ class AgentJobResultView(LoggerMixin, APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        if job_token is not None and profile.claim_token is not None and profile.claim_token != job_token:
+            self.logger.warning(
+                'Agent %s reported a stale or invalid claim token for profile %d',
+                agent.agent_id,
+                profile_id,
+            )
+            return Response(
+                {'detail': 'The job claim is no longer valid. Poll again for the current job.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        now = timezone.now()
         if success:
-            now = timezone.now()
             profile.last_certificate_update = now
-            # Calculate next update based on renewal threshold
-            next_update = now + timedelta(days=profile.renewal_threshold_days)
+            profile.last_attempt_at = now
+            profile.last_error = ''
+            profile.failure_count = 0
+            next_update = next_update_after_success(profile, now)
             profile.next_certificate_update_scheduled = next_update
-            profile.save(update_fields=['last_certificate_update', 'next_certificate_update_scheduled'])
+        else:
+            profile.last_attempt_at = now
+            profile.last_error = error_message[:MAX_ERROR_LENGTH]
+            profile.failure_count += 1
+            next_update = now + timedelta(seconds=_failure_backoff_seconds(profile))
+            profile.next_certificate_update_scheduled = next_update
+
+        updated = AgentAssignedProfile.objects.filter(pk=profile.pk, claim_token=profile.claim_token).update(
+            last_certificate_update=profile.last_certificate_update,
+            last_attempt_at=profile.last_attempt_at,
+            last_error=profile.last_error,
+            failure_count=profile.failure_count,
+            next_certificate_update_scheduled=profile.next_certificate_update_scheduled,
+            claimed_at=None,
+            claim_token=None,
+        )
+        if not updated:
+            return Response(
+                {'detail': 'The job claim is no longer valid. Poll again for the current job.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        if success:
             self.logger.info(
                 'Agent %s: profile %d (%s) completed successfully at %s, next update: %s',
                 agent.agent_id,
@@ -459,11 +630,12 @@ class AgentJobResultView(LoggerMixin, APIView):
             )
         else:
             self.logger.warning(
-                'Agent %s: profile %d (%s) reported failure: %s',
+                'Agent %s: profile %d (%s) reported failure: %s (retry after %s)',
                 agent.agent_id,
                 profile_id,
                 profile.workflow_definition.name,
                 error_message or '(no message)',
+                next_update.isoformat(),
             )
 
         response_data = {

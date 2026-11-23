@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Admin registrations for the agents application."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -15,6 +16,7 @@ from agents.models import (
 )
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
     from django.http import HttpRequest
 
 
@@ -37,32 +39,62 @@ class AgentProfileDefinitionAdmin(admin.ModelAdmin[AgentProfileDefinition]):
     search_fields = ('name',)
     readonly_fields = ('created_at', 'updated_at')
 
+    def get_queryset(self, request: HttpRequest) -> QuerySet[AgentProfileDefinition]:
+        """Keep the encrypted secret value out of the admin change list."""
+        return super().get_queryset(request).defer('secrets')
+
 
 @admin.register(AgentAssignedProfile)
 class AgentAssignedProfileAdmin(admin.ModelAdmin[AgentAssignedProfile]):
     """Admin for AgentAssignedProfile."""
 
     list_display = (
-        'agent', 'workflow_definition', 'renewal_threshold_days',
-        'last_certificate_update', 'next_certificate_update_scheduled', 'enabled',
+        'agent',
+        'workflow_definition',
+        'renewal_threshold_days',
+        'last_certificate_update',
+        'next_certificate_update_scheduled',
+        'enabled',
     )
     list_filter = ('enabled',)
     search_fields = ('agent__name', 'workflow_definition__name')
     readonly_fields = ('last_certificate_update', 'created_at', 'updated_at')
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[AgentAssignedProfile]:
+        """Select relations for the change list without decrypting workflow secrets."""
+        return (
+            super()
+            .get_queryset(request)
+            .select_related('agent', 'workflow_definition')
+            .defer('workflow_definition__secrets')
+        )
+
     fieldsets = (
-        (None, {
-            'fields': ('agent', 'workflow_definition', 'enabled'),
-        }),
-        ('Certificate Settings', {
-            'fields': ('subject', 'subject_alt_name'),
-        }),
-        ('Renewal Settings', {
-            'fields': ('renewal_threshold_days', 'last_certificate_update', 'next_certificate_update_scheduled'),
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',),
-        }),
+        (
+            None,
+            {
+                'fields': ('agent', 'workflow_definition', 'enabled'),
+            },
+        ),
+        (
+            'Certificate Settings',
+            {
+                'fields': ('subject', 'subject_alt_name'),
+            },
+        ),
+        (
+            'Renewal Settings',
+            {
+                'fields': ('renewal_threshold_days', 'last_certificate_update', 'next_certificate_update_scheduled'),
+            },
+        ),
+        (
+            'Timestamps',
+            {
+                'fields': ('created_at', 'updated_at'),
+                'classes': ('collapse',),
+            },
+        ),
     )
     actions: list[str] = ['force_renewal']  # noqa: RUF012
 

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """URL configuration for the agents application."""
+
 from django.urls import path, re_path
 
 from agents.web_views import (
@@ -26,7 +27,6 @@ urlpatterns = [
         AgentProfileDefinitionBulkDeleteConfirmView.as_view(),
         name='profiles-delete_confirm',
     ),
-
     # Assigned profiles for 1-to-1 agents
     path(
         '<int:agent_id>/assigned-profiles/',
