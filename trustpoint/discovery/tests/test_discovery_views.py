@@ -222,9 +222,18 @@ class TestDiscoveryViews:
         assert response.status_code == 200
         assert response['Content-Disposition'] == 'attachment; filename="inventory.csv"'
 
-        rows = list(csv.reader(StringIO(response.content.decode('utf-8'))))
+        rows = list(csv.reader(StringIO(b''.join(response.streaming_content).decode('utf-8'))))
         assert rows == [
             ['IP', 'Hostname', 'Ports'],
             ['192.168.1.100', 'sensor-a', '443, 502'],
             ['192.168.1.101', 'sensor-b', ''],
         ]
+
+    def test_export_csv_neutralizes_hostname_formula(self, authenticated_client) -> None:
+        """A hostile discovered hostname must not become a spreadsheet formula."""
+        DiscoveredDevice.objects.create(ip_address='192.168.1.102', hostname='=HYPERLINK("x")', open_ports=[])
+
+        response = authenticated_client.get(reverse('discovery:export_csv'))
+
+        rows = list(csv.reader(StringIO(b''.join(response.streaming_content).decode('utf-8'))))
+        assert rows[1][1] == '\'=HYPERLINK("x")'

@@ -39,3 +39,13 @@ def test_generate_csv_response_streams_rows() -> None:
     assert response['Content-Type'] == 'text/csv; charset=utf-8'
     assert response['Content-Disposition'].startswith('attachment; filename="tp_devices_')
     assert body == '\ufeffName\r\nalpha\r\nbeta\r\n'
+
+
+def test_generate_csv_response_neutralizes_formulas() -> None:
+    rows = _Rows([_Row('=HYPERLINK("http://attacker/")'), _Row('-1+1')])
+    response = generate_csv_response(rows, [ExportColumn(key='name', label='Name')], 'devices')
+
+    body = b''.join(response.streaming_content).decode('utf-8')
+
+    assert "'=HYPERLINK" in body
+    assert "'-1+1" in body

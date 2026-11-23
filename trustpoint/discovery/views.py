@@ -3,7 +3,6 @@
 
 """Views for the network discovery dashboard and port management."""
 
-import csv
 from typing import Any
 
 from django.contrib import messages
@@ -11,10 +10,11 @@ from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
+from shared.exports import stream_csv_response
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
@@ -269,12 +269,9 @@ class ExportCsvView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     http_method_names = ('get',)
     permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
-    def get(self, request: HttpRequest) -> HttpResponse:  # noqa: ARG002
+    def get(self, request: HttpRequest) -> HttpResponseBase:  # noqa: ARG002
         """Return inventory rows as a downloadable CSV."""
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="inventory.csv"'
-        writer = csv.writer(response)
-        writer.writerow(['IP', 'Hostname', 'Ports'])
-        for d in DiscoveredDevice.objects.all():
-            writer.writerow([d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))])
-        return response
+        rows = (
+            [d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))] for d in DiscoveredDevice.objects.iterator()
+        )
+        return stream_csv_response(['IP', 'Hostname', 'Ports'], rows, 'inventory.csv')

@@ -335,12 +335,6 @@ class DeviceDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsPushDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
-    """Download dispatcher view for the OPC UA GDS Push pages."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
 # --------------------------------------------- Certificate Download Help ----------------------------------------------
 
 
@@ -372,11 +366,5 @@ class AbstractCertificateDownloadView(PageContextMixin, DetailView[IssuedCredent
 
 class DeviceCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the device pages."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
-    """Certificate download view for the OPC UA GDS Push pages."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY

@@ -90,3 +90,13 @@ def test_self_signed_ca_is_supported(rsa_env: ScepEnv) -> None:
     ca.save(update_fields=['ca_type'])
     assert services.get_local_issuing_ca(rsa_env.domain) == ca
     assert services.ensure_server_credential(rsa_env.domain) is not None
+
+
+def test_valid_credential_does_not_take_the_domain_lock(rsa_env: ScepEnv) -> None:
+    """Serving a usable credential is a read-only fast path."""
+    services.ensure_server_credential(rsa_env.domain)
+
+    with patch('pki.models.DomainModel.objects.select_for_update') as lock:
+        services.ensure_server_credential(rsa_env.domain)
+
+    lock.assert_not_called()

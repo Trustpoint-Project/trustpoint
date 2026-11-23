@@ -319,3 +319,28 @@ def test_notification_commands_follow_shared_policy_and_deduplicate(policy_keys,
     for _ in range(2):
         call_command(command, stdout=StringIO())
     assert NotificationModel.objects.filter(event=event, certificate=model).count() == 1
+
+
+def test_combined_policy_command_reports_all_checks_in_one_run(policy_keys):
+    """The notification cycle uses one command for all certificate policy alerts."""
+    config = _config(
+        rsa_minimum_key_size=4096,
+        not_permitted_ecc_curve_oids=[NamedCurve.SECP256R1.dotted_string],
+        not_permitted_signature_algorithm_oids=[HashAlgorithm.SHA256.dotted_string],
+    )
+    config.save()
+    rsa_certificate, _ = _material(policy_keys['rsa'])
+    ec_certificate, _ = _material(policy_keys['ec256'])
+    rsa_model = CertificateModel.save_certificate(rsa_certificate)
+    ec_model = CertificateModel.save_certificate(ec_certificate)
+
+    call_command('check_certificate_policy', stdout=StringIO())
+
+    assert NotificationModel.objects.filter(event='INSUFFICIENT_KEY_LENGTH', certificate=rsa_model).count() == 1
+    assert NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate=ec_model).count() == 1
+    assert (
+        NotificationModel.objects.filter(
+            event='WEAK_SIGNATURE_ALGORITHM', certificate__in=[rsa_model, ec_model]
+        ).count()
+        == 2
+    )

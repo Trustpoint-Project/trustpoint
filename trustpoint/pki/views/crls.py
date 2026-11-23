@@ -24,7 +24,7 @@ from django.views.generic.edit import FormView
 from pki.filters import CrlFilter
 from pki.models import CaModel, CertificateModel, CrlModel
 from pki.util.crl import crl_to_pkcs7_der, crl_to_pkcs7_pem
-from shared.exports import ExportColumn, ExportConfig, ExportMixin
+from shared.exports import ExportConfig, ExportMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
@@ -58,13 +58,6 @@ class CrlTableView(ExportMixin, CrlContextMixin, ListView[CrlModel]):
                 'next_update': _('Next Update'),
                 'is_active': _('Active'),
             },
-            extra=[
-                ExportColumn(
-                    key='revoked_count',
-                    label=_('Revoked Certificates'),
-                    accessor=lambda c: str(len(c.get_revoked_serial_numbers())),
-                ),
-            ],
             filename='crls',
         )
 

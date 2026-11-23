@@ -51,8 +51,6 @@ from .download import (
     DeviceCertificateDownloadView,
     DeviceDownloadPageDispatcherView,
     DeviceManualCredentialDownloadView,
-    OpcUaGdsPushCertificateDownloadView,
-    OpcUaGdsPushDownloadPageDispatcherView,
 )
 from .gds_push import (
     OpcUaGdsPushCertRenewalSettingsView,
@@ -104,13 +102,11 @@ __all__ = [
     'OpcUaGdsPushBulkDeleteView',
     'OpcUaGdsPushBulkRevokeView',
     'OpcUaGdsPushCertRenewalSettingsView',
-    'OpcUaGdsPushCertificateDownloadView',
     'OpcUaGdsPushCertificateLifecycleManagementSummaryView',
     'OpcUaGdsPushCreateChooseOnboardingView',
     'OpcUaGdsPushCreateOnboardingView',
     'OpcUaGdsPushDiscoverServerView',
     'OpcUaGdsPushDomainCredentialRenewalSettingsView',
-    'OpcUaGdsPushDownloadPageDispatcherView',
     'OpcUaGdsPushIssueDomainCredentialView',
     'OpcUaGdsPushIssuedCredentialRevocationView',
     'OpcUaGdsPushOnboardingIssueNewApplicationCredentialView',

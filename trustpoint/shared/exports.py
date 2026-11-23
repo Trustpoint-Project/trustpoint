@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 from django.http import HttpResponse, StreamingHttpResponse
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterable, Iterator, Sequence
 
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
@@ -83,6 +83,29 @@ class _Echo:
         return value
 
 
+def csv_safe_cell(value: str) -> str:
+    """Stop spreadsheet programs from treating exported text as a formula."""
+    if value.startswith(('=', '+', '-', '@', '\t', '\r')):
+        return f"'{value}"
+    return value
+
+
+def stream_csv_response(
+    header: Sequence[str], rows: Iterable[Sequence[object]], filename: str
+) -> StreamingHttpResponse:
+    """Stream header and rows as a CSV attachment with a fixed filename."""
+
+    def content() -> Iterator[str]:
+        writer = csv.writer(_Echo())
+        yield writer.writerow([csv_safe_cell('' if cell is None else str(cell)) for cell in header])
+        for row in rows:
+            yield writer.writerow([csv_safe_cell('' if cell is None else str(cell)) for cell in row])
+
+    response = StreamingHttpResponse(content(), content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
 def generate_csv_response(
     queryset: QuerySet[Any],
     columns: list[ExportColumn],
@@ -97,7 +120,7 @@ def generate_csv_response(
         # Preserve Excel's UTF-8 detection without buffering the response body.
         yield '\ufeff' + writer.writerow([col.label for col in columns])
         for obj in queryset.iterator():
-            yield writer.writerow([col.get_value(obj) for col in columns])
+            yield writer.writerow([csv_safe_cell(col.get_value(obj)) for col in columns])
 
     response = StreamingHttpResponse(rows(), content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{full_filename}"'
