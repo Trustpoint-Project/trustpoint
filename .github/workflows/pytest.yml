@@ -102,7 +102,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:18.7
+        image: postgres:19.0
         env:
           POSTGRES_DB: trustpoint_db
           POSTGRES_USER: admin
