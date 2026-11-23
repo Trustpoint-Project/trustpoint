@@ -29,9 +29,7 @@ if TYPE_CHECKING:
 SIGNATURE_EVENT = 'WEAK_SIGNATURE_ALGORITHM'
 KEY_EVENT = 'INSUFFICIENT_KEY_LENGTH'
 CURVE_EVENT = 'WEAK_ECC_CURVE'
-_POLICY_SIGNATURE_CODES = frozenset(
-    {PolicyViolationCode.SIGNATURE_BLOCKED, PolicyViolationCode.SIGNATURE_HASH_BLOCKED}
-)
+_POLICY_SIGNATURE_CODES = frozenset({PolicyViolationCode.SIGNATURE_BLOCKED, PolicyViolationCode.SIGNATURE_HASH_BLOCKED})
 
 
 def _signature_violation(policy: CryptographicPolicy, certificate: CertificateModel) -> tuple[PolicyViolation, ...]:
@@ -114,9 +112,7 @@ def check_certificate_policy_notifications(
         return
 
     policy = CryptographicPolicy.from_config(config)
-    checks: list[
-        tuple[str, Callable[[CryptographicPolicy, CertificateModel], tuple[PolicyViolation, ...]]]
-    ] = []
+    checks: list[tuple[str, Callable[[CryptographicPolicy, CertificateModel], tuple[PolicyViolation, ...]]]] = []
     if signature and policy.blocked_signature_oids:
         checks.append((SIGNATURE_EVENT, _signature_violation))
     if key and policy.rsa_minimum_key_size != 0:

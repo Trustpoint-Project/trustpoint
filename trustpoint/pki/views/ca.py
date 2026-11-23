@@ -68,7 +68,8 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
                     label=_('Not Valid After'),
                     accessor=lambda c: (
                         timezone.localtime(c.display_not_valid_after).strftime('%Y-%m-%d %H:%M:%S')
-                        if c.display_not_valid_after else '-'
+                        if c.display_not_valid_after
+                        else '-'
                     ),
                 ),
             ],
@@ -90,7 +91,8 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
     def get_queryset(self) -> QuerySet[CaModel]:
         """Return CA models with relationships prefetched, respecting active filters."""
         base_qs = (
-            super().get_queryset()
+            super()
+            .get_queryset()
             .select_related('parent_ca', 'credential__certificate', 'certificate')
             .prefetch_related('domains')
         )
@@ -101,10 +103,7 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
         context = super().get_context_data(**kwargs)
 
         context['filter'] = getattr(self, 'filterset', None)
-        context['filters_active'] = any(
-            self.request.GET.get(k)
-            for k in ('unique_name', 'ca_type_group', 'is_active')
-        )
+        context['filters_active'] = any(self.request.GET.get(k) for k in ('unique_name', 'ca_type_group', 'is_active'))
 
         # Handle both paginated and non-paginated cases
         if context.get('page_obj'):

@@ -272,7 +272,6 @@ class ExportCsvView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     def get(self, request: HttpRequest) -> HttpResponseBase:  # noqa: ARG002
         """Return inventory rows as a downloadable CSV."""
         rows = (
-            [d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))]
-            for d in DiscoveredDevice.objects.iterator()
+            [d.ip_address, d.hostname, ', '.join(map(str, d.open_ports))] for d in DiscoveredDevice.objects.iterator()
         )
         return stream_csv_response(['IP', 'Hostname', 'Ports'], rows, 'inventory.csv')

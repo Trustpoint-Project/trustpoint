@@ -185,9 +185,7 @@ def test_keyless_ca_certificate_still_gets_a_generic_expiry_alert(monkeypatch):
 
     call_command('check_certificate_validity', stdout=StringIO())
 
-    assert NotificationModel.objects.filter(
-        certificate=ca_model.certificate, event='CERTIFICATE_EXPIRING'
-    ).exists()
+    assert NotificationModel.objects.filter(certificate=ca_model.certificate, event='CERTIFICATE_EXPIRING').exists()
 
 
 def test_active_tls_certificate_is_left_to_the_tls_check(certificate, monkeypatch):

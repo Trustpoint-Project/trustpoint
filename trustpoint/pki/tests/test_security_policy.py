@@ -338,4 +338,9 @@ def test_combined_policy_command_reports_all_checks_in_one_run(policy_keys):
 
     assert NotificationModel.objects.filter(event='INSUFFICIENT_KEY_LENGTH', certificate=rsa_model).count() == 1
     assert NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate=ec_model).count() == 1
-    assert NotificationModel.objects.filter(event='WEAK_SIGNATURE_ALGORITHM', certificate__in=[rsa_model, ec_model]).count() == 2
+    assert (
+        NotificationModel.objects.filter(
+            event='WEAK_SIGNATURE_ALGORITHM', certificate__in=[rsa_model, ec_model]
+        ).count()
+        == 2
+    )
