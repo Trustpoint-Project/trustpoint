@@ -23,14 +23,16 @@ class UnsaltedSHA256Hasher(BasePasswordHasher):
     def encode(self, password: str, salt: str) -> str:
         """Return the prefixed digest of the secret."""
         del salt
-        return f'{self.algorithm}${sha256(password.encode()).hexdigest()}'  # lgtm[py/weak-sensitive-data-hashing]
+        # codeql[py/weak-sensitive-data-hashing]: 384-bit random secret, not a user-chosen password
+        return f'{self.algorithm}${sha256(password.encode()).hexdigest()}'
 
     def verify(self, password: str, encoded: str) -> bool:
         """Compare the secret with the stored digest in constant time."""
         algorithm, digest = encoded.split('$', 1)
         if algorithm != self.algorithm:
             return False
-        submitted = sha256(password.encode()).hexdigest()  # lgtm[py/weak-sensitive-data-hashing]
+        # codeql[py/weak-sensitive-data-hashing]: 384-bit random secret, not a user-chosen password
+        submitted = sha256(password.encode()).hexdigest()
         return constant_time_compare(digest, submitted)
 
     def decode(self, encoded: str) -> dict[str, str]:
