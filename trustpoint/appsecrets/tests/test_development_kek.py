@@ -3,7 +3,10 @@
 
 """Local-only KEK provisioning must never replace an initialized installation's key."""
 
+from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -18,12 +21,24 @@ from appsecrets.service import (
 )
 from trustpoint.secret_key import development_software_kek
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from pytest_django.fixtures import SettingsWrapper
+
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture
-def development_backend(settings, monkeypatch, tmp_path):
-    settings.DEBUG = True
+@pytest.fixture(params=[False, True], ids=['debug', 'development-server'])
+def development_backend(
+    settings: SettingsWrapper,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    request: pytest.FixtureRequest,
+) -> tuple[SoftwareAppSecretService, Path]:
+    """Exercise both debug and native development-server key provisioning."""
+    settings.DEBUG = not request.param
+    settings.TRUSTPOINT_DEVELOPMENT_SERVER = request.param
     settings.DOCKER_CONTAINER = False
     settings.REPO_ROOT = tmp_path
     monkeypatch.delenv('TRUSTPOINT_SOFTWARE_KEK_FILE', raising=False)
@@ -103,11 +118,22 @@ def test_explicit_kek_file_always_takes_precedence(development_backend, monkeypa
     assert not default.exists()
 
 
-@pytest.mark.parametrize('debug,docker', [(False, False), (False, True), (True, True)])
-def test_production_and_docker_never_generate_a_kek(development_backend, settings, debug, docker):
+@pytest.mark.parametrize(
+    ('debug', 'docker', 'development_server'),
+    [(False, False, False), (False, True, False), (True, True, False), (False, True, True)],
+)
+def test_production_and_docker_never_generate_a_kek(
+    development_backend: tuple[SoftwareAppSecretService, Path],
+    settings: SettingsWrapper,
+    debug: bool,
+    docker: bool,
+    development_server: bool,
+) -> None:
+    """Production and Docker cannot opt into development key creation."""
     _, path = development_backend
     settings.DEBUG = debug
     settings.DOCKER_CONTAINER = docker
+    settings.TRUSTPOINT_DEVELOPMENT_SERVER = development_server
     with (
         patch('appsecrets.service.Path.open', side_effect=FileNotFoundError),
         patch('appsecrets.service.development_software_kek') as helper,

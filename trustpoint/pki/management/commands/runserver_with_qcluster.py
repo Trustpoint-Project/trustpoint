@@ -32,8 +32,13 @@ class QClusterMixin:
         qcluster: subprocess.Popen[bytes] | None = None
         # The autoreloader re-runs handle() in a child with RUN_MAIN set; only the parent owns the qcluster.
         if not options.get('no_qcluster') and os.environ.get('RUN_MAIN') != 'true':
+            worker_env = os.environ.copy()
+            if settings.TRUSTPOINT_DEVELOPMENT_SERVER:
+                # The child runs qcluster rather than a development-server command.
+                worker_env['_TRUSTPOINT_DEVELOPMENT_SERVER'] = '1'
             qcluster = subprocess.Popen(  # noqa: S603 - fixed project command, no user input
-                [sys.executable, str(settings.BASE_DIR / 'manage.py'), 'qcluster']
+                [sys.executable, str(settings.BASE_DIR / 'manage.py'), 'qcluster'],
+                env=worker_env,
             )
         try:
             super().handle(*args, **options)  # type: ignore[misc]

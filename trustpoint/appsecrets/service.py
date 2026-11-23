@@ -303,7 +303,7 @@ def load_software_kek(*, allow_development_creation: bool = False) -> bytes:
     path = os.environ.get('TRUSTPOINT_SOFTWARE_KEK_FILE')
     try:
         if path is None:
-            if settings.DEBUG and not settings.DOCKER_CONTAINER:
+            if (settings.DEBUG or settings.TRUSTPOINT_DEVELOPMENT_SERVER) and not settings.DOCKER_CONTAINER:
                 path = str(
                     development_software_kek(
                         settings.REPO_ROOT / 'var' / 'development' / 'software_kek',

@@ -154,7 +154,7 @@
                         rows="16"
                         spellcheck="false"
                         {% if form.profile.errors %}aria-describedby="profile_json_error"{% endif %}
-                    >{{ profile_json }}</textarea>
+                    >{{ profile_json_text }}</textarea>
 
                     {% for error in form.profile.errors %}
                         <div
@@ -168,6 +168,37 @@
                     {% if form.profile.help_text %}
                         <div class="form-text">
                             {{ form.profile.help_text }}
+                        </div>
+                    {% endif %}
+
+                    <label
+                        for="secrets-editor"
+                        class="form-label mt-4"
+                    >
+                        {% trans "Secret Values" %}
+                    </label>
+
+                    <textarea
+                        class="form-control font-monospace{% if form.secrets.errors %} is-invalid{% endif %}"
+                        id="secrets-editor"
+                        name="secrets"
+                        rows="6"
+                        spellcheck="false"
+                        {% if form.secrets.errors %}aria-describedby="secrets_json_error"{% endif %}
+                    >{{ secrets_json }}</textarea>
+
+                    {% for error in form.secrets.errors %}
+                        <div
+                            class="invalid-feedback"
+                            id="secrets_json_error"
+                        >
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+
+                    {% if form.secrets.help_text %}
+                        <div class="form-text">
+                            {{ form.secrets.help_text }}
                         </div>
                     {% endif %}
                 </section>

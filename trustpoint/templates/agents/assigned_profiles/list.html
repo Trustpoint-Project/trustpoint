@@ -67,6 +67,10 @@
                                 {% trans "Next Update" %}
                             </th>
 
+                            <th scope="col" class="text-nowrap">
+                                {% trans "Last Attempt" %}
+                            </th>
+
                             <th scope="col">
                                 {% trans "Status" %}
                             </th>
@@ -120,8 +124,32 @@
                                     {% endif %}
                                 </td>
 
+                                <td class="text-nowrap">
+                                    {% if assignment.last_attempt_at %}
+                                        {{ assignment.last_attempt_at|local_datetime }}
+                                    {% else %}
+                                        <span class="text-muted">
+                                            {% trans "Never" %}
+                                        </span>
+                                    {% endif %}
+                                    {% if assignment.failure_count %}
+                                        <span class="badge text-bg-danger">
+                                            {{ assignment.failure_count }}
+                                        </span>
+                                        {% if assignment.last_error %}
+                                            <div class="small text-danger" title="{{ assignment.last_error }}">
+                                                {{ assignment.last_error }}
+                                            </div>
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+
                                 <td>
-                                    {% if assignment.enabled %}
+                                    {% if not assignment.workflow_definition.is_active %}
+                                        <span class="badge text-bg-warning">
+                                            {% trans "Profile inactive" %}
+                                        </span>
+                                    {% elif assignment.enabled %}
                                         <span class="badge text-bg-success">
                                             {% trans "Active" %}
                                         </span>
@@ -162,7 +190,7 @@
                         {% empty %}
                             <tr>
                                 <td
-                                    colspan="7"
+                                    colspan="8"
                                     class="text-center text-muted py-5"
                                 >
                                     {% trans "No profiles have been assigned to this agent yet." %}

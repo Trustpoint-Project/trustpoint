@@ -23,7 +23,7 @@ Key security/operational properties
 * No secrets are passed via process command-line arguments.
 * No tempfile.mktemp usage.
 * Private keys are written atomically with mode 0600.
-* Certificate/key rotation is staged and committed atomically.
+* Certificate/key rotation is staged with rollback and startup recovery.
 * Structured logging supports text or JSON output.
 * systemd notification support is included when NOTIFY_SOCKET is present.
 * HTTP requests use retry/backoff for transient failures.
@@ -49,6 +49,7 @@ import os
 import random
 import signal
 import socket
+import stat
 import sys
 import tempfile
 import time
@@ -579,7 +580,7 @@ HTTP_OK_MAX = 300
 
 def _backoff_delay(attempt: int, initial_backoff: float, max_backoff: float) -> float:
     """Calculate exponential backoff delay with jitter (not for cryptographic use)."""
-    base = min(max_backoff, initial_backoff * (2 ** attempt))
+    base = min(max_backoff, initial_backoff * (2**attempt))
     return float(base * random.uniform(0.5, 1.5))  # noqa: S311
 
 
@@ -742,8 +743,12 @@ def fetch_jobs(params: PollParams, session: Session, cert_pem_urlencoded: str) -
     return poll_interval, jobs
 
 
-def deterministic_paths_for_job(params: PollParams, cert_profile: str) -> tuple[Path, Path, Path, Path]:
-    """Determine file paths for certificate renewal based on profile."""
+def deterministic_paths_for_job(
+    params: PollParams,
+    cert_profile: str,
+    profile_id: int,
+) -> tuple[Path, Path, Path, Path]:
+    """Determine file paths for certificate renewal based on profile and assignment id."""
     if cert_profile == 'domain_credential':
         return (
             params.local_storage.private_key_path,
@@ -752,16 +757,17 @@ def deterministic_paths_for_job(params: PollParams, cert_profile: str) -> tuple[
             params.local_storage.certificate_chain_path,
         )
 
-    # For non-domain credentials, keep deterministic names beside the configured domain key.
+    # The assignment id keeps two profiles with the same certificate profile from overwriting each other.
     base_dir = params.local_storage.private_key_path.parent
     if str(base_dir) == '':
         base_dir = Path()
     safe_profile = ''.join(ch if ch.isalnum() or ch in {'-', '_', '.'} else '_' for ch in cert_profile)
+    stem = f'{safe_profile}-{profile_id}'
     return (
-        base_dir / f'{safe_profile}-key.pem',
-        base_dir / f'{safe_profile}-csr.pem',
-        base_dir / f'{safe_profile}-certificate.pem',
-        base_dir / f'{safe_profile}-chain.pem',
+        base_dir / f'{stem}-key.pem',
+        base_dir / f'{stem}-csr.pem',
+        base_dir / f'{stem}-certificate.pem',
+        base_dir / f'{stem}-chain.pem',
     )
 
 
@@ -791,7 +797,7 @@ def execute_renewal_job(
         public_key_algorithm_oid = _optional_str(cert_req.get('public_key_algorithm_oid'))
         key_parameter = _optional_str(cert_req.get('key_parameter'))
 
-        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, cert_profile)
+        key_path, csr_path, cert_path, chain_path = deterministic_paths_for_job(params, cert_profile, profile_id)
 
         LOG.info(
             'executing renewal job',
@@ -840,13 +846,18 @@ def execute_renewal_job(
             )
             save_credentials(enrollment, staged_cert, staged_chain)
 
-            # Commit order: cert/chain first, key last. For domain credential rotation,
-            # the current mTLS session for this poll still holds the old credential.
-            # The next poll creates a fresh session using the new cert/key paths.
-            atomic_copy(staged_csr, csr_path, 0o644)
-            atomic_copy(staged_cert, cert_path, 0o644)
-            atomic_copy(staged_chain, chain_path, 0o644)
-            atomic_copy(staged_key, key_path, 0o600)
+            # Commit all files together, keeping .bak copies until the new key and
+            # certificate are verified. A crash is recovered on the next startup.
+            _commit_staged_credentials(
+                [
+                    (staged_csr, csr_path, 0o644),
+                    (staged_cert, cert_path, 0o644),
+                    (staged_chain, chain_path, 0o644),
+                    (staged_key, key_path, 0o600),
+                ],
+                cert_path,
+                key_path,
+            )
 
         if cert_profile == 'domain_credential':
             params.active_credential = ActiveCredential(cert_path=cert_path, key_path=key_path)
@@ -864,14 +875,105 @@ def atomic_copy(src: Path, dst: Path, mode: int) -> None:
     atomic_write_bytes(dst, src.read_bytes(), mode)
 
 
-def acknowledge_job(params: PollParams, session: Session, result: JobResult, cert_pem_urlencoded: str) -> None:
+BACKUP_SUFFIX = '.bak'
+COMMITTED_SUFFIX = '.rotation-committed'
+
+
+def _backup_path(path: Path) -> Path:
+    """Return the rollback copy path for a credential file."""
+    return path.with_name(path.name + BACKUP_SUFFIX)
+
+
+def _verify_cert_key_pair(cert_path: Path, key_path: Path) -> None:
+    """Reject a cert/key pair whose public keys do not match."""
+    cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+    key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+    cert_public = cert.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    key_public = key.public_key().public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    if cert_public != key_public:
+        msg = 'new certificate does not match the new private key'
+        raise AgentError(msg)
+
+
+def _commit_staged_credentials(
+    staged_targets: list[tuple[Path, Path, int]],
+    cert_path: Path,
+    key_path: Path,
+) -> None:
+    """Copy staged files into place with rollback on failure and recovery on next start."""
+    committed = key_path.with_name(key_path.name + COMMITTED_SUFFIX)
+    if committed.exists():
+        _finish_committed_rotation(committed)
+    targets = [(target, mode) for _source, target, mode in staged_targets]
+    existed = {target for target, _mode in targets if target.exists()}
+    for target, mode in targets:
+        if target.exists():
+            atomic_copy(target, _backup_path(target), mode)
+    try:
+        for source, target, mode in staged_targets:
+            atomic_copy(source, target, mode)
+        _verify_cert_key_pair(cert_path, key_path)
+    except Exception:
+        for target, mode in targets:
+            backup = _backup_path(target)
+            if backup.exists():
+                atomic_copy(backup, target, mode)
+                backup.unlink(missing_ok=True)
+            elif target not in existed:
+                target.unlink(missing_ok=True)
+        raise
+    # Recovery must keep the verified pair even if backup cleanup is interrupted.
+    atomic_write_text(committed, json.dumps([str(_backup_path(target).resolve()) for target, _mode in targets]), 0o600)
+    _finish_committed_rotation(committed)
+
+
+def _finish_committed_rotation(committed: Path) -> None:
+    """Discard backups only after the complete new credential has been committed."""
+    for name in json.loads(committed.read_text(encoding='utf-8')):
+        backup = Path(name)
+        backup.unlink(missing_ok=True)
+        _fsync_parent(backup)
+    committed.unlink()
+    _fsync_parent(committed)
+
+
+def recover_interrupted_rotations(directory: Path) -> None:
+    """Restore credential files left mid-rotation by an interrupted process."""
+    if not directory.exists():
+        return
+    for committed in sorted(directory.glob(f'*{COMMITTED_SUFFIX}')):
+        _finish_committed_rotation(committed)
+    for backup in sorted(directory.glob(f'*{BACKUP_SUFFIX}')):
+        target = backup.with_name(backup.name[: -len(BACKUP_SUFFIX)])
+        mode = stat.S_IMODE(backup.stat().st_mode)
+        atomic_copy(backup, target, mode)
+        backup.unlink(missing_ok=True)
+        LOG.warning('restored interrupted credential rotation', extra={'path': str(target)})
+
+
+def acknowledge_job(
+    params: PollParams,
+    session: Session,
+    result: JobResult,
+    cert_pem_urlencoded: str,
+    job_token: str | None = None,
+) -> None:
     """Send job result acknowledgement to Trustpoint."""
     result_url = join_url(params.base_url, '/api/agents/jobs/result/')
     body = {
         'profile_id': result.profile_id,
         'success': result.success,
-        'error_message': result.error_message,
+        # Keep the request below the server's serializer limit.
+        'error_message': result.error_message[:2000],
     }
+    if job_token:
+        body['job_token'] = job_token
     response = request_with_retries(
         session,
         'POST',
@@ -903,7 +1005,14 @@ def poll_once(params: PollParams) -> int:
         if _stop_requested:
             break
         result = execute_renewal_job(params, session, job, cert_pem_urlencoded)
-        acknowledge_job(params, session, result, cert_pem_urlencoded)
+        job_token = job.get('job_token')
+        acknowledge_job(
+            params,
+            session,
+            result,
+            cert_pem_urlencoded,
+            job_token=str(job_token) if job_token else None,
+        )
 
     return poll_interval
 
@@ -942,9 +1051,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description='Bootstrap and run a hardened Trustpoint endpoint agent.')
     parser.add_argument('--profile', default='agent_setup.json', type=Path, help='Path to rendered agent_setup.json')
-    parser.add_argument(
-        '--once', action='store_true', help='Perform a single poll cycle after onboarding, then exit'
-    )
+    parser.add_argument('--once', action='store_true', help='Perform a single poll cycle after onboarding, then exit')
     parser.add_argument(
         '--skip-onboarding',
         action='store_true',
@@ -991,6 +1098,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         profile = read_profile(args.profile)
+        recover_interrupted_rotations(profile.local_storage.private_key_path.parent)
 
         if args.skip_onboarding:
             _handle_skip_onboarding(profile)

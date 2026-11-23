@@ -21,6 +21,7 @@ dependencies = [
     "django-prometheus>=2.4.0",
     "django-stubs-ext>=6.1.0",
     "djangorestframework>=3.17.1",
+    "jsonschema>=4.26.0",
     "djangorestframework-simplejwt>=5.5.1",
     "drf-spectacular>=0.30.0",
     "packaging>=26.2",

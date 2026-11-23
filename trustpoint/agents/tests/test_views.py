@@ -6,7 +6,7 @@
 Covers:
 - AgentCertificateAuthentication
 - AgentJobsView (GET /api/agents/jobs/)
-- AgentJobResultView (POST /api/agents/jobs/results/)
+- AgentJobResultView (POST /api/agents/jobs/result/)
 - AgentProfileDefinitionTableView
 - AgentProfileDefinitionConfigView
 - AgentProfileDefinitionBulkDeleteConfirmView
@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import json
 import urllib.parse
+import uuid
 from datetime import timedelta
+from io import StringIO
 from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
@@ -27,9 +29,13 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.db import connection
 from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
+from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.test import APIClient
 
@@ -38,16 +44,20 @@ from agents.api_views import (
     _build_resolved_profile,
     _parse_client_cert,
     _resolve_enrollment_url,
+    next_update_after_success,
 )
+from agents.checks import literal_password_steps
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
 from agents.web_views import AgentProfileDefinitionConfigView, AgentProfileDefinitionTableView
 from devices.models import DeviceModel, DomainModel
-from management.models import SecurityConfig
+from management.models import AuditLog, SecurityConfig
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models import IssuedCredentialModel
 from onboarding.models import OnboardingProtocol
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from django.contrib.auth.models import AbstractBaseUser
     from django.test import Client
 
@@ -784,6 +794,25 @@ class TestAgentJobResultView:
         assert assigned_profile.last_certificate_update == initial_last_update
 
     @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_long_error_message_is_stored_truncated(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {'profile_id': assigned_profile.pk, 'success': False, 'error_message': 'x' * 3000},
+            format='json',
+        )
+
+        assert response.status_code == 200
+        assigned_profile.refresh_from_db()
+        assert len(assigned_profile.last_error) == 2000
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
     def test_post_result_profile_not_found(
         self,
         mock_auth: Mock,
@@ -1015,3 +1044,740 @@ class TestAgentProfileDefinitionBulkDeleteView:
         # Verify deletions
         final_count = AgentProfileDefinition.objects.count()
         assert final_count < initial_count
+
+
+# ============================================================================
+# Regression tests for audit fixes
+# ============================================================================
+
+
+@pytest.fixture
+def second_agent(db: Any, domain: DomainModel) -> TrustpointAgent:
+    """Create a second agent with its own device."""
+    device = DeviceModel.objects.create(
+        common_name='second-device',
+        serial_number='SN654321',
+        device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+        domain=domain,
+    )
+    return TrustpointAgent.objects.create(
+        agent_id='second-agent-1',
+        name='Second Agent',
+        device=device,
+        is_active=True,
+    )
+
+
+@pytest.mark.django_db
+class TestProfileValidationFixes:
+    """Validation gaps found in the audit."""
+
+    def test_certificate_request_must_be_an_object(self):
+        profile = AgentProfileDefinition(name='Bad Request', profile={'certificate_request': None})
+        with pytest.raises(ValidationError):
+            profile.full_clean()
+
+    def test_literal_password_is_rejected(self):
+        profile = AgentProfileDefinition(
+            name='Plain Password',
+            profile={'steps': [{'type': 'fill', 'selector': '#password', 'value': 'plain'}]},
+        )
+        with pytest.raises(ValidationError, match='password'):
+            profile.full_clean()
+
+    def test_secret_placeholder_is_accepted(self):
+        profile = AgentProfileDefinition(
+            name='Secret Password',
+            profile={'steps': [{'type': 'fill', 'selector': '#password', 'value': '{{ secret:wbm_password }}'}]},
+            secrets={'wbm_password': 'value'},
+        )
+        profile.full_clean()
+
+    def test_incomplete_click_step_is_rejected(self):
+        profile = AgentProfileDefinition(name='Incomplete', profile={'steps': [{'type': 'click'}]})
+        with pytest.raises(ValidationError, match='selector'):
+            profile.full_clean()
+
+    def test_missing_secret_reference_is_rejected(self):
+        profile = AgentProfileDefinition(
+            name='Missing Secret',
+            profile={'steps': [{'type': 'fill', 'selector': '#username', 'value': '{{ secret:missing }}'}]},
+            secrets={},
+        )
+        with pytest.raises(ValidationError, match='Missing secret'):
+            profile.full_clean()
+
+
+@pytest.mark.django_db
+class TestScheduleFromCertificate:
+    """The renewal threshold is measured before certificate expiry."""
+
+    def test_next_update_uses_certificate_expiry(self, assigned_profile: AgentAssignedProfile):
+        now = timezone.now()
+        assigned_profile.renewal_threshold_days = 4
+        with patch.object(AgentAssignedProfile, 'certificate_not_after', return_value=now + timedelta(days=10)):
+            result = next_update_after_success(assigned_profile, now)
+        assert result == now + timedelta(days=6)
+
+    def test_custom_domain_profile_name_is_used_for_lookup(
+        self,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        expiry = timezone.now() + timedelta(days=10)
+        credential = Mock()
+        credential.credential.certificate.not_valid_after = expiry
+        manager = Mock()
+        manager.select_related.return_value.order_by.return_value.first.return_value = credential
+        calls: list[tuple[Any, ...]] = []
+
+        def fake_filter(*args: Any, **_kwargs: Any) -> Mock:
+            calls.append(args)
+            return manager
+
+        manager.filter.side_effect = fake_filter
+        with (
+            patch('pki.models.IssuedCredentialModel.objects.filter', side_effect=fake_filter),
+            patch.object(agent.device.domain, 'get_domain_credential_profile_name', return_value='custom-domain'),
+        ):
+            result = assigned_profile.certificate_not_after()
+
+        assert result == expiry
+        assert 'custom-domain' in str(calls[1][0])
+
+    def test_threshold_larger_than_lifetime_does_not_loop(
+        self,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        now = timezone.now()
+        assigned_profile.renewal_threshold_days = 30
+        with patch.object(AgentAssignedProfile, 'certificate_not_after', return_value=now + timedelta(days=10)):
+            result = next_update_after_success(assigned_profile, now)
+        assert result == now + timedelta(days=1)
+
+    def test_recalculate_schedules_command_moves_old_dates_earlier(
+        self,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        now = timezone.now()
+        assigned_profile.next_certificate_update_scheduled = now + timedelta(days=30)
+        assigned_profile.save()
+        with patch.object(
+            AgentAssignedProfile,
+            'next_update_from_certificate',
+            return_value=now + timedelta(days=1),
+        ):
+            call_command('recalculate_agent_renewal_schedules')
+
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.next_certificate_update_scheduled is not None
+        assert assigned_profile.next_certificate_update_scheduled < now + timedelta(days=2)
+
+    def test_success_ack_uses_certificate_expiry(
+        self,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        now = timezone.now()
+        assigned_profile.renewal_threshold_days = 5
+        assigned_profile.save()
+        with (
+            patch('agents.api_views.AgentCertificateAuthentication.authenticate', return_value=(agent, None)),
+            patch.object(AgentAssignedProfile, 'certificate_not_after', return_value=now + timedelta(days=20)),
+        ):
+            response = api_client.post(
+                '/api/agents/jobs/result/',
+                {'profile_id': assigned_profile.pk, 'success': True},
+                format='json',
+            )
+        assert response.status_code == 200
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.next_certificate_update_scheduled is not None
+        assert assigned_profile.next_certificate_update_scheduled > now + timedelta(days=14)
+        assert assigned_profile.next_certificate_update_scheduled < now + timedelta(days=16)
+
+
+@pytest.mark.django_db
+class TestJobClaims:
+    """Jobs are leased so two pollers do not run them twice."""
+
+    @pytest.mark.parametrize('success', [True, False])
+    def test_result_does_not_overwrite_a_replacement_claim(
+        self,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+        *,
+        success: bool,
+    ) -> None:
+        """A result cannot clear a claim installed after its initial token check."""
+        original_token = uuid.uuid4()
+        replacement_token = uuid.uuid4()
+        replacement_time = timezone.now()
+        AgentAssignedProfile.objects.filter(pk=assigned_profile.pk).update(
+            claim_token=original_token,
+            claimed_at=replacement_time - timedelta(hours=1),
+        )
+
+        def replace_claim(*_args: Any) -> Any:
+            AgentAssignedProfile.objects.filter(pk=assigned_profile.pk).update(
+                claim_token=replacement_token,
+                claimed_at=replacement_time,
+            )
+            return replacement_time + timedelta(days=1) if success else 3600
+
+        scheduling_function = 'next_update_after_success' if success else '_failure_backoff_seconds'
+        with (
+            patch('agents.api_views.AgentCertificateAuthentication.authenticate', return_value=(agent, None)),
+            patch(f'agents.api_views.{scheduling_function}', side_effect=replace_claim),
+        ):
+            response = api_client.post(
+                '/api/agents/jobs/result/',
+                {'profile_id': assigned_profile.pk, 'success': success, 'job_token': str(original_token)},
+                format='json',
+            )
+
+        assert response.status_code == status.HTTP_409_CONFLICT
+        original_schedule = assigned_profile.next_certificate_update_scheduled
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.claim_token == replacement_token
+        assert assigned_profile.claimed_at == replacement_time
+        assert assigned_profile.next_certificate_update_scheduled == original_schedule
+        assert assigned_profile.last_certificate_update is None
+        assert assigned_profile.failure_count == 0
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_job_is_claimed_once(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        first = api_client.get('/api/agents/jobs/')
+        assert first.status_code == 200
+        jobs = first.json()['jobs']
+        assert len(jobs) == 1
+        token = jobs[0]['job_token']
+
+        second = api_client.get('/api/agents/jobs/')
+        assert second.status_code == 200
+        assert second.json()['jobs'] == []
+
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {'profile_id': assigned_profile.pk, 'success': True, 'job_token': token},
+            format='json',
+        )
+        assert response.status_code == 200
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.claimed_at is None
+        assert assigned_profile.claim_token is None
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_stale_token_is_rejected(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        assert api_client.get('/api/agents/jobs/').json()['jobs']
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {
+                'profile_id': assigned_profile.pk,
+                'success': True,
+                'job_token': '00000000-0000-0000-0000-000000000000',
+            },
+            format='json',
+        )
+        assert response.status_code == 409
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_failure_records_backoff_and_error(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        assert api_client.get('/api/agents/jobs/').json()['jobs']
+        before = timezone.now()
+        response = api_client.post(
+            '/api/agents/jobs/result/',
+            {'profile_id': assigned_profile.pk, 'success': False, 'error_message': 'timeout'},
+            format='json',
+        )
+        assert response.status_code == 200
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.failure_count == 1
+        assert assigned_profile.last_error == 'timeout'
+        assert assigned_profile.claimed_at is None
+        assert assigned_profile.next_certificate_update_scheduled is not None
+        assert assigned_profile.next_certificate_update_scheduled > before
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_inactive_definition_is_not_offered(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        assigned_profile.workflow_definition.is_active = False
+        assigned_profile.workflow_definition.save()
+        response = api_client.get('/api/agents/jobs/')
+        assert response.status_code == 200
+        assert response.json()['jobs'] == []
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_one_job_is_claimed_per_poll(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        second_profile = AgentProfileDefinition.objects.create(
+            name='Second Profile',
+            profile={
+                'certificate_request': {'certificate_profile': 'tls_server'},
+                'steps': [],
+            },
+        )
+        AgentAssignedProfile.objects.create(
+            agent=agent,
+            workflow_definition=second_profile,
+            next_certificate_update_scheduled=timezone.now() - timedelta(hours=1),
+        )
+
+        assert len(api_client.get('/api/agents/jobs/').json()['jobs']) == 1
+        assert len(api_client.get('/api/agents/jobs/').json()['jobs']) == 1
+        assert api_client.get('/api/agents/jobs/').json()['jobs'] == []
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_corrupt_secret_is_skipped_without_breaking_poll(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'UPDATE {AgentProfileDefinition._meta.db_table} SET secrets = %s WHERE id = %s',
+                ['tpsec:v1:broken', assigned_profile.workflow_definition_id],
+            )
+
+        response = api_client.get('/api/agents/jobs/')
+
+        assert response.status_code == 200
+        assert response.json()['jobs'] == []
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.claimed_at is None
+
+    @patch('agents.api_views.AgentCertificateAuthentication.authenticate')
+    def test_expired_claim_is_reclaimed(
+        self,
+        mock_auth: Mock,
+        api_client: APIClient,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        mock_auth.return_value = (agent, None)
+        agent.device.domain = None
+        agent.device.save()
+        assigned_profile.claimed_at = timezone.now() - timedelta(hours=1)
+        assigned_profile.claim_token = None
+        assigned_profile.save()
+
+        response = api_client.get('/api/agents/jobs/')
+
+        assert len(response.json()['jobs']) == 1
+
+
+@pytest.mark.django_db
+class TestAssignedProfileWebViews:
+    """Regression coverage for the assigned-profile operator views."""
+
+    def test_delete_does_not_touch_another_agent(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        second_agent: TrustpointAgent,
+        workflow_definition: AgentProfileDefinition,
+    ):
+        assignment = AgentAssignedProfile.objects.create(
+            agent=second_agent,
+            workflow_definition=workflow_definition,
+        )
+        url = reverse(
+            'agents:assigned-profiles-delete_confirm',
+            kwargs={'agent_id': agent.pk, 'pks': f'{assignment.pk}/'},
+        )
+        response = web_client.post(url)
+        assert response.status_code == 302
+        assert AgentAssignedProfile.objects.filter(pk=assignment.pk).exists()
+
+    def test_delete_own_assignment(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        url = reverse(
+            'agents:assigned-profiles-delete_confirm',
+            kwargs={'agent_id': agent.pk, 'pks': f'{assigned_profile.pk}/'},
+        )
+        response = web_client.post(url)
+        assert response.status_code == 302
+        assert not AgentAssignedProfile.objects.filter(pk=assigned_profile.pk).exists()
+
+    def test_second_domain_credential_assignment_is_rejected(
+        self,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+        workflow_definition: AgentProfileDefinition,
+    ):
+        other = AgentProfileDefinition.objects.create(
+            name='Other Domain Credential',
+            profile=workflow_definition.profile,
+        )
+        assignment = AgentAssignedProfile(agent=agent, workflow_definition=other)
+        with pytest.raises(ValidationError, match='domain credential'):
+            assignment.full_clean()
+
+    def test_duplicate_assignment_shows_form_error(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        url = reverse('agents:assigned-profiles-create', kwargs={'agent_id': agent.pk})
+        response = web_client.post(
+            url,
+            {
+                'workflow_definition': assigned_profile.workflow_definition.pk,
+                'renewal_threshold_days': 30,
+                'subject': '',
+                'subject_alt_name': '',
+            },
+        )
+        assert response.status_code == 200
+        assert AgentAssignedProfile.objects.filter(agent=agent).count() == 1
+
+    def test_agent_without_device_shows_form_error(
+        self,
+        web_client: Client,
+        workflow_definition: AgentProfileDefinition,
+    ):
+        agent = TrustpointAgent.objects.create(agent_id='no-device-agent', name='No Device Agent')
+        url = reverse('agents:assigned-profiles-create', kwargs={'agent_id': agent.pk})
+        response = web_client.post(
+            url,
+            {
+                'workflow_definition': workflow_definition.pk,
+                'renewal_threshold_days': 30,
+                'subject': '',
+                'subject_alt_name': '',
+            },
+        )
+        assert response.status_code == 200
+        assert not AgentAssignedProfile.objects.filter(agent=agent).exists()
+
+    def test_new_agent_assignment_gets_a_grace_period(self, domain: DomainModel):
+        from devices.views.agents import AgentCreateOneToOneOnboardingView
+
+        AgentProfileDefinition.objects.create(
+            name='Domain Credential Update',
+            profile={'certificate_request': {'certificate_profile': 'domain_credential'}, 'steps': []},
+        )
+        device = DeviceModel.objects.create(
+            common_name='new-agent-device',
+            serial_number='SN-NEW-AGENT',
+            device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            domain=domain,
+        )
+        form = Mock()
+        form.cleaned_data = {'agent_os_path': '/etc/trustpoint'}
+        form.save.return_value = device
+        view = AgentCreateOneToOneOnboardingView()
+        view.request = RequestFactory().post('/')
+        view.request.user = Mock(has_perm=Mock(return_value=True))
+
+        view.form_valid(form)
+
+        agent = TrustpointAgent.objects.get(device=device)
+        assignment = AgentAssignedProfile.objects.get(agent=agent)
+        assert assignment.next_certificate_update_scheduled is not None
+        assert assignment.next_certificate_update_scheduled > timezone.now()
+
+    def test_list_shows_inactive_profile_badge(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        assigned_profile.workflow_definition.is_active = False
+        assigned_profile.workflow_definition.save()
+        response = web_client.get(reverse('agents:assigned-profiles-list', kwargs={'agent_id': agent.pk}))
+        assert b'Profile inactive' in response.content
+
+    def test_list_and_edit_pages_render(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        list_response = web_client.get(reverse('agents:assigned-profiles-list', kwargs={'agent_id': agent.pk}))
+        assert list_response.status_code == 200
+        edit_response = web_client.get(
+            reverse(
+                'agents:assigned-profiles-edit',
+                kwargs={'agent_id': agent.pk, 'pk': assigned_profile.pk},
+            )
+        )
+        assert edit_response.status_code == 200
+
+    def test_edit_threshold_recomputes_schedule(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        assigned_profile.next_certificate_update_scheduled = timezone.now() - timedelta(days=1)
+        assigned_profile.save()
+        response = web_client.post(
+            reverse(
+                'agents:assigned-profiles-edit',
+                kwargs={'agent_id': agent.pk, 'pk': assigned_profile.pk},
+            ),
+            {
+                'renewal_threshold_days': 7,
+                'subject': assigned_profile.subject,
+                'subject_alt_name': assigned_profile.subject_alt_name,
+                'enabled': True,
+            },
+        )
+        assert response.status_code == 302
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.next_certificate_update_scheduled is not None
+        assert assigned_profile.next_certificate_update_scheduled > timezone.now() + timedelta(days=6)
+
+    def test_force_update_sets_schedule(
+        self,
+        web_client: Client,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        assigned_profile.next_certificate_update_scheduled = timezone.now() + timedelta(days=30)
+        assigned_profile.save()
+        url = reverse(
+            'agents:assigned-profiles-force-update',
+            kwargs={'agent_id': agent.pk, 'pk': assigned_profile.pk},
+        )
+        response = web_client.post(url)
+        assert response.status_code == 302
+        assigned_profile.refresh_from_db()
+        assert assigned_profile.next_certificate_update_scheduled <= timezone.now()
+
+
+@pytest.mark.django_db
+class TestProfileSecretsAndEditor:
+    """Secrets are encrypted and non-ASCII editor content is preserved."""
+
+    def test_dumpdata_loaddata_preserves_encrypted_secrets(self, tmp_path: Path) -> None:
+        """Restoring a fixture encrypts JSON secrets exactly once."""
+        profile = AgentProfileDefinition.objects.create(
+            name='Restored Secrets', profile={'steps': []}, secrets={'password': 'Müller-secret'},
+        )
+        output = StringIO()
+        call_command('dumpdata', 'agents.AgentProfileDefinition', stdout=output)
+        fixture = tmp_path / 'agent-profiles.json'
+        fixture.write_text(output.getvalue(), encoding='utf-8')
+        assert 'Müller-secret' not in output.getvalue()
+
+        AgentProfileDefinition.objects.filter(pk=profile.pk).delete()
+        call_command('loaddata', str(fixture))
+
+        profile.refresh_from_db()
+        assert profile.secrets == {'password': 'Müller-secret'}
+
+    def test_secrets_are_encrypted_and_resolved(self, agent: TrustpointAgent):
+        profile = AgentProfileDefinition.objects.create(
+            name='Encrypted Profile',
+            profile={
+                'certificate_request': {},
+                'steps': [{'type': 'fill', 'selector': '#password', 'value': '{{ secret:wbm_password }}'}],
+            },
+            secrets={'wbm_password': 'hunter2'},
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f'SELECT secrets FROM {profile._meta.db_table} WHERE id = %s',
+                [profile.pk],
+            )
+            raw = cursor.fetchone()[0]
+        assert raw.startswith('tpsec:v1:')
+        assert 'hunter2' not in raw
+
+        profile.refresh_from_db()
+        assert profile.secrets == {'wbm_password': 'hunter2'}
+
+        agent.device.domain = None
+        agent.device.save()
+        assignment = AgentAssignedProfile.objects.create(agent=agent, workflow_definition=profile)
+        resolved = _build_resolved_profile(agent, profile.profile, assignment)
+        assert resolved['steps'][0]['value'] == 'hunter2'
+
+        output = StringIO()
+        call_command('dumpdata', 'agents.AgentProfileDefinition', stdout=output)
+        assert 'hunter2' not in output.getvalue()
+        assert 'tpsec:v1:' in output.getvalue()
+
+    def test_management_command_encrypts_legacy_password(self):
+        profile = AgentProfileDefinition.objects.create(
+            name='Legacy Password',
+            profile={'steps': [{'type': 'fill', 'selector': '#password', 'value': 'plain'}]},
+        )
+        call_command('encrypt_agent_profile_secrets')
+        profile.refresh_from_db()
+        assert profile.profile['steps'][0]['value'].startswith('{{ secret:')
+        assert profile.secrets
+        profile.full_clean()
+
+    def test_profile_editor_preserves_non_ascii(self, web_client: Client, workflow_definition: AgentProfileDefinition):
+        workflow_definition.profile['metadata']['description'] = 'Müller GmbH'
+        workflow_definition.save()
+        url = reverse('agents:profiles-config', kwargs={'pk': workflow_definition.pk})
+        response = web_client.get(url)
+        content = response.content.decode()
+        assert 'Müller GmbH' in content
+        assert 'MÃ¼ller' not in content
+        assert isinstance(response.context['profile_json'], dict)
+
+    @patch('agents.api_views._resolve_enrollment_url', return_value=None)
+    def test_local_storage_placeholders_are_resolved(
+        self,
+        _mock_url: Mock,
+        agent: TrustpointAgent,
+        assigned_profile: AgentAssignedProfile,
+    ):
+        agent.device.domain = None
+        agent.device.save()
+        raw_profile = {
+            'certificate_request': {'certificate_profile': 'tls_server', 'url': '{{ endpoint }}'},
+            'local_storage': {'certificate_path': '{{ os_path }}/{{ certificate_profile }}-{{ profile_id }}.pem'},
+        }
+        resolved = _build_resolved_profile(agent, raw_profile, assigned_profile)
+        assert resolved['local_storage']['certificate_path'] == (
+            f'{agent.os_path}/tls_server-{assigned_profile.pk}.pem'
+        )
+        assert 'url' not in resolved['certificate_request']
+
+
+@pytest.mark.django_db
+class TestAuditAndThrottleFixes:
+    """Audit entries and the authenticated-agent principal."""
+
+    def test_profile_create_and_update_are_audited(self, web_client: Client):
+        create_url = reverse('agents:profiles-create')
+        payload = {
+            'name': 'Audited Profile',
+            'profile': json.dumps({'certificate_request': {}, 'steps': []}),
+            'secrets': '{}',
+            'is_active': True,
+        }
+        assert web_client.post(create_url, payload).status_code == 302
+        profile = AgentProfileDefinition.objects.get(name='Audited Profile')
+        assert AuditLog.objects.filter(
+            operation_type=AuditLog.OperationType.AGENT_PROFILE_CREATED,
+            target_object_id=str(profile.pk),
+        ).exists()
+
+        payload['is_active'] = False
+        assert (
+            web_client.post(
+                reverse('agents:profiles-config', kwargs={'pk': profile.pk}),
+                payload,
+            ).status_code
+            == 302
+        )
+        assert AuditLog.objects.filter(
+            operation_type=AuditLog.OperationType.AGENT_PROFILE_UPDATED,
+            target_object_id=str(profile.pk),
+        ).exists()
+
+    def test_profile_in_use_cannot_be_deleted(self, web_client: Client, assigned_profile: AgentAssignedProfile):
+        url = reverse(
+            'agents:profiles-delete_confirm',
+            kwargs={'pks': f'{assigned_profile.workflow_definition.pk}/'},
+        )
+        response = web_client.post(url)
+        assert response.status_code == 302
+        assert AgentProfileDefinition.objects.filter(pk=assigned_profile.workflow_definition.pk).exists()
+
+    def test_profile_delete_audit_keeps_target_id(self, web_client: Client):
+        profile = AgentProfileDefinition.objects.create(
+            name='Delete Audit Target',
+            profile={'certificate_request': {}, 'steps': []},
+        )
+        profile_pk = profile.pk
+        response = web_client.post(reverse('agents:profiles-delete_confirm', kwargs={'pks': f'{profile_pk}/'}))
+        assert response.status_code == 302
+        entry = AuditLog.objects.get(
+            operation_type=AuditLog.OperationType.AGENT_PROFILE_DELETED,
+            target_display='Agent Profile Definition: Delete Audit Target',
+        )
+        assert entry.target_object_id == str(profile_pk)
+
+    def test_audit_failure_rolls_back_profile_creation(self, web_client: Client):
+        payload = {
+            'name': 'Rollback Profile',
+            'profile': json.dumps({'certificate_request': {}, 'steps': []}),
+            'secrets': '{}',
+            'is_active': True,
+        }
+        with (
+            patch('agents.web_views.AuditLog.create_entry', side_effect=RuntimeError('audit down')),
+            pytest.raises(RuntimeError),
+        ):
+            web_client.post(reverse('agents:profiles-create'), payload)
+
+        assert not AgentProfileDefinition.objects.filter(name='Rollback Profile').exists()
+
+    def test_literal_password_check_warns_until_migrated(self):
+        profile = AgentProfileDefinition.objects.create(
+            name='Check Legacy Password',
+            profile={'steps': [{'type': 'fill', 'selector': '#password', 'value': 'plain'}]},
+        )
+        warnings = literal_password_steps(app_configs=None)
+        assert any(warning.id == 'agents.W001' for warning in warnings)
+
+        call_command('encrypt_agent_profile_secrets')
+        warnings = literal_password_steps(app_configs=None)
+        assert not any(warning.id == 'agents.W001' for warning in warnings)
+        profile.refresh_from_db()
+        assert profile.secrets
+
+    def test_agent_is_an_authenticated_principal(self, agent: TrustpointAgent):
+        assert agent.is_authenticated is True
+        assert agent.is_anonymous is False

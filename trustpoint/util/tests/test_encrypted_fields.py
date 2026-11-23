@@ -3,13 +3,14 @@
 
 """Tests for encrypted field wrappers over the app-secret subsystem."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from util.encrypted_fields import EncryptedCharField, EncryptedTextField
+from util.encrypted_fields import EncryptedCharField, EncryptedJSONField, EncryptedTextField
 
 
 class TestEncryptedTextField(TestCase):
@@ -79,6 +80,33 @@ class TestEncryptedTextField(TestCase):
         result = self.field.get_prep_value(self.test_plaintext)
         self.assertEqual(result, 'tpsec:v1:encrypted')
         mock_encrypt.assert_called_once_with(self.test_plaintext)
+
+    def test_get_prep_value_does_not_reencrypt_ciphertext(self) -> None:
+        self.assertEqual(self.field.get_prep_value('tpsec:v1:already-encrypted'), 'tpsec:v1:already-encrypted')
+
+    @patch.object(EncryptedTextField, 'encrypt_value', return_value='tpsec:v1:encrypted')
+    def test_value_to_string_exports_ciphertext(self, _mock_encrypt) -> None:
+        self.field.name = 'value'
+        self.field.attname = 'value'
+        value = self.field.value_to_string(SimpleNamespace(value=self.test_plaintext))
+        self.assertEqual(value, 'tpsec:v1:encrypted')
+
+
+class TestEncryptedJSONField(TestCase):
+    """Test cases for EncryptedJSONField."""
+
+    def test_to_python_accepts_ciphertext_for_loaddata(self) -> None:
+        field = EncryptedJSONField()
+        ciphertext = 'tpsec:v1:already-encrypted'
+        self.assertEqual(field.to_python(ciphertext), ciphertext)
+
+    @patch('util.encrypted_fields.encrypt_app_secret', return_value='tpsec:v1:encrypted')
+    def test_value_to_string_exports_ciphertext(self, _mock_encrypt) -> None:
+        field = EncryptedJSONField()
+        field.name = 'secrets'
+        field.attname = 'secrets'
+        value = field.value_to_string(SimpleNamespace(secrets={'password': 'hunter2'}))
+        self.assertEqual(value, 'tpsec:v1:encrypted')
 
 
 class TestEncryptedCharField(TestCase):

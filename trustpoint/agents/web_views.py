@@ -5,21 +5,26 @@
 
 from __future__ import annotations
 
-import contextlib
+import copy
 import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django import forms
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
+from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views import View
 from django.views.generic import FormView, ListView, UpdateView
 
+from agents.api_views import next_update_after_success
 from agents.models import AgentAssignedProfile, AgentProfileDefinition, TrustpointAgent
 from agents.security import AgentSecurityMixin
+from management.models import AuditLog
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView, UserPermissionRequiredMixin
@@ -43,8 +48,8 @@ class AgentProfileDefinitionTableView(
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[AgentProfileDefinition]:
-        """Return all workflow definitions ordered by name."""
-        return AgentProfileDefinition.objects.all().order_by('name')
+        """Return all workflow definitions ordered by name, without decrypting secrets."""
+        return AgentProfileDefinition.objects.defer('secrets').order_by('name')
 
 
 class AgentProfileDefinitionConfigView(
@@ -67,6 +72,7 @@ class AgentProfileDefinitionConfigView(
     fields: ClassVar[list[str]] = [  # type: ignore[misc]
         'name',
         'profile',
+        'secrets',
         'is_active',
     ]
 
@@ -78,44 +84,37 @@ class AgentProfileDefinitionConfigView(
         return get_object_or_404(AgentProfileDefinition, pk=pk)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add additional context data for JSON editor."""
+        """Add the parsed profile and secret JSON to the editor context."""
         context = super().get_context_data(**kwargs)
         form = context['form']
-
-        raw_json = form['profile'].value() or None
 
         if not self.object or not self.object.pk:
             context['is_new'] = True
 
-        context['json_valid'] = True
+        profile_value = form['profile'].value()
+        parsed_profile, profile_valid = self._parse_form_json(profile_value)
+        context['json_valid'] = profile_valid
+        if profile_valid and isinstance(parsed_profile, dict):
+            context['profile_json'] = parsed_profile
+            context['profile_json_text'] = json.dumps(parsed_profile, indent=2, ensure_ascii=False)
+        elif profile_value in (None, '', 'null'):
+            default_profile = self._default_profile()
+            context['profile_json'] = default_profile
+            context['profile_json_text'] = json.dumps(default_profile, indent=2, ensure_ascii=False)
+            context['json_valid'] = True
+        else:
+            context['json_valid'] = False
+            context['profile_json'] = str(profile_value)
+            context['profile_json_text'] = str(profile_value)
 
-        if not raw_json or raw_json == 'null':
-            context['profile_json'] = self._default_profile_json()
-            return context
-
-        if isinstance(raw_json, dict):
-            context['profile_json'] = raw_json
-            return context
-
-        if isinstance(raw_json, str):
-            cleaned_raw = raw_json.encode('utf-8').decode('unicode_escape')
-            if cleaned_raw.startswith('"') and cleaned_raw.endswith('"'):
-                cleaned_raw = cleaned_raw[1:-1]
-
-            with contextlib.suppress(json.JSONDecodeError):
-                parsed = json.loads(cleaned_raw)
-                if isinstance(parsed, dict):
-                    context['profile_json'] = parsed
-                    return context
-
-            with contextlib.suppress(json.JSONDecodeError):
-                parsed = json.loads(raw_json)
-                if isinstance(parsed, dict):
-                    context['profile_json'] = parsed
-                    return context
-
-        context['json_valid'] = False
-        context['profile_json'] = str(raw_json)
+        secrets_value = form['secrets'].value()
+        parsed_secrets, secrets_valid = self._parse_form_json(secrets_value)
+        if secrets_valid and isinstance(parsed_secrets, dict):
+            context['secrets_json'] = json.dumps(parsed_secrets, indent=2, ensure_ascii=False)
+        elif secrets_value in (None, '', 'null'):
+            context['secrets_json'] = '{}'
+        else:
+            context['secrets_json'] = str(secrets_value)
         return context
 
     def get_initial(self) -> dict[str, Any]:
@@ -123,19 +122,38 @@ class AgentProfileDefinitionConfigView(
         initial = super().get_initial()
         if self.object and self.object.pk:
             initial['name'] = self.object.name
-            if self.object.profile:
-                initial['profile'] = json.dumps(self.object.profile)
-            else:
-                initial['profile'] = self._default_profile_json()
+            initial['profile'] = self.object.profile or self._default_profile()
+            initial['secrets'] = self.object.secrets or {}
             initial['is_active'] = self.object.is_active
         else:
-            initial['profile'] = self._default_profile_json()
+            initial['profile'] = self._default_profile()
+            initial['secrets'] = {}
         return initial
 
     @staticmethod
-    def _default_profile_json() -> str:
-        """Return a default workflow profile as JSON string."""
-        default_profile = {
+    def _parse_form_json(value: Any) -> tuple[Any, bool]:
+        """Parse a form JSON value once, or twice when it is JSON-encoded as a string."""
+        if isinstance(value, (dict, list)):
+            return value, True
+        if value in (None, '', 'null'):
+            return None, True
+        if not isinstance(value, str):
+            return None, False
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None, False
+        if isinstance(parsed, str):
+            try:
+                parsed = json.loads(parsed)
+            except json.JSONDecodeError:
+                return None, False
+        return parsed, True
+
+    @staticmethod
+    def _default_profile() -> dict[str, Any]:
+        """Return the default workflow profile."""
+        return {
             'metadata': {
                 'agent_type': '1-to-1',
                 'version': '1.0',
@@ -143,11 +161,11 @@ class AgentProfileDefinitionConfigView(
             },
             'device': {
                 'vendor': 'Vendor Name',
-                'device_family': 'Device Family',
+                'device_family': 'Webserver',
                 'firmware': '1.0',
             },
             'certificate_request': {
-                'certificate_profile': 'domain_credential',
+                'certificate_profile': 'tls_server',
                 'url': '{{ endpoint }}',
                 'path': '{{ path }}',
             },
@@ -164,7 +182,7 @@ class AgentProfileDefinitionConfigView(
                 {
                     'type': 'fill',
                     'selector': '#password',
-                    'value': 'password',
+                    'value': '{{ secret:wbm_password }}',
                 },
                 {
                     'type': 'click',
@@ -180,36 +198,46 @@ class AgentProfileDefinitionConfigView(
                 },
             ],
         }
-        return json.dumps(default_profile, indent=2)
 
     def form_valid(self, form: Any) -> Any:
-        """Process form submission and parse profile JSON."""
+        """Process form submission and save the profile plus its encrypted secrets."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        # Convert profile JSON string to dict
+        created = not form.instance.pk
         profile_data = form.cleaned_data.get('profile')
-        parsed_profile = None
+        parsed_profile = profile_data
         if isinstance(profile_data, str):
             try:
                 parsed_profile = json.loads(profile_data)
-                # Ensure profile is a dict with 'steps' array
-                if not isinstance(parsed_profile, dict):
-                    form.add_error('profile', 'Profile must be a JSON object.')
-                    return self.form_invalid(form)
-                form.instance.profile = parsed_profile
             except json.JSONDecodeError as exc:
                 form.add_error('profile', f'Invalid JSON: {exc}')
                 return self.form_invalid(form)
-        else:
-            parsed_profile = profile_data
+        if not isinstance(parsed_profile, dict):
+            form.add_error('profile', 'Profile must be a JSON object.')
+            return self.form_invalid(form)
 
+        secrets_data = form.cleaned_data.get('secrets') or {}
         if not form.instance.pk:
             form.instance = AgentProfileDefinition()
             form.instance.name = form.cleaned_data.get('name')
-            form.instance.profile = parsed_profile
             form.instance.is_active = form.cleaned_data.get('is_active', True)
+        form.instance.profile = parsed_profile
+        form.instance.secrets = secrets_data
 
-        return super().form_valid(form)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            AuditLog.create_entry(
+                operation_type=(
+                    AuditLog.OperationType.AGENT_PROFILE_CREATED
+                    if created
+                    else AuditLog.OperationType.AGENT_PROFILE_UPDATED
+                ),
+                target=self.object,
+                target_display=f'Agent Profile Definition: {self.object.name}',
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                details={'name': self.object.name, 'is_active': self.object.is_active},
+            )
+        return response
 
 
 class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContextMixin, BulkDeleteView):
@@ -224,6 +252,10 @@ class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContex
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
+    def get_queryset(self) -> QuerySet[AgentProfileDefinition]:
+        """Keep encrypted secret values out of the confirmation/delete queryset."""
+        return super().get_queryset().defer('secrets')
+
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
         queryset = self.get_queryset()
@@ -237,9 +269,27 @@ class AgentProfileDefinitionBulkDeleteConfirmView(AgentSecurityMixin, PageContex
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
         queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
-
-        response = super().form_valid(form)
+        profiles = list(queryset)
+        sketches = [copy.copy(profile) for profile in profiles]
+        deleted_count = len(profiles)
+        try:
+            with transaction.atomic():
+                response = super().form_valid(form)
+                actor = self.request.user if self.request.user.is_authenticated else None
+                for profile in sketches:
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.AGENT_PROFILE_DELETED,
+                        target=profile,
+                        target_display=f'Agent Profile Definition: {profile.name}',
+                        actor=actor,
+                    )
+        except ProtectedError as exc:
+            names = ', '.join(str(profile) for profile in exc.protected_objects)
+            messages.error(
+                self.request,
+                f'These profiles are still assigned to an agent and cannot be deleted: {names}',
+            )
+            return HttpResponseRedirect(self.success_url)
 
         messages.success(
             self.request,
@@ -276,14 +326,17 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
             'subject_alt_name': 'OpenSSL-style SAN extension. Leave empty for no SAN.',
         }
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Restrict the workflow queryset to active definitions."""
+    def __init__(self, *args: Any, agent: TrustpointAgent | None = None, **kwargs: Any) -> None:
+        """Restrict the workflow queryset to active, unassigned definitions."""
         from django.forms import ModelChoiceField  # noqa: PLC0415
 
         super().__init__(*args, **kwargs)
         field = self.fields['workflow_definition']
         if isinstance(field, ModelChoiceField):
-            field.queryset = AgentProfileDefinition.objects.filter(is_active=True).order_by('name')
+            queryset = AgentProfileDefinition.objects.filter(is_active=True)
+            if agent is not None:
+                queryset = queryset.exclude(pk__in=agent.assigned_profiles.values('workflow_definition_id'))
+            field.queryset = queryset.order_by('name')
 
 
 class AgentAssignedProfileEditForm(forms.ModelForm[AgentAssignedProfile]):
@@ -344,6 +397,7 @@ class AgentAssignedProfileTableView(
         return (
             AgentAssignedProfile.objects.filter(agent_id=agent_id)
             .select_related('agent', 'workflow_definition')
+            .defer('workflow_definition__secrets')
             .order_by('workflow_definition__name')
         )
 
@@ -373,23 +427,49 @@ class AgentAssignedProfileCreateView(
         """Redirect to the assigned-profiles list after saving."""
         return str(reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Give the form the agent so assigned profiles can be excluded."""
+        kwargs = super().get_form_kwargs()
+        kwargs['agent'] = self._get_agent()
+        return kwargs
+
     def form_valid(self, form: AgentAssignedProfileForm) -> HttpResponse:
         """Save the assignment and show a success message."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        from django.utils import timezone  # noqa: PLC0415
 
         agent = self._get_agent()
         assignment: AgentAssignedProfile = form.save(commit=False)
         assignment.agent = agent
         assignment.next_certificate_update_scheduled = timezone.now()
-        assignment.full_clean()
-        assignment.save()
+        try:
+            assignment.full_clean()
+        except ValidationError as exc:
+            self._add_form_errors(form, exc)
+            return self.form_invalid(form)
+        with transaction.atomic():
+            assignment.save()
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.MODEL_CREATED,
+                target=assignment,
+                target_display=f'Agent Assignment: {agent.name} / {assignment.workflow_definition.name}',
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                details={'agent': agent.agent_id, 'profile': assignment.workflow_definition.name},
+            )
         messages.success(
             self.request,
             f"Profile '{assignment.workflow_definition.name}' assigned to agent '{agent.name}'.",
         )
         return HttpResponseRedirect(self.get_success_url())
+
+    @staticmethod
+    def _add_form_errors(form: forms.ModelForm[Any], exc: ValidationError) -> None:
+        """Attach model validation errors to matching form fields."""
+        if hasattr(exc, 'message_dict'):
+            for field, errors in exc.message_dict.items():
+                form.add_error(field if field in form.fields else None, errors)
+        else:
+            form.add_error(None, exc.messages)
 
 
 class AgentAssignedProfileEditView(
@@ -410,8 +490,12 @@ class AgentAssignedProfileEditView(
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[AgentAssignedProfile]:
-        """Restrict to profiles belonging to the specified agent."""
-        return AgentAssignedProfile.objects.filter(agent_id=self.kwargs['agent_id'])
+        """Restrict to profiles belonging to the specified agent without decrypting secrets."""
+        return (
+            AgentAssignedProfile.objects.filter(agent_id=self.kwargs['agent_id'])
+            .select_related('workflow_definition')
+            .defer('workflow_definition__secrets')
+        )
 
     def get_success_url(self) -> str:
         """Redirect to the assigned-profiles list after saving."""
@@ -421,7 +505,21 @@ class AgentAssignedProfileEditView(
         """Save the changes and show a success message."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        assignment: AgentAssignedProfile = form.save()
+        assignment: AgentAssignedProfile = form.save(commit=False)
+        if 'renewal_threshold_days' in form.changed_data:
+            assignment.next_certificate_update_scheduled = next_update_after_success(
+                assignment,
+                timezone.now(),
+            )
+        with transaction.atomic():
+            assignment.save()
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.MODEL_UPDATED,
+                target=assignment,
+                target_display=(f'Agent Assignment: {assignment.agent.name} / {assignment.workflow_definition.name}'),
+                actor=self.request.user if self.request.user.is_authenticated else None,
+                details={'changed_fields': list(form.changed_data)},
+            )
         messages.success(
             self.request,
             f"Profile assignment '{assignment.workflow_definition.name}' updated successfully.",
@@ -437,6 +535,17 @@ class AgentAssignedProfileDeleteView(AgentContextMixin, AgentSecurityMixin, Page
     context_object_name = 'assigned_profiles'
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
+
+    def get_queryset(self) -> QuerySet[AgentAssignedProfile]:
+        """Restrict deletion to profiles belonging to the agent in the URL."""
+        pks = self.get_pks_as_list(self.get_pks_path())
+        if not pks:
+            return AgentAssignedProfile.objects.none()
+        return (
+            AgentAssignedProfile.objects.filter(agent_id=self.kwargs['agent_id'], pk__in=pks)
+            .select_related('agent', 'workflow_definition')
+            .defer('workflow_definition__secrets')
+        )
 
     def get_success_url(self) -> str:
         """Return to the assigned-profiles list after deletion."""
@@ -460,8 +569,20 @@ class AgentAssignedProfileDeleteView(AgentContextMixin, AgentSecurityMixin, Page
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
         queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
-        response = super().form_valid(form)
+        assignments = [copy.copy(assignment) for assignment in queryset]
+        deleted_count = len(assignments)
+        with transaction.atomic():
+            response = super().form_valid(form)
+            actor = self.request.user if self.request.user.is_authenticated else None
+            for assignment in assignments:
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.MODEL_DELETED,
+                    target=assignment,
+                    target_display=(
+                        f'Agent Assignment: {assignment.agent.name} / {assignment.workflow_definition.name}'
+                    ),
+                    actor=actor,
+                )
         messages.success(self.request, f'Successfully removed {deleted_count} profile assignment(s).')
         return response
 
@@ -477,16 +598,25 @@ class AgentAssignedProfileForceUpdateView(AgentSecurityMixin, PageContextMixin, 
         """Set next_certificate_update_scheduled to now and redirect back to list."""
         if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
             raise PermissionDenied
-        from django.utils import timezone  # noqa: PLC0415
 
         assignment = get_object_or_404(
-            AgentAssignedProfile,
+            AgentAssignedProfile.objects.select_related('workflow_definition').defer('workflow_definition__secrets'),
             pk=pk,
             agent_id=agent_id,
         )
 
         assignment.next_certificate_update_scheduled = timezone.now()
-        assignment.save(update_fields=['next_certificate_update_scheduled'])
+        assignment.claimed_at = None
+        assignment.claim_token = None
+        with transaction.atomic():
+            assignment.save(update_fields=['next_certificate_update_scheduled', 'claimed_at', 'claim_token'])
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.MODEL_UPDATED,
+                target=assignment,
+                target_display=(f'Agent Assignment: {assignment.agent.name} / {assignment.workflow_definition.name}'),
+                actor=request.user if request.user.is_authenticated else None,
+                details={'action': 'force_renewal'},
+            )
 
         messages.success(
             request,

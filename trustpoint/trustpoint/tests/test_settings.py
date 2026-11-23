@@ -5,6 +5,7 @@
 
 import importlib
 import os
+import sys
 from pathlib import Path
 
 import pytest
@@ -49,6 +50,44 @@ def test_debug_setting(monkeypatch):
         assert settings.DEBUG is True
     finally:
         monkeypatch.delenv('TRUSTPOINT_DEBUG', raising=False)
+        importlib.reload(settings)
+
+
+@pytest.mark.parametrize(
+    ('command', 'worker', 'container', 'expected'),
+    [
+        ('runserver', False, False, True),
+        ('runserver_plus', False, False, True),
+        ('runserver_with_qcluster', False, False, True),
+        ('qcluster', True, False, True),
+        ('qcluster', False, False, False),
+        ('check', True, False, False),
+        ('runserver_plus', False, True, False),
+        ('qcluster', True, True, False),
+    ],
+)
+def test_development_server_key_context(  # noqa: PLR0913 - command and environment matrix
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    command: str,
+    worker: bool,
+    container: bool,
+    expected: bool,
+) -> None:
+    """Only native servers and their workers gain local KEK access without debug pages."""
+    secret_file = tmp_path / 'django_secret_key'
+    secret_file.write_text('x' * 64, encoding='utf-8')
+    try:
+        with monkeypatch.context() as context:
+            context.setattr(sys, 'argv', ['manage.py', command])
+            context.setenv('TRUSTPOINT_CONTAINER', '1' if container else '0')
+            context.setenv('DJANGO_SECRET_KEY_FILE', str(secret_file))
+            context.setenv('_TRUSTPOINT_DEVELOPMENT_SERVER', '1' if worker else '0')
+            context.delenv('TRUSTPOINT_DEBUG', raising=False)
+            importlib.reload(settings)
+            assert settings.TRUSTPOINT_DEVELOPMENT_SERVER is expected
+            assert settings.DEBUG is False
+    finally:
         importlib.reload(settings)
 
 

@@ -12,3 +12,7 @@ class AgentsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'agents'
     verbose_name = 'Agents'
+
+    def ready(self) -> None:
+        """Register deployment checks."""
+        from agents import checks  # noqa: F401, PLC0415
