@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.db.models.signals import post_migrate
 from django.dispatch import receiver
 
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_migrate)
-def initialize_notification_scheduling(sender: object, **kwargs: dict[str, object]) -> None:  # noqa: ARG001
+def initialize_notification_scheduling(sender: object, **_kwargs: object) -> None:
     """Initialize notification scheduling after database migrations.
 
     This signal handler runs after migrations are applied and ensures that
@@ -24,8 +25,14 @@ def initialize_notification_scheduling(sender: object, **kwargs: dict[str, objec
 
     Args:
         sender: The app config that triggered the migration.
-        **kwargs: Additional keyword arguments from the signal.
+        **_kwargs: Additional keyword arguments from the signal.
     """
+    # post_migrate fires for every app after every (partial) migrate call.
+    # Notification config only exists once the management migrations ran, and
+    # bootstrap uses an intentionally partial schema in a throwaway database.
+    if getattr(sender, 'label', None) != 'management' or getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+        return
+
     try:
         notification_config = NotificationConfig.get()
 
