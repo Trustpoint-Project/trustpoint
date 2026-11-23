@@ -3,16 +3,31 @@ name: Security / ZAP Baseline Scan
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
   workflow_dispatch:
   release:
     types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   zap-baseline:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Pinned so a new upstream :stable release cannot change CI results on its own.
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
     permissions:
       contents: read
       actions: read
@@ -75,13 +90,13 @@ jobs:
         id: zap_baselines
         if: ${{ !cancelled() && steps.readiness.outcome == 'success' }}
         run: |
-          docker pull ghcr.io/zaproxy/zaproxy:stable
+          docker pull "$ZAP_IMAGE"
           for protocol in http https; do
             status=0
             timeout 600 docker run --rm --network host \
               -v "$PWD/reports/zap:/zap/wrk:rw" \
-              ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
-              -t "$protocol://localhost" -a -T 5 \
+              "$ZAP_IMAGE" zap-baseline.py \
+              -t "$protocol://localhost" -T 5 \
               -J "$protocol.json" -w "$protocol.md" -r "$protocol.html" \
               > "reports/zap/$protocol.log" 2>&1 || status=$?
             printf '%s\n' "$status" > "reports/zap/$protocol.exit"

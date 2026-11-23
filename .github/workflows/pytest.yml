@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   pytest:
     runs-on: ubuntu-latest
@@ -30,6 +34,8 @@ jobs:
           uv run pytest \
           --md-report-flavor github \
           --md-report-color never \
+          --cov=trustpoint \
+          --cov-report=xml:reports/coverage.xml \
           --html=reports/pytest-report.html \
           --junitxml=reports/junit-report.xml \
           trustpoint/ tests/
@@ -39,7 +45,11 @@ jobs:
         run: |
           echo "<details><summary>Pytest Report</summary>" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          cat "md-report.md" >> $GITHUB_STEP_SUMMARY
+          if [ -f md-report.md ]; then
+            cat md-report.md >> $GITHUB_STEP_SUMMARY
+          else
+            echo "md-report.md was not generated; see the pytest log." >> $GITHUB_STEP_SUMMARY
+          fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "</details>" >> $GITHUB_STEP_SUMMARY
 
@@ -49,6 +59,29 @@ jobs:
         with:
           name: pytest-reports
           path: reports/
+
+      - name: Upload coverage to Codecov
+        if: >
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./reports/coverage.xml
+          fail_ci_if_error: true
+
+      - name: Upload test results to Codecov
+        if: >
+          !cancelled() &&
+          (
+            github.event_name != 'pull_request' ||
+            github.event.pull_request.head.repo.full_name == github.repository
+          )
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./reports/junit-report.xml
+          report_type: test_results
 
       - name: Render the report to the PR
         uses: marocchino/sticky-pull-request-comment@v3

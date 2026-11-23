@@ -2,10 +2,16 @@ name: CI/CD / Publish Container Images
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
+  workflow_run:
+    # Publish only after the test suite succeeded on main.
+    workflows:
+      - Tests / Pytest
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       release_tag:
@@ -21,8 +27,13 @@ permissions:
   artifact-metadata: write
   id-token: write
 
+concurrency:
+  group: publish-images
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.get_version.outputs.ghcr_namespace }}/trustpoint@${{ steps.push-trustpoint.outputs.digest }}
@@ -32,7 +43,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag != '' && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+          ref: ${{ inputs.release_tag != '' && format('refs/tags/{0}', inputs.release_tag) || github.event.workflow_run.head_sha || github.ref }}
 
       - name: Verify package version and Git release tag
         id: get_version
@@ -67,9 +78,6 @@ jobs:
               output.write(f'ghcr_namespace=ghcr.io/{os.environ["GITHUB_REPOSITORY_OWNER"].lower()}\n')
           print(f'Package version: {version}; source ref: {ref}; commit: {revision}')
           PYTHON
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

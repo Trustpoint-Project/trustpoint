@@ -22,7 +22,7 @@ def _report_risks(data: dict[str, Any]) -> list[int]:
         message = 'report contains no scanned sites'
         raise ValueError(message)
     targets = [urlsplit(site['@name']) for site in sites if isinstance(site['@name'], str)]
-    if len(targets) != len(sites) or not any(
+    if len(targets) != len(sites) or not all(
         url.hostname == 'localhost' and (url.scheme, url.port) in TARGET_ORIGINS for url in targets
     ):
         message = 'report does not include the intended localhost target'

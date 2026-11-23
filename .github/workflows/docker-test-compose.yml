@@ -2,9 +2,21 @@ name: Tests / Docker Compose
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:

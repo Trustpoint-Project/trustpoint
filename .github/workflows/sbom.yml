@@ -50,7 +50,8 @@ jobs:
 
       - name: Install Syft
         run: |
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          # Install script pinned to the v1.42.1 commit; the release itself is pinned by version.
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/0a3f7bb06ee168495ee54b8b66fccb22a056fe99/install.sh \
             | sh -s -- -b /usr/local/bin v1.42.1
           syft version
 
@@ -111,7 +112,7 @@ jobs:
           EOF
 
       - name: Publish SBOMs to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453  # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
