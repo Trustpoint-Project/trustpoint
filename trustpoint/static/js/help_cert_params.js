@@ -92,4 +92,6 @@
             select.addEventListener('change', () => showProfile(select.value));
         }
     });
+
+    globalThis.tpHelpCertParams = { formatValue, render };
 })();

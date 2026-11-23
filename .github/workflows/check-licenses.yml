@@ -14,6 +14,7 @@ on:
       - "**/uv.lock"
       - "trustpoint/workflows2/frontend/**"
       - "trustpoint/static/**"
+      - "tests/javascript/**"
       - "THIRD_PARTY_LICENSES/**"
       - "docs/source/LICENSE*"
       - "docs/source/*.jar"
@@ -39,6 +40,9 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: '26'
+
+      - name: Run static JavaScript tests
+        run: node --test tests/javascript/*.test.cjs
 
       - name: Verify bundled frontend and notices
         working-directory: trustpoint/workflows2/frontend

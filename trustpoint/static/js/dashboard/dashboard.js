@@ -6,11 +6,12 @@ const formatDashboardDate = (() => {
   const root = document.getElementById('dashboard');
   const pattern = root?.dataset.dateFormat || '%Y-%m-%d %H:%M:%S';
   const timeZone = root?.dataset.timezone || 'UTC';
-  const formatter = new Intl.DateTimeFormat('en-US', {
+  const locale = document.documentElement.lang || 'en-US';
+  const formatter = new Intl.DateTimeFormat(locale, {
     timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
   });
-  const monthFormatter = /%[bB]/.test(pattern) ? new Intl.DateTimeFormat('en-US', {
+  const monthFormatter = /%[bB]/.test(pattern) ? new Intl.DateTimeFormat(locale, {
     timeZone, month: pattern.includes('%b') ? 'short' : 'long'
   }) : null;
   return value => {
@@ -291,7 +292,7 @@ const formatDashboardDate = (() => {
   const labels = {
     expiring_within_selected_horizon: 'Expiring within selected horizon',
     no_onboarding: 'Without onboarding', pending: 'Pending onboarding', onboarded: 'Onboarded',
-    total: 'Total devices', none: 'None', valid: 'Valid',
+    total: 'Total devices', valid: 'Valid',
     expired: 'Expired', expired_or_revoked_only: 'Only expired/revoked certificates',
     revoked: 'Revoked', not_yet_valid: 'Not yet valid',
     no_domain_credential: 'No domain credential',
@@ -303,19 +304,22 @@ const formatDashboardDate = (() => {
     expiring: 'Expiring soon',
     disabled: 'Disabled', current: 'Up to date', missing: 'No active CRL', no_certificate: 'Missing CA certificate',
   };
-  const readable = text => labels[text] || String(text).replaceAll('_', ' ').replace(/\b\w/g, c=>c.toUpperCase());
+  const readable = (text, groupKey) => {
+    if (text === 'none' && groupKey === 'by_domain_credential') return 'No domain credential';
+    return labels[text] || String(text).replaceAll('_', ' ').replace(/\b\w/g, c=>c.toUpperCase());
+  };
   const tabs = new Set(['certificates','devices','cas']);
   let controller = null;
-  function rows(value) {
+  function rows(value, groupKey) {
     if (Array.isArray(value)) return value.map((x, i) => {
       if (x && typeof x === 'object') {
         const count = x.cert_count ?? x.device_count ?? x.onboarded_device_count ?? x.count ?? x.total;
         const name = x.ca_name ?? x.domain_name ?? x.name ?? x.protocol ?? x.label ?? `Group ${i+1}`;
-        return {label:readable(name), count:Number(count), domainId:x.domain_id ?? null};
+        return {label:readable(name, groupKey), count:Number(count), domainId:x.domain_id ?? null};
       }
       return {label:String(i+1), count:Number(x), domainId:null};
     }).filter(x=>Number.isFinite(x.count));
-    if (value && typeof value==='object') return Object.entries(value).filter(([,v])=>typeof v==='number' && Number.isFinite(v)).map(([k,v])=>({label:readable(k),count:v,domainId:null,key:k}));
+    if (value && typeof value==='object') return Object.entries(value).filter(([,v])=>typeof v==='number' && Number.isFinite(v)).map(([k,v])=>({label:readable(k, groupKey),count:v,domainId:null,key:k}));
     return [];
   }
   function render(tab, data) {
@@ -328,7 +332,7 @@ const formatDashboardDate = (() => {
       const card=document.createElement('div');card.className='card h-100';
       const body=document.createElement('div');body.className='card-body';
       const heading=document.createElement('h3');heading.className='h6'; heading.textContent=names[groupKey]||groupKey;body.append(heading);
-      const values=rows(group).sort((a,b)=>b.count-a.count);
+      const values=rows(group, groupKey).sort((a,b)=>b.count-a.count);
       const nonzero = values.filter(item=>item.count>0);
       const displayValues = (groupKey==='by_profile'||groupKey==='by_issuing_ca'||groupKey==='by_protocol') ? nonzero : values;
       if (!displayValues.length) {const p=document.createElement('p');p.className='text-body-secondary small';p.textContent='No matching records in the selected period';body.append(p);}
