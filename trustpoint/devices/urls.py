@@ -265,8 +265,8 @@ urlpatterns = [
     ),
     path(
         'opc-ua-gds-push/download/<int:pk>/',
-        views.OpcUaGdsPushDownloadPageDispatcherView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_download',
+        views.DeviceDownloadPageDispatcherView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_opc_ua_gds_push_download',
     ),
     path(
         'credential/download/<int:pk>/',
@@ -276,7 +276,7 @@ urlpatterns = [
     path(
         'opc-ua-gds-push/credential/download/<int:pk>/',
         views.DeviceManualCredentialDownloadView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_credential-download',
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_opc_ua_gds_push_credential-download',
     ),
     path(
         'credential-download/browser/<int:pk>/',
@@ -290,8 +290,8 @@ urlpatterns = [
     ),
     path(
         'opc-ua-gds-push/certificate/download/<int:pk>/',
-        views.OpcUaGdsPushCertificateDownloadView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate-download',
+        views.DeviceCertificateDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_opc_ua_gds_push_certificate-download',
     ),
     # OPC UA GDS Push Actions
     path(

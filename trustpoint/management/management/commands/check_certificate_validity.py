@@ -16,6 +16,7 @@ from datetime import timedelta
 from typing import Any
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 
 from management.models import NotificationConfig, NotificationModel, NotificationStatus
@@ -53,13 +54,19 @@ class Command(BaseCommand):
         current_time = timezone.now()
         expiring_threshold = current_time + timedelta(days=config.cert_expiry_warning_days)
 
-        expiring_certificates = CertificateModel.objects.filter(
+        # Device certificates have their own revocation and CA/TLS checks.
+        managed_device_certificates = CertificateModel.objects.filter(revoked_certificate__isnull=True).exclude(
+            Q(credential__issuing_ca__isnull=False)
+            | Q(credential__activetrustpointtlsservercredentialmodel__isnull=False)
+        )
+        expiring_certificates = managed_device_certificates.filter(
             not_valid_after__lte=expiring_threshold, not_valid_after__gt=current_time
         )
-        expired_certificates = CertificateModel.objects.filter(not_valid_after__lte=current_time)
+        expired_certificates = managed_device_certificates.filter(not_valid_after__lte=current_time)
         expiring_certificates = expiring_certificates.select_related('user_client_certificate__user')
         expired_certificates = expired_certificates.select_related('user_client_certificate__user')
 
+        self._solve_revoked_certificate_alerts()
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
         self._existing_notifications = set(
@@ -95,6 +102,32 @@ class Command(BaseCommand):
                 new_status=new_status,
             )
 
+    @staticmethod
+    def _add_solved_status(notifications: Any) -> None:
+        """Replace the open status with SOLVED without creating duplicate rows."""
+        solved, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.SOLVED)
+        new_status = NotificationStatus.StatusChoices.NEW
+        for notification in notifications:
+            notification.statuses.remove(*notification.statuses.filter(status=new_status))
+            notification.statuses.add(solved)
+
+    def _solve_revoked_certificate_alerts(self) -> None:
+        """Close expiry alerts for certificates that are now revoked."""
+        notifications = NotificationModel.objects.filter(
+            event__in=('CERTIFICATE_EXPIRING', 'CERTIFICATE_EXPIRED'),
+            certificate__revoked_certificate__isnull=False,
+        ).exclude(statuses__status=NotificationStatus.StatusChoices.SOLVED)
+        self._add_solved_status(notifications)
+
+    def _solve_expiring_alert(self, certificate: CertificateModel, domain_id: int | None) -> None:
+        """Close the warning that is superseded by the expired alert."""
+        notifications = NotificationModel.objects.filter(
+            event='CERTIFICATE_EXPIRING',
+            certificate=certificate,
+            domain_id=domain_id,
+        ).exclude(statuses__status=NotificationStatus.StatusChoices.SOLVED)
+        self._add_solved_status(notifications)
+
     def _create_notification(
         self,
         certificate: CertificateModel,
@@ -126,6 +159,8 @@ class Command(BaseCommand):
             )
 
         issued_credential_domain_id = self._domains_by_certificate.get(certificate.pk)
+        if event == 'CERTIFICATE_EXPIRED':
+            self._solve_expiring_alert(certificate, issued_credential_domain_id)
         key: tuple[str, int, int | None]
 
         if issued_credential_domain_id is not None:

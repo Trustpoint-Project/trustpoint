@@ -181,6 +181,12 @@ def ensure_server_credential(domain: DomainModel) -> CredentialModel:
 
     get_local_issuing_ca(domain)
 
+    config = ScepServerConfigModel.objects.filter(domain=domain).first()
+    if config is not None and server_credential_is_usable(config):
+        credential = config.server_credential
+        if credential is not None:
+            return credential
+
     with transaction.atomic():
         locked_domain = DomainModelCls.objects.select_for_update().get(pk=domain.pk)
 

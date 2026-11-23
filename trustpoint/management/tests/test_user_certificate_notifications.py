@@ -15,7 +15,10 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from management.models import NotificationConfig, NotificationModel
-from pki.models import CertificateModel
+from pki.models import CaModel, CertificateModel, CredentialModel, RevokedCertificateModel
+from pki.models.credential import PrimaryCredentialCertificate
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from pki.util.x509 import CertificateGenerator
 from users.models import TrustpointUser, UserClientCertificate
 
 pytestmark = pytest.mark.django_db
@@ -109,3 +112,96 @@ def test_user_certificate_notification_escapes_user_input(certificate, monkeypat
     title = Template('{{ notification.short_translated }}').render(Context({'notification': notification}))
     assert '&lt;script&gt;' in title
     assert '&amp;lt;' not in title
+
+
+def test_revoked_certificate_closes_its_expiry_alert(certificate, monkeypatch):
+    """A certificate that becomes revoked must not keep its warning open."""
+    UserClientCertificate.objects.all().delete()
+    config = NotificationConfig.get()
+    config.cert_expiry_warning_days = 7
+    config.save()
+    now = certificate.not_valid_after - timedelta(days=5)
+    monkeypatch.setattr('management.management.commands.check_certificate_validity.timezone.now', lambda: now)
+
+    call_command('check_certificate_validity', stdout=StringIO())
+    warning = NotificationModel.objects.get(certificate=certificate, event='CERTIFICATE_EXPIRING')
+    RevokedCertificateModel.objects.create(certificate=certificate)
+
+    call_command('check_certificate_validity', stdout=StringIO())
+
+    warning.refresh_from_db()
+    assert warning.statuses.filter(status='SOLV').exists()
+    assert not NotificationModel.objects.filter(
+        certificate=certificate, event='CERTIFICATE_EXPIRING', statuses__status='NEW'
+    ).exists()
+
+
+def test_expired_certificate_closes_the_expiring_alert(certificate, monkeypatch):
+    """The expired critical alert replaces the earlier warning."""
+    UserClientCertificate.objects.all().delete()
+    config = NotificationConfig.get()
+    config.cert_expiry_warning_days = 7
+    config.save()
+    warning_time = certificate.not_valid_after - timedelta(days=5)
+    monkeypatch.setattr(
+        'management.management.commands.check_certificate_validity.timezone.now',
+        lambda: warning_time,
+    )
+
+    call_command('check_certificate_validity', stdout=StringIO())
+    warning = NotificationModel.objects.get(certificate=certificate, event='CERTIFICATE_EXPIRING')
+
+    expired_time = certificate.not_valid_after + timedelta(days=1)
+    monkeypatch.setattr(
+        'management.management.commands.check_certificate_validity.timezone.now',
+        lambda: expired_time,
+    )
+    call_command('check_certificate_validity', stdout=StringIO())
+
+    warning.refresh_from_db()
+    assert warning.statuses.filter(status='SOLV').exists()
+    expired = NotificationModel.objects.get(certificate=certificate, event='CERTIFICATE_EXPIRED')
+    assert expired.statuses.filter(status='NEW').exists()
+
+
+def test_issuing_ca_certificate_is_left_to_the_ca_check(issuing_ca_instance, monkeypatch):
+    """Issuing CA certificates get the dedicated CA alert, not a generic certificate alert."""
+    ca_model = issuing_ca_instance['issuing_ca']
+    certificate = ca_model.credential.certificate
+    now = certificate.not_valid_after - timedelta(days=2)
+    monkeypatch.setattr('management.management.commands.check_certificate_validity.timezone.now', lambda: now)
+
+    call_command('check_certificate_validity', stdout=StringIO())
+
+    assert not NotificationModel.objects.filter(certificate=certificate).exists()
+
+
+def test_keyless_ca_certificate_still_gets_a_generic_expiry_alert(monkeypatch):
+    """No dedicated check exists for keyless CAs, so the generic check must cover them."""
+    ca_cert, _key = CertificateGenerator.create_root_ca('Generic CA Check', validity_days=5)
+    ca_model = CaModel.create_keyless_ca('generic-ca-check', ca_cert)
+    now = ca_model.certificate.not_valid_after - timedelta(days=2)
+    monkeypatch.setattr('management.management.commands.check_certificate_validity.timezone.now', lambda: now)
+
+    call_command('check_certificate_validity', stdout=StringIO())
+
+    assert NotificationModel.objects.filter(
+        certificate=ca_model.certificate, event='CERTIFICATE_EXPIRING'
+    ).exists()
+
+
+def test_active_tls_certificate_is_left_to_the_tls_check(certificate, monkeypatch):
+    """The active TLS certificate is checked by the dedicated TLS command."""
+    UserClientCertificate.objects.all().delete()
+    credential = CredentialModel.objects.create(
+        certificate=certificate,
+        credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+    )
+    PrimaryCredentialCertificate.objects.create(certificate=certificate, credential=credential, is_primary=True)
+    ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
+    now = certificate.not_valid_after - timedelta(days=2)
+    monkeypatch.setattr('management.management.commands.check_certificate_validity.timezone.now', lambda: now)
+
+    call_command('check_certificate_validity', stdout=StringIO())
+
+    assert not NotificationModel.objects.filter(certificate=certificate).exists()

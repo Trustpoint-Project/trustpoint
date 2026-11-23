@@ -115,10 +115,6 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
         if ca_list:
             ca_list = self._hierarchical_sort(ca_list)
 
-            # Add display properties to each CA
-            for ca in ca_list:
-                ca.display_indentation = f'{ca.get_hierarchy_depth() * 20}px'  # type: ignore[attr-defined]
-
             if context.get('page_obj'):
                 context['page_obj'].object_list = ca_list
             else:
@@ -127,7 +123,7 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
         return context
 
     def _hierarchical_sort(self, cas: list[CaModel]) -> list[CaModel]:
-        """Sort CAs hierarchically: roots first, then their children recursively.
+        """Sort CAs hierarchically and set indentation while walking the tree.
 
         Args:
             cas: List of CA models to sort.
@@ -147,14 +143,15 @@ class CaTableView(ExportMixin, ContextDataMixin, ListView[CaModel]):
 
         result: list[CaModel] = []
 
-        def add_ca_and_children(parent_id: int | None) -> None:
-            """Recursively add CA and its children to result."""
+        def add_ca_and_children(parent_id: int | None, depth: int) -> None:
+            """Append a CA and its descendants, setting the depth-based indentation."""
             if parent_id in children_map:
                 for ca in children_map[parent_id]:
+                    ca.display_indentation = f'{depth * 20}px'  # type: ignore[attr-defined]
                     result.append(ca)
-                    add_ca_and_children(ca.id)
+                    add_ca_and_children(ca.id, depth + 1)
 
-        add_ca_and_children(None)
+        add_ca_and_children(None, 0)
 
         return result
 

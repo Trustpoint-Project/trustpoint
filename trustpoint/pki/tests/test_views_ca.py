@@ -26,6 +26,7 @@ def test_ca_table_hierarchical_sort_orders_roots_and_children() -> None:
     result = CaTableView.__dict__['_hierarchical_sort'](view, [child_b, second_root, root, child_a])
 
     assert [ca.unique_name for ca in result] == ['root', 'child-a', 'child-b', 'second-root']
+    assert [ca.display_indentation for ca in result] == ['0px', '20px', '20px', '0px']
 
 
 def test_ca_table_hierarchical_sort_ignores_orphaned_rows() -> None:

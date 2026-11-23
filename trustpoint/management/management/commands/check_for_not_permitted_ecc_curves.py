@@ -8,18 +8,14 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
-from trustpoint_core.oid import PublicKeyAlgorithmOid
 
-from management.models import NotificationModel, NotificationStatus, SecurityConfig
-from pki.models import CertificateModel
-from pki.security_policy import CryptographicPolicy, PolicyViolationCode, evaluate_public_key, stored_public_key_facts
+from management.services.certificate_policy_notifications import check_certificate_policy_notifications
 
 
 class Command(BaseCommand):
     """Custom Django management command to check certificates for not permitted ECC curves."""
 
-    help = 'Check certificates using not permitted ECC curves.'
+    help = 'Deprecated alias for check_certificate_policy; checks only ECC curves.'
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
         """Entrypoint for the command.
@@ -28,45 +24,5 @@ class Command(BaseCommand):
             *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
-        self._check_for_not_permitted_ecc_curves()
+        check_certificate_policy_notifications(signature=False, key=False, curve=True)
         self.stdout.write(self.style.SUCCESS('Not permitted ECC curves check completed.'))
-
-    def _check_for_not_permitted_ecc_curves(self) -> None:
-        """Task to check if any certificates are using not permitted ECC curves."""
-        config = SecurityConfig.objects.first()
-        if config is None:
-            return
-        policy = CryptographicPolicy.from_config(config)
-        if not policy.blocked_curve_oids:
-            return
-
-        not_permitted_ecc_certificates = CertificateModel.objects.filter(
-            spki_algorithm_oid=PublicKeyAlgorithmOid.ECC.dotted_string,
-        )
-        new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
-        notified_certificate_ids = set(
-            NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate__isnull=False).values_list(
-                'certificate_id', flat=True
-            )
-        )
-
-        for cert in not_permitted_ecc_certificates.iterator():
-            if not any(
-                failure.code == PolicyViolationCode.ECC_CURVE_BLOCKED
-                for failure in evaluate_public_key(policy, stored_public_key_facts(cert))
-            ):
-                continue
-            if cert.pk not in notified_certificate_ids:
-                message_data = {'common_name': cert.common_name, 'spki_ec_curve': cert.spki_ec_curve}
-
-                notification = NotificationModel.objects.create(
-                    certificate=cert,
-                    created_at=timezone.now(),
-                    event='WEAK_ECC_CURVE',
-                    notification_source=NotificationModel.NotificationSource.CERTIFICATE,
-                    notification_type=NotificationModel.NotificationTypes.WARNING,
-                    message_type=NotificationModel.NotificationMessageType.WEAK_ECC_CURVE,
-                    message_data=message_data,
-                )
-                notification.statuses.add(new_status)
-                notified_certificate_ids.add(cert.pk)
