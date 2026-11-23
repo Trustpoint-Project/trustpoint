@@ -10,10 +10,23 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from devices.models import OpcUaGdsPushConfig
-from devices.tasks import perform_gds_push_update
+from devices.models import DeviceModel, OpcUaGdsPushConfig
+from devices.tasks import (
+    perform_gds_push_update,
+    update_gds_push_server_certificate,
+    update_gds_push_trustlist,
+)
 
 from request.gds_push import GdsPushError, GdsPushService
+
+
+@pytest.fixture
+def mock_models(mock_models):
+    """Background GDS updates require a GDS device."""
+    device = mock_models['device']
+    device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+    device.save(update_fields=['device_type'])
+    return mock_models
 
 
 class TestPerformGdsPushUpdate:
@@ -51,9 +64,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.transaction.atomic'):
@@ -73,9 +84,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(False, 'Trustlist update failed'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -96,9 +105,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(False, 'Certificate update failed', None)
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(False, 'Certificate update failed', None))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -118,9 +125,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(side_effect=GdsPushError('Connection failed'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -140,9 +145,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            side_effect=GdsPushError('Certificate signing failed')
-        )
+        mock_service.update_server_certificate = AsyncMock(side_effect=GdsPushError('Certificate signing failed'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -162,9 +165,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(side_effect=RuntimeError('Unexpected error'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -182,9 +183,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            side_effect=RuntimeError('Unexpected error')
-        )
+        mock_service.update_server_certificate = AsyncMock(side_effect=RuntimeError('Unexpected error'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -203,9 +202,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.transaction.atomic'):
@@ -216,8 +213,9 @@ class TestPerformGdsPushUpdate:
                     # Verify that DeviceModel.objects.get was called with the device ID
                     mock_get.assert_called_with(pk=device.pk)
 
-    def test_atomic_transaction_for_trustlist_update(self, mock_models):
-        """Test that trustlist update is wrapped in atomic transaction."""
+    @pytest.mark.django_db(transaction=True)
+    def test_network_updates_run_outside_atomic_transaction(self, mock_models):
+        """Slow device I/O must not hold a database transaction open."""
         device = mock_models['device']
         config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
         device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
@@ -226,24 +224,26 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
+
+        from django.db import connection
+
+        run = asyncio.run
+
+        def run_outside_transaction(coroutine):
+            assert not connection.in_atomic_block
+            return run(coroutine)
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
-            with patch('devices.tasks.transaction.atomic') as mock_atomic:
-                mock_atomic.return_value.__enter__ = Mock()
-                mock_atomic.return_value.__exit__ = Mock(return_value=None)
-                with patch.object(device, 'refresh_from_db'):
-                    with patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'):
-                        perform_gds_push_update(device.pk)
-
-                        # Atomic should be called at least once
-                        assert mock_atomic.call_count >= 2
+            with patch('devices.tasks.asyncio.run', side_effect=run_outside_transaction):
+                perform_gds_push_update(device.pk)
+        mock_service.update_trustlist.assert_awaited_once()
+        mock_service.update_server_certificate.assert_awaited_once()
 
     def test_logging_on_success(self, mock_models, caplog):
         """Test that success is logged properly."""
         import logging
+
         caplog.set_level(logging.INFO)
 
         device = mock_models['device']
@@ -254,9 +254,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -264,12 +262,15 @@ class TestPerformGdsPushUpdate:
                     perform_gds_push_update(device.pk)
 
                     # Check that success messages are logged
-                    assert 'Trustlist updated successfully' in caplog.text or True  # May not appear depending on logger level
+                    assert (
+                        'Trustlist updated successfully' in caplog.text or True
+                    )  # May not appear depending on logger level
                     assert 'Starting periodic GDS Push update' in caplog.text or True
 
     def test_logging_on_failure(self, mock_models, caplog):
         """Test that failures are logged properly."""
         import logging
+
         caplog.set_level(logging.WARNING)
 
         device = mock_models['device']
@@ -280,9 +281,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(False, 'Trustlist update failed'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(False, 'Certificate update failed', None)
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(False, 'Certificate update failed', None))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -303,9 +302,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.asyncio.run', wraps=asyncio.run) as mock_asyncio_run:
@@ -326,9 +323,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.asyncio.run', wraps=asyncio.run) as mock_asyncio_run:
@@ -340,8 +335,8 @@ class TestPerformGdsPushUpdate:
                         calls = [call for call in mock_asyncio_run.call_args_list]
                         assert len(calls) >= 2
 
-    def test_multiple_consecutive_updates(self, mock_models):
-        """Test multiple consecutive task executions."""
+    def test_duplicate_updates_do_not_start_another_cycle(self, mock_models):
+        """Duplicate queued tasks must not update a device again before its next cycle."""
         device = mock_models['device']
         config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
         device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
@@ -350,9 +345,7 @@ class TestPerformGdsPushUpdate:
 
         mock_service = Mock(spec=GdsPushService)
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(True, 'Certificate updated', b'cert_data')
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(True, 'Certificate updated', b'cert_data'))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch.object(device, 'refresh_from_db'):
@@ -361,9 +354,8 @@ class TestPerformGdsPushUpdate:
                     for _ in range(3):
                         perform_gds_push_update(device.pk)
 
-                    # Service should be instantiated 3 times
-                    assert mock_service.update_trustlist.call_count == 3
-                    assert mock_service.update_server_certificate.call_count == 3
+                    mock_service.update_trustlist.assert_called_once()
+                    mock_service.update_server_certificate.assert_called_once()
 
     def test_mixed_success_and_failure_results(self, mock_models):
         """Test handling of mixed success/failure results."""
@@ -376,9 +368,7 @@ class TestPerformGdsPushUpdate:
         mock_service = Mock(spec=GdsPushService)
         # Trustlist succeeds, certificate fails
         mock_service.update_trustlist = AsyncMock(return_value=(True, 'Trustlist updated'))
-        mock_service.update_server_certificate = AsyncMock(
-            return_value=(False, 'Certificate update failed', None)
-        )
+        mock_service.update_server_certificate = AsyncMock(return_value=(False, 'Certificate update failed', None))
 
         with patch('devices.tasks.GdsPushService', return_value=mock_service):
             with patch('devices.tasks.transaction.atomic'):
@@ -392,6 +382,7 @@ class TestPerformGdsPushUpdate:
     def test_device_not_found_with_logging(self, caplog):
         """Test logging when device is not found."""
         import logging
+
         caplog.set_level(logging.ERROR)
 
         with pytest.raises(ValueError):
@@ -403,6 +394,7 @@ class TestPerformGdsPushUpdate:
     def test_disabled_periodic_update_with_logging(self, mock_models, caplog):
         """Test logging when periodic updates are disabled."""
         import logging
+
         caplog.set_level(logging.INFO)
 
         device = mock_models['device']
@@ -416,3 +408,29 @@ class TestPerformGdsPushUpdate:
 
             assert 'Periodic GDS Push update disabled' in caplog.text
             mock_service.assert_not_called()
+
+
+class TestManualGdsPushTasks:
+    """Manual update tasks must run even when the periodic schedule is disabled."""
+
+    def test_update_trustlist_runs_once(self, mock_models):
+        """The task delegates to the GDS Push service."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_trustlist = AsyncMock(return_value=(True, 'ok'))
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            update_gds_push_trustlist(device.pk)
+
+        service.update_trustlist.assert_called_once()
+
+    def test_update_server_certificate_runs_once(self, mock_models):
+        """The task delegates the certificate push to the GDS Push service."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_server_certificate = AsyncMock(return_value=(True, 'ok', b'certificate'))
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            update_gds_push_server_certificate(device.pk)
+
+        service.update_server_certificate.assert_called_once()

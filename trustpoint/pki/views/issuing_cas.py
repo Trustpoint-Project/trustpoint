@@ -13,7 +13,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import FieldError, PermissionDenied, ValidationError
 from django.db import transaction
 from django.forms import Form
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
@@ -203,9 +203,12 @@ class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], Lis
         elif sort_param == '-common_name':
             sort_param = '-credential__certificate__common_name'
 
-        if hasattr(self.model, 'is_active'):
-            return queryset.order_by('-is_active', sort_param)
-        return queryset.order_by(sort_param)
+        try:
+            if hasattr(self.model, 'is_active'):
+                return queryset.order_by('-is_active', sort_param)
+            return queryset.order_by(sort_param)
+        except FieldError:
+            return queryset.order_by(self.default_sort_param)
 
 
 class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddMethodSelectForm]):
@@ -659,6 +662,12 @@ class IssuingCaExternalCsrView(LoggerMixin, IssuingCaContextMixin, FormView[Issu
     form_class = IssuingCaExternalCsrCertificateForm
     template_name = 'pki/issuing_cas/external_csr.html'
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Only CA managers may complete an external-CSR provisioning."""
+        if not request.user.has_perm(AppPermissions.MANAGE_CAS):
+            raise PermissionDenied
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
     def get_ca(self) -> CaModel:
         """Get the pending external-CSR issuing CA."""
         return get_object_or_404(
@@ -782,15 +791,19 @@ class IssuingCaExternalCsrView(LoggerMixin, IssuingCaContextMixin, FormView[Issu
         ca = self.get_ca()
         if ca.credential is None:
             raise ValidationError(_('The Issuing CA credential is missing.'))
+        if ca.credential.certificate is not None:
+            form.add_error(None, _('The Issuing CA already has a certificate. Use a CA rollover to replace it.'))
+            return self.form_invalid(form)
 
-        certificate_serializer = form.cleaned_data['certificate']
-        certificate_model = CertificateModel.save_certificate(certificate_serializer.as_crypto())
-        ca.credential.certificate = certificate_model
-        ca.credential.save()
-        PrimaryCredentialCertificate.objects.update_or_create(
-            credential=ca.credential,
-            defaults={'certificate': certificate_model, 'is_primary': True},
-        )
+        with transaction.atomic():
+            certificate_serializer = form.cleaned_data['certificate']
+            certificate_model = CertificateModel.save_certificate(certificate_serializer.as_crypto())
+            ca.credential.certificate = certificate_model
+            ca.credential.save()
+            PrimaryCredentialCertificate.objects.update_or_create(
+                credential=ca.credential,
+                defaults={'certificate': certificate_model, 'is_primary': True},
+            )
         messages.success(self.request, _('Successfully uploaded the externally issued Issuing CA certificate.'))
         return redirect('pki:issuing_cas-config', pk=ca.pk)
 
@@ -1021,6 +1034,23 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         return self.render_to_response(context)
 
 
+def _complete_rollover_for_state(state: dict[str, Any], ca: CaModel) -> None:
+    """Attach a certificate-request result to the rollover that started it."""
+    rollover_pk = state.get('rollover_pk')
+    if not rollover_pk:
+        return
+    rollover = CaRolloverModel.objects.filter(
+        pk=rollover_pk,
+        state=CaRolloverState.AWAITING_NEW_CA,
+        new_issuing_ca__isnull=True,
+    ).first()
+    if rollover is None:
+        return
+    rollover.new_issuing_ca = ca
+    rollover.save(update_fields=['new_issuing_ca'])
+    CaRolloverService.complete_awaiting_rollover_for_ca(ca)
+
+
 class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextMixin, EstRequestCertView):
     """Review the EST request, then create the Issuing CA from the issued certificate."""
 
@@ -1047,7 +1077,7 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
     ) -> CaModel:
         """Create the Issuing CA from the EST-issued certificate."""
         profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
-        return finalize_est_issuing_ca(
+        ca = finalize_est_issuing_ca(
             credential=credential,
             issued_cert=issued_cert,
             truststore=truststore,
@@ -1060,6 +1090,8 @@ class IssuingCaRequestCertEstView(UserPermissionRequiredMixin, IssuingCaContextM
             est_password=self.state['est_password'],
             ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
+        _complete_rollover_for_state(self.state, ca)
+        return ca
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
         """Return to the created CA's configuration page."""
@@ -1092,7 +1124,7 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
     ) -> CaModel:
         """Create the Issuing CA from the CMP-issued certificate and chain."""
         profile = get_object_or_404(CertificateProfileModel, pk=self.state.get('profile_pk'))
-        return finalize_cmp_issuing_ca(
+        ca = finalize_cmp_issuing_ca(
             credential=credential,
             issued_cert=issued_cert,
             chain_certs=extra_certs,
@@ -1106,6 +1138,8 @@ class IssuingCaRequestCertCmpView(UserPermissionRequiredMixin, IssuingCaContextM
             cmp_sender_kid=self.state.get('cmp_sender_kid'),
             ca_role=CaModel.CaRole(int(self.state.get('ca_role', CaModel.CaRole.ISSUING))),
         )
+        _complete_rollover_for_state(self.state, ca)
+        return ca
 
     def _redirect_after_finalize(self, result: CaModel) -> HttpResponse:
         """Return to the created CA's configuration page."""
@@ -1141,6 +1175,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
     model = CertificateModel
     template_name = 'pki/issuing_cas/issued_certificates.html'
     context_object_name = 'issued_certificates'
+    paginate_by = UIConfig.paginate_by
 
     def get_queryset(self) -> QuerySet[CertificateModel, CertificateModel]:
         """Gets the required and filtered QuerySet.
@@ -1153,7 +1188,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
             pk=self.kwargs['pk'],
         )
 
-        return issuing_ca.get_issued_certificates().select_related('revoked_certificate')
+        return issuing_ca.get_issued_certificates().select_related('revoked_certificate').order_by('common_name', 'pk')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issuing ca model object to the context.
@@ -1261,7 +1296,7 @@ class IssuingCaCrlGenerationView(UserPermissionRequiredMixin, IssuingCaContextMi
             )
             return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
-        if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
+        if issuing_ca.issue_crl(crl_validity_hours=issuing_ca.crl_validity_hours):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
@@ -1351,9 +1386,9 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         summary='Retrieve Issuing CA',
         description='Retrieve details of a specific Issuing CA by ID.',
     )
-    def retrieve(self, request: Request) -> Response:
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request)
+        return super().retrieve(request, *args, **kwargs)
 
     @extend_schema(
         summary='Import Issuing CA from PEM files',
@@ -1522,7 +1557,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
         del pk  # not needed, but passed by DRF
         ca = self.get_object()
 
-        if ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours)):
+        if ca.issue_crl(crl_validity_hours=ca.crl_validity_hours):
             return Response(
                 {
                     'message': f'CRL generated successfully for Issuing CA "{ca.unique_name}".',

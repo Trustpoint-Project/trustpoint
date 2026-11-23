@@ -8,12 +8,15 @@ from typing import Any
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db import connection
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
-from trustpoint.views.base import ContextDataMixin
+from trustpoint.settings import UIConfig
+from trustpoint.views.base import ContextDataMixin, UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 from .models import DiscoveredDevice, DiscoveryPort
@@ -27,12 +30,13 @@ class DiscoveryContextMixin(ContextDataMixin):
     context_page_name = 'discovery'
 
 
-class DeviceListView(DiscoveryContextMixin, View):
+class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Display the asset discovery dashboard with scan results and port config."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
-    def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:
+    def _apply_filters(self, queryset: Any, request: HttpRequest) -> tuple[Any, bool]:  # noqa: C901
         """Apply filters to the device queryset and return filtered queryset and active status."""
         filters_active = False
         ip_address = request.GET.get('ip_address', '').strip()
@@ -60,39 +64,59 @@ class DeviceListView(DiscoveryContextMixin, View):
         if port:
             try:
                 port_num = int(port)
-                queryset = queryset.filter(open_ports__contains=[port_num])
-                filters_active = True
             except (ValueError, TypeError):
                 pass
+            else:
+                if connection.features.supports_json_field_contains:
+                    queryset = queryset.filter(open_ports__contains=[port_num])
+                else:
+                    matching_ids = [device.pk for device in queryset if port_num in (device.open_ports or [])]
+                    queryset = queryset.filter(pk__in=matching_ids)
+                filters_active = True
 
         return queryset, filters_active
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the discovery dashboard."""
-        all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
+        all_devs = DiscoveredDevice.objects.select_related('certificate_record').order_by('-last_seen')
 
         # Apply filters
         all_devs, filters_active = self._apply_filters(all_devs, request)
 
         all_ports = DiscoveryPort.objects.all().order_by('port_number')
 
-        stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
-
         ot_ports = list(
             DiscoveryPort.objects.filter(
                 Q(description__icontains='OPC') | Q(description__icontains='MQTT')
             ).values_list('port_number', flat=True)
         )
+        industrial_filter = Q()
+        for port_number in ot_ports:
+            industrial_filter |= Q(open_ports__contains=[port_number])
+        if ot_ports and connection.features.supports_json_field_contains:
+            industrial = all_devs.filter(industrial_filter).distinct().count()
+        elif ot_ports:
+            # SQLite only: JSON membership is not queryable, so keep the old scan.
+            industrial = sum(
+                1
+                for open_ports in all_devs.values_list('open_ports', flat=True)
+                if any(port_number in open_ports for port_number in ot_ports)
+            )
+        else:
+            industrial = 0
+        stats = {
+            'total': all_devs.count(),
+            'risks': all_devs.filter(ssl_info__is_self_signed=True).count(),
+            'industrial': industrial,
+        }
 
-        for d in all_devs:
-            if d.ssl_info and d.ssl_info.get('is_self_signed'):
-                stats['risks'] += 1
-            if any(p in ot_ports for p in d.open_ports):
-                stats['industrial'] += 1
-
+        paginator = Paginator(all_devs, UIConfig.paginate_by)
+        page_obj = paginator.get_page(request.GET.get('page'))
         state = ScanManager.get_state()
         context = self.get_context_data(
-            devices=all_devs,
+            devices=page_obj.object_list,
+            page_obj=page_obj,
+            is_paginated=page_obj.has_other_pages(),
             scan_ports=all_ports,
             scan_running=state['scan_running'],
             stop_pending=state['stop_pending'],
@@ -164,10 +188,14 @@ class AddPortView(View):
         if port_str and desc:
             try:
                 port_int = int(port_str)
-                DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
-                messages.success(request, f'Port {port_int} added to scan configuration.')
             except ValueError:
-                messages.error(request, 'Invalid port number. Please enter a valid integer.')
+                messages.error(request, 'Invalid port number. Enter a value between 1 and 65535.')
+            else:
+                if not DiscoveryPort.MIN_PORT <= port_int <= DiscoveryPort.MAX_PORT:
+                    messages.error(request, 'Invalid port number. Enter a value between 1 and 65535.')
+                else:
+                    DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
+                    messages.success(request, f'Port {port_int} added to scan configuration.')
 
         referer = request.META.get('HTTP_REFERER', '')
         if 'port-config' in referer:
@@ -175,10 +203,11 @@ class AddPortView(View):
         return redirect('discovery:device_list')
 
 
-class PortConfigView(DiscoveryContextMixin, View):
+class PortConfigView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Display and manage port configuration."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the port configuration page."""
@@ -221,10 +250,11 @@ class ClearDevicesView(View):
         return redirect('discovery:device_list')
 
 
-class DeviceDetailView(DiscoveryContextMixin, View):
+class DeviceDetailView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Show detail view for a discovered device."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest, device_id: int) -> HttpResponse:
         """Render details for a single discovered device."""
@@ -233,10 +263,11 @@ class DeviceDetailView(DiscoveryContextMixin, View):
         return render(request, 'discovery/device_detail.html', context)
 
 
-class ExportCsvView(DiscoveryContextMixin, View):
+class ExportCsvView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
     """Export the current discovery inventory to a CSV file."""
 
     http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_CERTIFICATE_DISCOVERY
 
     def get(self, request: HttpRequest) -> HttpResponse:  # noqa: ARG002
         """Return inventory rows as a downloadable CSV."""

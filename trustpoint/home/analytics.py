@@ -36,28 +36,26 @@ def application_certificate_device_counts(now: datetime) -> dict[str, int]:
     both active and old/expired certificates belong to the active category.
     """
     devices = DeviceModel.objects.all()
-    active = set(filter_devices_with_active_application_certificates(devices, now).values_list('pk', flat=True))
-    bad = (
-        set(filter_devices_with_expired_or_revoked_application_certificates(devices, now).values_list('pk', flat=True))
-        - active
-    )
+    active = filter_devices_with_active_application_certificates(devices, now)
+    bad = filter_devices_with_expired_or_revoked_application_certificates(devices, now).exclude(pk__in=active)
     future = (
-        set(
-            filter_credential_health(
-                devices,
-                IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-                ['not_yet_valid'],
-                as_of=now,
-            ).values_list('pk', flat=True)
+        filter_credential_health(
+            devices,
+            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+            ['not_yet_valid'],
+            as_of=now,
         )
-        - active
-        - bad
+        .exclude(pk__in=active)
+        .exclude(pk__in=bad)
     )
+    active_count = active.count()
+    bad_count = bad.count()
+    future_count = future.count()
     return {
-        'active': len(active),
-        'expired_or_revoked_only': len(bad),
-        'not_yet_valid': len(future),
-        'none': devices.count() - len(active) - len(bad) - len(future),
+        'active': active_count,
+        'expired_or_revoked_only': bad_count,
+        'not_yet_valid': future_count,
+        'none': devices.count() - active_count - bad_count - future_count,
     }
 
 

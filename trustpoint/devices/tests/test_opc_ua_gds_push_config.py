@@ -17,6 +17,7 @@ from onboarding.models import OnboardingPkiProtocol, OnboardingProtocol
 def opc_device(device_instance_onboarding):
     device = device_instance_onboarding['device']
     device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+    device.ip_address = '127.0.0.1'
     device.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
     device.onboarding_config.set_pki_protocols([OnboardingPkiProtocol.OPC_GDS_PUSH])
     device.onboarding_config.save()

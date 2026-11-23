@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 
 from pki.models.credential import CredentialModel
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
@@ -143,17 +143,23 @@ class SaveCredentialToDbMixin(LoggerMixin):
         )
         return saved_record
 
-    def _save_keyless_credential(
+    def _save_keyless_credential(  # noqa: PLR0913
         self,
         certificate: x509.Certificate,
         certificate_chain: list[x509.Certificate],
         common_name: str,
-        issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
+        issued_credential_type: (
+            IssuedCredentialModel.IssuedCredentialType | RemoteIssuedCredentialModel.RemoteIssuedCredentialType
+        ),
         certificate_profile: CertificateProfileModel,
-    ) -> IssuedCredentialModel:
+        *,
+        remote: bool = False,
+    ) -> IssuedCredentialModel | RemoteIssuedCredentialModel:
+        record_model = RemoteIssuedCredentialModel if remote else IssuedCredentialModel
 
         self.logger.info(
-            "Saving keyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
+            "Saving %skeyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
+            'remote ' if remote else '',
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
@@ -162,14 +168,13 @@ class SaveCredentialToDbMixin(LoggerMixin):
             certificate_profile,
         )
 
-        def create_record() -> IssuedCredentialModel:
+        def create_record() -> IssuedCredentialModel | RemoteIssuedCredentialModel:
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,
                 certificate_chain=certificate_chain,
                 credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
             )
-
-            issued_credential_model = IssuedCredentialModel(
+            record = record_model(
                 issued_credential_type=issued_credential_type,
                 certificate_profile=certificate_profile,
                 common_name=common_name,
@@ -177,15 +182,14 @@ class SaveCredentialToDbMixin(LoggerMixin):
                 device=self.device,
                 domain=self.domain,
             )
-
-            issued_credential_model.save()
-            return issued_credential_model
+            record.save()
+            return record
 
         return self._save_or_update_keyless_credential_record(
             KeylessCredentialSaveConfig(
                 certificate=certificate,
                 certificate_chain=certificate_chain,
-                existing_records=IssuedCredentialModel.objects.filter(
+                existing_records=record_model.objects.filter(
                     device=self.device,
                     domain=self.domain,
                     issued_credential_type=issued_credential_type,
@@ -193,7 +197,11 @@ class SaveCredentialToDbMixin(LoggerMixin):
                 ),
                 create_record=create_record,
                 certificate_profile=certificate_profile,
-                success_log="Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
+                success_log=(
+                    "Successfully saved keyless RemoteIssuedCredentialModel (ID: %s) for device '%s'"
+                    if remote
+                    else "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'"
+                ),
             )
         )
 
@@ -253,8 +261,11 @@ class CredentialSaver(SaveCredentialToDbMixin):
         certificate_profile: CertificateProfileModel,
     ) -> IssuedCredentialModel:
         """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
-        return self._save_keyless_credential(
-            certificate, certificate_chain, common_name, issued_credential_type, certificate_profile
+        return cast(
+            'IssuedCredentialModel',
+            self._save_keyless_credential(
+                certificate, certificate_chain, common_name, issued_credential_type, certificate_profile
+            ),
         )
 
     def save_remote_keyless_credential(
@@ -265,44 +276,14 @@ class CredentialSaver(SaveCredentialToDbMixin):
         certificate_profile: CertificateProfileModel,
     ) -> RemoteIssuedCredentialModel:
         """Saves a keyless credential issued via a remote/RA CA as a RemoteIssuedCredentialModel."""
-        self.logger.info(
-            "Saving remote keyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Profile: %s",
-            self._device.common_name,
-            self._device.pk,
-            self._domain.unique_name,
-            common_name,
-            certificate_profile,
-        )
-
-        def create_record() -> RemoteIssuedCredentialModel:
-            credential_model = CredentialModel.save_keyless_credential(
-                certificate=certificate,
-                certificate_chain=certificate_chain,
-                credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
-            )
-            remote_issued = RemoteIssuedCredentialModel(
-                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
-                certificate_profile=certificate_profile,
-                common_name=common_name,
-                credential=credential_model,
-                device=self._device,
-                domain=self._domain,
-            )
-            remote_issued.save()
-            return remote_issued
-
-        return self._save_or_update_keyless_credential_record(
-            KeylessCredentialSaveConfig(
-                certificate=certificate,
-                certificate_chain=certificate_chain,
-                existing_records=RemoteIssuedCredentialModel.objects.filter(
-                    device=self._device,
-                    domain=self._domain,
-                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
-                    common_name=common_name,
-                ),
-                create_record=create_record,
-                certificate_profile=certificate_profile,
-                success_log="Successfully saved RemoteIssuedCredentialModel (ID: %s) for device '%s'",
-            )
+        return cast(
+            'RemoteIssuedCredentialModel',
+            self._save_keyless_credential(
+                certificate,
+                certificate_chain,
+                common_name,
+                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+                certificate_profile,
+                remote=True,
+            ),
         )

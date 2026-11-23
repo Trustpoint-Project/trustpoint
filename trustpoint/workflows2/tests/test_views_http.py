@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
@@ -13,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from management.models.workflows2 import WorkflowExecutionConfig
+from trustpoint.middleware import Workflow2InlineDrainMiddleware
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.models import (
     Workflow2Approval,
@@ -405,11 +407,17 @@ workflow:
         cfg.worker_stale_after_seconds = 30
         cfg.save()
 
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.get(reverse('workflows2:runs-list'))
+        Workflow2Instance.objects.filter(pk=inst.pk).update(created_at=timezone.now() - timedelta(minutes=2))
 
-        self.assertEqual(response.status_code, 200)
-        inst.refresh_from_db()
+        with patch.object(Workflow2InlineDrainMiddleware, 'DRAIN_INTERVAL_SECONDS', 0):
+            for _ in range(4):
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.get(reverse('workflows2:runs-list'))
+                self.assertEqual(response.status_code, 200)
+                inst.refresh_from_db()
+                if inst.status == Workflow2Instance.STATUS_FINISHED:
+                    break
+
         self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
 

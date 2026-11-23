@@ -1,0 +1,79 @@
+@startuml
+' General interface for all parsing components.
+interface ParsingComponent {
+    + parse(context: RequestContext)
+}
+
+' Composite parser to group and execute individual parsing strategies.
+class CompositeParsing {
+    + components: list[ParsingComponent]
+    + add(component: ParsingComponent)
+    + remove(component: ParsingComponent)
+    + parse(context: RequestContext)
+}
+
+' Specialized composite parsers for specific protocols.
+class CmpMessageParser {
+    + __init__()
+    + parse(context: RequestContext)
+}
+
+class EstMessageParser {
+    + __init__()
+    + parse(context: RequestContext)
+}
+
+' Individual parsing components.
+class EstPkiMessageParsing {
+    + parse(context: RequestContext)
+}
+
+class CmpPkiMessageParsing {
+    + parse(context: RequestContext)
+}
+
+class EstCsrSignatureVerification {
+    + parse(context: RequestContext)
+}
+
+class DomainParsing {
+    + parse(context: RequestContext)
+}
+
+class CertProfileParsing {
+    + parse(context: RequestContext)
+}
+
+' Dependency relationship with RequestContext.
+class RequestContext {
+    + raw_message: Request
+    + domain_str: str
+    + cert_profile_str: str
+    + cert_requested: x509.CertificateSigningRequest
+    + domain: DomainModel
+    + parsed_message: PKIMessage
+    + est_encoding: str
+}
+
+' Relationships.
+ParsingComponent <|-- CompositeParsing
+CompositeParsing <|-- CmpMessageParser
+CompositeParsing <|-- EstMessageParser
+ParsingComponent <|-- EstPkiMessageParsing
+ParsingComponent <|-- CmpPkiMessageParsing
+ParsingComponent <|-- EstCsrSignatureVerification
+ParsingComponent <|-- DomainParsing
+ParsingComponent <|-- CertProfileParsing
+
+' Composite dependencies.
+CompositeParsing o--> ParsingComponent : "parses with"
+CompositeParsing --> RequestContext : "uses"
+CmpMessageParser --> CompositeParsing : "extends"
+EstMessageParser --> CompositeParsing : "extends"
+EstPkiMessageParsing --> RequestContext : "parses CSR"
+CmpPkiMessageParsing --> RequestContext : "handles CMP messages"
+EstCsrSignatureVerification --> RequestContext : "verifies CSR signature"
+DomainParsing --> RequestContext : "validates domain"
+CertProfileParsing --> RequestContext : "parses certificate template"
+
+@enduml

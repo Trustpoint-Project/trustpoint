@@ -134,6 +134,8 @@ class TruststoreAddForm(forms.Form):
 
             intended_usage_enum = TruststoreModel.IntendedUsage(int(intended_usage))
             validate_and_create_ca_chain(certs, intended_usage_enum)
+            if intended_usage_enum == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN:
+                certs = _sort_certificate_chain(certs)
 
             trust_store_model = self.save_trust_store(
                 unique_name=unique_name,

@@ -75,25 +75,8 @@ Primary Certificate vs Certificate Chain
 
 Each credential has a **primary certificate** (the leaf/end-entity certificate) and an optional **certificate chain** (issuing CA certificates up the trust path):
 
-.. uml::
-
-   class CredentialModel {
-      + certificate: CertificateModel (primary/leaf)
-      + certificates: [CertificateModel] (via PrimaryCredentialCertificate)
-      + certificate_chain: [CertificateModel] (ordered, via CertificateChainOrderModel)
-   }
-
-   class PrimaryCredentialCertificate {
-      + credential: CredentialModel
-      + certificate: CertificateModel (ForeignKey)
-      + is_primary: bool
-   }
-
-   class CertificateChainOrderModel {
-      + credential: CredentialModel
-      + certificate: CertificateModel
-      + order: int
-   }
+.. image:: ../../diagrams/credential_certificate_chain.svg
+   :alt: Credential certificate chain
 
 The **primary certificate** (``certificate`` field) is the credential's active end-entity certificate. When a new certificate is issued or renewed, it becomes the new primary, and the old one is retained for revocation handling.
 

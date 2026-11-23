@@ -167,6 +167,20 @@ class TestAokiInitializationRequestView:
                 assert response.status_code == 401
                 assert b'No valid TLS client certificate provided' in response.content
 
+    def test_get_untrusted_proxy_peer_is_rejected(self, request_factory, mock_tls_cert):
+        """A client-certificate header from an untrusted peer must not be read."""
+        with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
+            with patch('aoki.views.NginxTLSClientCertExtractor.get_client_cert_as_x509') as extractor:
+                request = request_factory.get(
+                    '/aoki/init/',
+                    REMOTE_ADDR='203.0.113.10',
+                    HTTP_SSL_CLIENT_CERT='forged',
+                )
+                response = AokiInitializationRequestView().get(request)
+
+        assert response.status_code == 401
+        extractor.assert_not_called()
+
     def test_get_idevid_authentication_failed(self, request_factory, mock_tls_cert, mock_idevid_cert):
         """Test AOKI initialization when IDevID authentication fails."""
         with patch.object(ActiveTrustpointTlsServerCredentialModel.objects, 'first', return_value=mock_tls_cert):
@@ -312,8 +326,10 @@ class TestAokiInitializationRequestView:
                         request = request_factory.get('/aoki/init/')
                         view = AokiInitializationRequestView()
 
-                        with pytest.raises(TypeError, match='Unsupported private key type'):
-                            view.get(request)
+                        response = view.get(request)
+
+                        assert response.status_code == 501
+                        assert 'not supported' in response.content.decode()
 
     def test_http_method_names(self):
         """Test that only GET method is allowed."""

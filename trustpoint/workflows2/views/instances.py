@@ -128,7 +128,7 @@ def _get_step_meta(inst: Workflow2Instance) -> dict[str, dict[str, Any]]:
     return meta
 
 
-class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2InstanceDetailView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow instance with step history, jobs, and approvals."""
 
     page_category = 'workflows2'
@@ -270,6 +270,10 @@ class Workflow2InstanceCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
                 locked_until=None,
                 locked_by='',
             )
+            Workflow2Approval.objects.filter(
+                instance=inst,
+                status=Workflow2Approval.STATUS_PENDING,
+            ).update(status=Workflow2Approval.STATUS_EXPIRED, decided_at=timezone.now())
 
             WorkflowInstanceTransitionService.mark_cancelled(inst)
             save_instance_status(inst)

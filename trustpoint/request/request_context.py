@@ -25,13 +25,30 @@ if TYPE_CHECKING:
     from cmp.models import CmpTransactionModel
     from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
+    from pki.models import (
+        CertificateProfileModel,
+        CredentialModel,
+        DomainModel,
+        IssuedCredentialModel,
+        RemoteIssuedCredentialModel,
+        TruststoreModel,
+    )
     from workflows2.events.request_events import Event
     from workflows2.services.dispatch import DispatchOutcome
 
 # Request context classes follow the naming convention of <Protocol><Operation>RequestContext
 
 RCT = TypeVar('RCT', bound='BaseRequestContext')
+
+_SECRET_FIELD_NAMES = frozenset(
+    {
+        'est_password',
+        'est_client_key_pem',
+        'cmp_shared_secret',
+        'rest_password',
+        'private_key',
+    }
+)
 
 
 class ManualIssuanceMethod(IntEnum):
@@ -123,8 +140,11 @@ class BaseRequestContext(LoggerMixin):
             setattr(self, field.name, None)
 
     def __str__(self) -> str:
-        """String representation showing all context fields."""
-        field_summary = ', '.join(f'{field.name}={getattr(self, field.name)}' for field in fields(self))
+        """String representation showing all context fields, with credentials masked."""
+        field_summary = ', '.join(
+            f'{field.name}={"***" if field.name in _SECRET_FIELD_NAMES else getattr(self, field.name)}'
+            for field in fields(self)
+        )
         return f'{self.__class__.__name__}({field_summary})'
 
     def __repr__(self) -> str:
@@ -174,7 +194,7 @@ class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
 
     cert_serial_number: str | None = None
-    credential_to_revoke: IssuedCredentialModel | None = None
+    credential_to_revoke: IssuedCredentialModel | RemoteIssuedCredentialModel | None = None
     revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
 
@@ -234,6 +254,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     cmp_body_type: str | None = None
     cmp_transaction_id: str | None = None
     cmp_transaction: CmpTransactionModel | None = None
+    cmp_authenticated: bool = False
 
     # Client-side fields
     cmp_server_host: str | None = None

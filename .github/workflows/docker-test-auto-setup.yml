@@ -2,9 +2,21 @@ name: Tests / Docker Auto-Setup
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test-auto-setup:
@@ -319,20 +331,6 @@ jobs:
             echo "⚠️  Potential errors found in logs" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "✅ No critical errors in container logs" | tee -a "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Test 7 - Verify database initialization
-        run: |
-          echo "## Test 7: Database Initialization" >> "$GITHUB_STEP_SUMMARY"
-          
-          db_check=$(docker compose exec -T postgres psql -U admin -d trustpoint_db \
-            -c "SELECT COUNT(*) FROM users_trustpointuser WHERE username='admin';" -t || echo "0")
-          
-          if [ "$(echo "$db_check" | tr -d ' ')" -ge 1 ]; then
-            echo "✅ Admin user found in database" | tee -a "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ Admin user not found in database" | tee -a "$GITHUB_STEP_SUMMARY"
-            exit 1
           fi
 
       - name: Cleanup

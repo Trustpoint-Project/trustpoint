@@ -24,32 +24,16 @@ from request.enrollment import est_enrollment
 from request.message_responder import EstErrorMessageResponder
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import LoggedHttpResponse
 from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
     from pki.models.ca import CaModel
+    from pki.models.ca_rollover import CaRolloverModel
 
 
 class UsernamePasswordAuthenticationError(Exception):
     """Exception raised for username and password authentication failures."""
-
-
-THRESHOLD_LOGGER: int = 400
-
-
-class LoggedHttpResponse(HttpResponse, LoggerMixin):
-    """Custom HttpResponse that logs and prints error messages automatically."""
-
-    def __init__(self, content: str | bytes = b'', status: int | None = None, *args: Any, **kwargs: Any) -> None:
-        """Initialize the LoggedHttpResponse instance."""
-        if status and status >= THRESHOLD_LOGGER:
-            if isinstance(content, bytes):
-                content = content.decode('utf-8')
-            self.logger.error('EST - ERROR - %s - %s', status, content)
-        else:
-            self.logger.info('EST - SUCCESS - %s', status)
-
-        super().__init__(content, *args, status=status, **kwargs)
 
 
 class EstRequestedDomainExtractorMixin:
@@ -167,13 +151,20 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
         return CertificateCollectionSerializer(certificates)
 
     @staticmethod
-    def _get_domain_ca_chain(domain: DomainModel) -> CertificateCollectionSerializer:
+    def _get_domain_ca_chain(
+        domain: DomainModel,
+        *,
+        active_rollovers: dict[int, 'CaRolloverModel'] | None = None,
+    ) -> CertificateCollectionSerializer:
         """Include the current CA chain and any prepared rollover chain."""
         if domain.issuing_ca is None:
             msg = 'The requested domain has no issuing CA configured'
             raise ValueError(msg)
         chain = EstCACertsView._get_ca_chain(domain.issuing_ca)
-        rollover = CaRolloverService.get_active_rollover(domain.issuing_ca)
+        if active_rollovers is None:
+            rollover = CaRolloverService.get_active_rollover(domain.issuing_ca)
+        else:
+            rollover = active_rollovers.get(domain.issuing_ca_id or 0)
         if rollover and rollover.state == CaRolloverState.PREPARATION and rollover.new_issuing_ca:
             chain = CertificateCollectionSerializer(
                 chain.as_crypto() + EstCACertsView._get_ca_chain(rollover.new_issuing_ca).as_crypto()
@@ -182,14 +173,18 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
 
     def _get_default_ca_certs(self) -> LoggedHttpResponse:
         """Publish all active domains' CA chains when no CA label is supplied."""
-        domains = (
+        domains = list(
             DomainModel.objects.filter(is_active=True, issuing_ca__isnull=False)
             .select_related('issuing_ca__credential')
             .order_by('pk')
         )
+        # Load every prepared rollover once instead of querying per domain.
+        issuing_ca_ids = {domain.issuing_ca_id for domain in domains if domain.issuing_ca_id is not None}
+        active_rollovers = CaRolloverService.get_prepared_rollovers(issuing_ca_ids)
+
         certificates = []
         for domain in domains:
-            certificates.extend(self._get_domain_ca_chain(domain).as_crypto())
+            certificates.extend(self._get_domain_ca_chain(domain, active_rollovers=active_rollovers).as_crypto())
         if not certificates:
             return LoggedHttpResponse('No CA certificates are available.', status=503)
         # Domains may share an issuing CA or root; publish each certificate once.

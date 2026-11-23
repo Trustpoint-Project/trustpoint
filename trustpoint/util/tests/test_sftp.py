@@ -12,7 +12,7 @@ import paramiko
 
 from management.models import BackupOptions
 from management.tests.ssh_helpers import SFTP_HOST_KEY
-from util.sftp import SftpClient, SftpError
+from util.sftp import SFTP_CONNECT_TIMEOUT_SECONDS, SftpClient, SftpError
 
 
 @pytest.fixture(scope='module')
@@ -344,6 +344,9 @@ class TestSftpClient:
             pkey=None,
             allow_agent=False,
             look_for_keys=False,
+            timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+            banner_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+            auth_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
         )
         ssh.close.assert_not_called()
         connection.close()

@@ -126,9 +126,7 @@ class TruststoreTableView(
         """
         context = super().get_context_data(**kwargs)
         context['filter'] = getattr(self, 'filterset', None)
-        context['filters_active'] = any(
-            self.request.GET.get(k) for k in ('unique_name', 'intended_usage')
-        )
+        context['filters_active'] = any(self.request.GET.get(k) for k in ('unique_name', 'intended_usage'))
         return context
 
 
@@ -147,7 +145,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
             self.for_devid = True
         else:
             self.for_devid = False
-        return cast('HttpResponse',super().dispatch(request, *args, **kwargs))
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
@@ -209,6 +207,17 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
     template_name = 'pki/truststores/details.html'
     context_object_name = 'truststore'
 
+    def get_queryset(self) -> QuerySet[TruststoreModel]:
+        """Load subject and issuer entries for every certificate in one batch."""
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                'certificates__subject',
+                'certificates__issuer',
+            )
+        )
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adding map of attribute and its oid with its values.
 
@@ -225,29 +234,17 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
         cert_context = []
         for cert in truststore.certificates.all():
             subject_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value
-                }
-                for entry in cert.subject.all()
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value} for entry in cert.subject.all()
             ]
 
             issuer_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value,
-                    'id': entry.id
-                }
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value, 'id': entry.id}
                 for entry in cert.issuer.all()
             ]
 
-            cert_context.append({
-                'certificate': cert,
-                'subject_entries': subject_entries,
-                'issuer_entries': issuer_entries
-            })
+            cert_context.append(
+                {'certificate': cert, 'subject_entries': subject_entries, 'issuer_entries': issuer_entries}
+            )
 
         context['cert_context'] = cert_context
         return context
@@ -437,17 +434,16 @@ class CanManageTruststores(BasePermission):
     def has_permission(self, request: Request, _view: Any) -> bool:
         """Check if the user has permission to manage truststores."""
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES)
+            request.user and request.user.is_authenticated and request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES)
         )
+
 
 @extend_schema(tags=['Truststore'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single Truststore by id.'),
     update=extend_schema(description='Update an existing Truststore.'),
     partial_update=extend_schema(description='Partially update an existing Truststore.'),
-    destroy=extend_schema(description='Delete a Truststore.')
+    destroy=extend_schema(description='Delete a Truststore.'),
 )
 @extend_schema_view(
     list=extend_schema(summary='List Truststores', description='Retrieve truststore from the database.'),

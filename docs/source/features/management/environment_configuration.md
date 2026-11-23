@@ -123,11 +123,11 @@ If `EMAIL_HOST` is not configured, Trustpoint uses Django's console email backen
 
 ## Security Configuration
 
-`TP_SECURITY_MODE` defines the security baseline. Additional security variables may only make the selected preset more restrictive.
+`TP_SECURITY_MODE` defines the security baseline. Additional security variables may only make the selected preset more restrictive. When `TP_SECURITY_MODE` is unset, startup keeps the mode stored in the database (set by the setup wizard or the management UI); set it explicitly only when the environment should own the preset on every start.
 
 | Variable | Values | Description |
 |---|---|---|
-| `TP_SECURITY_MODE` | `LAB`, `BROWNFIELD`, `INDUSTRIAL`, `HARDENED`, `CRITICAL` | Selects the security preset. |
+| `TP_SECURITY_MODE` | `LAB`, `BROWNFIELD`, `INDUSTRIAL`, `HARDENED`, `CRITICAL` | Selects the security preset. Unset keeps the stored preset. |
 | `TP_SECURITY_RSA_MINIMUM_KEY_SIZE` | Integer / `null` | Minimum allowed RSA key size. |
 | `TP_SECURITY_MAX_CERT_VALIDITY_DAYS` | Integer / `null` | Maximum certificate validity period. |
 | `TP_SECURITY_MAX_CRL_VALIDITY_DAYS` | Integer / `null` | Maximum CRL validity period. |

@@ -37,15 +37,17 @@ def test_rest_enroll_view_dispatches_workflows2_before_processing() -> None:
         content_type=context.http_response_content_type,
     )
 
-    with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'request.enrollment.RestHttpRequestValidator'
-    ) as mock_validator, patch('request.enrollment.RestMessageParser') as mock_parser, patch(
-        'request.enrollment.RestAuthentication'
-    ) as mock_authentication, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
-        'request.enrollment.Workflow2Handler'
-    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
-        'request.enrollment.RestMessageResponder'
-    ) as mock_responder:
+    with (
+        patch('rest_pki.views.RestCertificateRequestContext', return_value=context),
+        patch('request.enrollment.RestHttpRequestValidator') as mock_validator,
+        patch('request.enrollment.RestMessageParser') as mock_parser,
+        patch('request.enrollment.RestAuthentication') as mock_authentication,
+        patch('request.enrollment.RestAuthorization') as mock_authorization,
+        patch('request.enrollment.Workflow2Handler') as mock_workflow2,
+        patch('request.enrollment.OperationProcessor') as mock_processor,
+        patch('request.enrollment.RestMessageResponder') as mock_responder,
+        patch('request.enrollment.require_single_security_config'),
+    ):
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
 
@@ -78,15 +80,17 @@ def test_rest_reenroll_view_dispatches_workflows2_before_processing() -> None:
         content_type=context.http_response_content_type,
     )
 
-    with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'request.enrollment.RestHttpRequestValidator'
-    ) as mock_validator, patch('request.enrollment.RestMessageParser') as mock_parser, patch(
-        'request.enrollment.RestAuthentication'
-    ) as mock_authentication, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
-        'request.enrollment.Workflow2Handler'
-    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
-        'request.enrollment.RestMessageResponder'
-    ) as mock_responder:
+    with (
+        patch('rest_pki.views.RestCertificateRequestContext', return_value=context),
+        patch('request.enrollment.RestHttpRequestValidator') as mock_validator,
+        patch('request.enrollment.RestMessageParser') as mock_parser,
+        patch('request.enrollment.RestAuthentication') as mock_authentication,
+        patch('request.enrollment.RestAuthorization') as mock_authorization,
+        patch('request.enrollment.Workflow2Handler') as mock_workflow2,
+        patch('request.enrollment.OperationProcessor') as mock_processor,
+        patch('request.enrollment.RestMessageResponder') as mock_responder,
+        patch('request.enrollment.require_single_security_config'),
+    ):
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
 
@@ -115,13 +119,15 @@ def test_rest_api_pipeline_dispatches_workflows2_before_processing() -> None:
     device = Mock()
     device.pk = 7
 
-    with patch('request.enrollment.RestHttpRequestValidator') as mock_validator, patch(
-        'request.enrollment.RestMessageParser'
-    ) as mock_parser, patch('request.enrollment.RestAuthorization') as mock_authorization, patch(
-        'request.enrollment.Workflow2Handler'
-    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
-        'request.enrollment.RestMessageResponder'
-    ) as mock_responder:
+    with (
+        patch('request.enrollment.RestHttpRequestValidator') as mock_validator,
+        patch('request.enrollment.RestMessageParser') as mock_parser,
+        patch('request.enrollment.RestAuthorization') as mock_authorization,
+        patch('request.enrollment.Workflow2Handler') as mock_workflow2,
+        patch('request.enrollment.OperationProcessor') as mock_processor,
+        patch('request.enrollment.RestMessageResponder') as mock_responder,
+        patch('request.enrollment.require_single_security_config'),
+    ):
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
 
@@ -153,15 +159,17 @@ def test_rest_enroll_view_skips_processing_when_workflow_blocks() -> None:
         content_type=context.http_response_content_type,
     )
 
-    with patch('rest_pki.views.RestCertificateRequestContext', return_value=context), patch(
-        'request.enrollment.RestHttpRequestValidator'
-    ), patch('request.enrollment.RestMessageParser') as mock_parser, patch(
-        'request.enrollment.RestAuthentication'
-    ), patch('request.enrollment.RestAuthorization'), patch(
-        'request.enrollment.Workflow2Handler'
-    ) as mock_workflow2, patch('request.enrollment.OperationProcessor') as mock_processor, patch(
-        'request.enrollment.RestMessageResponder'
-    ) as mock_responder:
+    with (
+        patch('rest_pki.views.RestCertificateRequestContext', return_value=context),
+        patch('request.enrollment.RestHttpRequestValidator'),
+        patch('request.enrollment.RestMessageParser') as mock_parser,
+        patch('request.enrollment.RestAuthentication'),
+        patch('request.enrollment.RestAuthorization'),
+        patch('request.enrollment.Workflow2Handler') as mock_workflow2,
+        patch('request.enrollment.OperationProcessor') as mock_processor,
+        patch('request.enrollment.RestMessageResponder') as mock_responder,
+        patch('request.enrollment.require_single_security_config'),
+    ):
         mock_parser.return_value.parse.return_value = context
         mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.stop_processing()
 

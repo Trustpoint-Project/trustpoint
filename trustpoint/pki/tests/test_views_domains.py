@@ -3,7 +3,6 @@
 
 """Tests for PKI domain views."""
 
-
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -17,10 +16,15 @@ from management.models.organization import OrganizationModel
 from pki.models import (
     DomainModel,
     CaModel,
+    CertificateModel,
+    CredentialModel,
     DevIdRegistration,
+    IssuedCredentialModel,
     TruststoreModel,
     CertificateProfileModel,
 )
+from devices.models import DeviceModel
+from pki.util.x509 import CertificateGenerator
 from pki.views.domains import (
     DomainTableView,
     DomainCreateView,
@@ -75,10 +79,10 @@ class TestDomainTableView:
         """Test that the domain table view renders successfully."""
         request = rf.get(reverse('pki:domains'))
         request.user = admin_user
-        
+
         view = DomainTableView.as_view()
         response = view(request)
-        
+
         assert response.status_code == 200
 
     def test_table_view_lists_domains(self, rf: RequestFactory, admin_user, issuing_ca_instance):
@@ -88,27 +92,27 @@ class TestDomainTableView:
         # Create some domains
         DomainModel.objects.create(unique_name='domain1', issuing_ca=issuing_ca)
         DomainModel.objects.create(unique_name='domain2', issuing_ca=issuing_ca)
-        
+
         request = rf.get(reverse('pki:domains'))
         request.user = admin_user
-        
+
         view = DomainTableView()
         view.request = request
         view.object_list = view.get_queryset()
-        
+
         assert view.object_list.count() == 2
 
     def test_table_view_context_data(self, rf: RequestFactory, admin_user):
         """Test that context data is properly set."""
         request = rf.get(reverse('pki:domains'))
         request.user = admin_user
-        
+
         view = DomainTableView()
         view.request = request
         view.kwargs = {}
         view.object_list = view.get_queryset()
         context = view.get_context_data()
-        
+
         assert 'page_category' in context
         assert context['page_category'] == 'pki'
         assert 'page_name' in context
@@ -124,14 +128,14 @@ class TestDomainCreateView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         # Skip creating autogen CA as it requires credential setup
         # Just verify that the form has the issuing_ca field with queryset filtering
-        
+
         request = rf.get(reverse('pki:domains-add'))
         request.user = admin_user
-        
+
         view = DomainCreateView()
         view.request = request
         form = view.get_form()
-        
+
         # Check that regular issuing CA is included
         ca_ids = [ca.id for ca in form.fields['issuing_ca'].queryset]
         assert issuing_ca.id in ca_ids
@@ -143,11 +147,11 @@ class TestDomainCreateView:
         """Test that is_active field is removed from the form."""
         request = rf.get(reverse('pki:domains-add'))
         request.user = admin_user
-        
+
         view = DomainCreateView()
         view.request = request
         form = view.get_form()
-        
+
         assert 'is_active' not in form.fields
 
     def test_create_view_success_message(self, client, admin_user, issuing_ca_instance):
@@ -155,16 +159,16 @@ class TestDomainCreateView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         issuing_ca = issuing_ca_instance['issuing_ca']
         client.force_login(admin_user)
-        
+
         response = client.post(
             reverse('pki:domains-add'),
             data={
                 'unique_name': 'test-domain',
                 'issuing_ca': issuing_ca.id,
             },
-            follow=True
+            follow=True,
         )
-        
+
         messages = list(get_messages(response.wsgi_request))
         assert len(messages) > 0
         assert 'Successfully created domain test-domain' in str(messages[0])
@@ -209,28 +213,68 @@ class TestDomainConfigView:
         """Test that context data includes profile data and certificates."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         # Create a certificate profile
-        profile = CertificateProfileModel.objects.create(
-            unique_name='test-profile',
-            profile_json='{}'
-        )
-        
+        profile = CertificateProfileModel.objects.create(unique_name='test-profile', profile_json='{}')
+
         request = rf.get(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
         request.user = admin_user
-        
+
         view = DomainConfigView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
         view.object = domain
         view.object_list = view.get_queryset()
-        
+
         context = view.get_context_data()
-        
+
         assert 'profile_data' in context
-        assert 'certificates' in context
+        assert context['certificate_count'] == 0
         assert 'domain_options' in context
         assert profile.id in context['profile_data']
+
+    def test_config_certificate_count_uses_a_constant_number_of_queries(
+        self, rf, admin_user, issuing_ca_instance, django_assert_num_queries
+    ):
+        """Certificate history must not add a credential query for each entry."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        ca = issuing_ca_instance['issuing_ca']
+        domain = DomainModel.objects.create(unique_name='count-domain', issuing_ca=ca)
+        other_domain = DomainModel.objects.create(unique_name='other-domain', issuing_ca=ca)
+        profile = CertificateProfileModel.objects.create(unique_name='count-profile', profile_json='{}')
+
+        def context():
+            view = DomainConfigView()
+            view.request = rf.get('')
+            view.request.user = admin_user
+            view.kwargs = {'pk': domain.pk}
+            view.object = domain
+            view.object_list = view.get_queryset()
+            return view.get_context_data()
+
+        with CaptureQueriesContext(connection) as baseline:
+            assert context()['certificate_count'] == 0
+
+        for index, owner in enumerate([domain, domain, domain, other_domain]):
+            device = DeviceModel.objects.create(common_name=f'count-device-{index}', domain=owner)
+            certificate, _ = CertificateGenerator.create_ee(
+                issuing_ca_instance['priv_key'], issuing_ca_instance['cert'].subject, f'count-cert-{index}'
+            )
+            credential = CredentialModel.save_keyless_credential(
+                certificate, [], CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL
+            )
+            IssuedCredentialModel.objects.create(
+                common_name=f'count-cert-{index}',
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                certificate_profile=profile,
+                credential=credential,
+                device=device,
+                domain=owner,
+            )
+        with django_assert_num_queries(len(baseline)):
+            assert context()['certificate_count'] == 3
 
     def test_config_view_context_contains_organizations(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that organization choices are available in context."""
@@ -256,22 +300,19 @@ class TestDomainConfigView:
         """Test that POST request updates allowed certificate profiles."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        profile = CertificateProfileModel.objects.create(
-            unique_name='test-profile',
-            profile_json='{}'
-        )
-        
+        profile = CertificateProfileModel.objects.create(unique_name='test-profile', profile_json='{}')
+
         client.force_login(admin_user)
-        
+
         response = client.post(
             reverse('pki:domains-config', kwargs={'pk': domain.pk}),
             data={
                 f'cert_p_allowed_{profile.id}': 'on',
                 f'cert_p_alias_{profile.id}': 'test-alias',
             },
-            follow=True
+            follow=True,
         )
-        
+
         messages = list(get_messages(response.wsgi_request))
         assert any('Settings updated successfully' in str(msg) for msg in messages)
 
@@ -279,20 +320,14 @@ class TestDomainConfigView:
         """Test that duplicate alias triggers warning message."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        profile1 = CertificateProfileModel.objects.create(
-            unique_name='profile1',
-            profile_json='{}'
-        )
-        profile2 = CertificateProfileModel.objects.create(
-            unique_name='profile2',
-            profile_json='{}'
-        )
-        
+        profile1 = CertificateProfileModel.objects.create(unique_name='profile1', profile_json='{}')
+        profile2 = CertificateProfileModel.objects.create(unique_name='profile2', profile_json='{}')
+
         # First set an alias for profile1
         domain.set_allowed_cert_profiles({str(profile1.id): 'same-alias'})
-        
+
         client.force_login(admin_user)
-        
+
         # Try to set the same alias for profile2
         response = client.post(
             reverse('pki:domains-config', kwargs={'pk': domain.pk}),
@@ -300,9 +335,9 @@ class TestDomainConfigView:
                 f'cert_p_allowed_{profile2.id}': 'on',
                 f'cert_p_alias_{profile2.id}': 'same-alias',
             },
-            follow=True
+            follow=True,
         )
-        
+
         messages = list(get_messages(response.wsgi_request))
         # Check if there's a warning about duplicate alias
         any('already in use' in str(msg) or 'unique' in str(msg).lower() for msg in messages)
@@ -314,7 +349,9 @@ class TestDomainConfigView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         old_org = OrganizationModel.objects.create(name='Old Org', organization='Old Org O')
         new_org = OrganizationModel.objects.create(name='New Org', organization='New Org O')
-        domain = DomainModel.objects.create(unique_name='test-domain-update-org', issuing_ca=issuing_ca, organization=old_org)
+        domain = DomainModel.objects.create(
+            unique_name='test-domain-update-org', issuing_ca=issuing_ca, organization=old_org
+        )
         client.force_login(admin_user)
 
         client.post(
@@ -373,18 +410,18 @@ class TestDomainDetailView:
         """Test that detail view displays domain information."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get(reverse('pki:domains-detail', kwargs={'pk': domain.pk}))
         request.user = admin_user
-        
+
         view = DomainDetailView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
         view.object = domain
         view.object_list = view.get_queryset()
-        
+
         context = view.get_context_data()
-        
+
         assert 'domain' in context
         assert context['domain'].unique_name == 'test-domain'
 
@@ -392,7 +429,9 @@ class TestDomainDetailView:
         """Test that detail page renders assigned organization."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         organization = OrganizationModel.objects.create(name='Shown Org', organization='Shown Org O')
-        domain = DomainModel.objects.create(unique_name='test-domain-org-detail', issuing_ca=issuing_ca, organization=organization)
+        domain = DomainModel.objects.create(
+            unique_name='test-domain-org-detail', issuing_ca=issuing_ca, organization=organization
+        )
         client.force_login(admin_user)
 
         response = client.get(reverse('pki:domains-detail', kwargs={'pk': domain.pk}))
@@ -420,7 +459,9 @@ class TestDomainApiOrganization:
         """Test list payload includes organization primary key."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         organization = OrganizationModel.objects.create(name='API Org', organization='API Org O')
-        domain = DomainModel.objects.create(unique_name='api-domain-list', issuing_ca=issuing_ca, organization=organization)
+        domain = DomainModel.objects.create(
+            unique_name='api-domain-list', issuing_ca=issuing_ca, organization=organization
+        )
 
         response = domain_api_client.get(reverse('domain-list'))
 
@@ -452,7 +493,9 @@ class TestDomainApiOrganization:
         """Test clearing organization via API update."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         organization = OrganizationModel.objects.create(name='API Update Org', organization='API Update Org O')
-        domain = DomainModel.objects.create(unique_name='api-domain-update-org', issuing_ca=issuing_ca, organization=organization)
+        domain = DomainModel.objects.create(
+            unique_name='api-domain-update-org', issuing_ca=issuing_ca, organization=organization
+        )
 
         response = domain_api_client.patch(
             reverse('domain-detail', kwargs={'pk': domain.pk}),
@@ -475,18 +518,18 @@ class TestDomainCaBulkDeleteConfirmView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain1 = DomainModel.objects.create(unique_name='domain1', issuing_ca=issuing_ca)
         domain2 = DomainModel.objects.create(unique_name='domain2', issuing_ca=issuing_ca)
-        
+
         client.force_login(admin_user)
-        
+
         # Correct URL pattern uses pks separated by /
         response = client.post(
             f'/pki/domains/delete/{domain1.pk}/{domain2.pk}/',
             data={
                 'selected_items': [domain1.pk, domain2.pk],
             },
-            follow=True
+            follow=True,
         )
-        
+
         messages = list(get_messages(response.wsgi_request))
         assert any('Successfully deleted 2 Domains' in str(msg) for msg in messages)
         assert not DomainModel.objects.filter(pk=domain1.pk).exists()
@@ -501,62 +544,61 @@ class TestDevIdRegistrationCreateView:
         """Test get_domain method retrieves the domain."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get(reverse('pki:devid_registration_create', kwargs={'pk': domain.pk}))
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         retrieved_domain = view.get_domain()
-        
+
         assert retrieved_domain.id == domain.id
         assert retrieved_domain.unique_name == 'test-domain'
 
     def test_create_view_get_domain_not_found(self, rf: RequestFactory, admin_user):
         """Test get_domain raises Http404 when domain doesn't exist."""
         from django.http import Http404
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': 99999}
-        
+
         with pytest.raises(Http404):
             view.get_domain()
 
     def test_create_view_get_truststore(self, rf: RequestFactory, admin_user):
         """Test get_truststore method retrieves the truststore."""
         truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {}
-        
+
         retrieved_truststore = view.get_truststore(truststore.id)
-        
+
         assert retrieved_truststore.id == truststore.id
 
     def test_create_view_get_truststore_not_found(self, rf: RequestFactory, admin_user):
         """Test get_truststore raises Http404 when truststore doesn't exist."""
         from django.http import Http404
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {}
-        
+
         with pytest.raises(Http404):
             view.get_truststore(99999)
 
@@ -565,19 +607,18 @@ class TestDevIdRegistrationCreateView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
         truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': domain.pk, 'truststore_id': truststore.id}
-        
+
         initial = view.get_initial()
-        
+
         assert initial['domain'] == domain
         assert initial['truststore'] == truststore
 
@@ -585,16 +626,16 @@ class TestDevIdRegistrationCreateView:
         """Test get_initial method without truststore ID."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         initial = view.get_initial()
-        
+
         assert initial['domain'] == domain
         assert initial['truststore'] is None
 
@@ -603,19 +644,18 @@ class TestDevIdRegistrationCreateView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
         truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': domain.pk, 'truststore_id': truststore.id}
-        
+
         context = view.get_context_data()
-        
+
         assert context['domain'] == domain
         assert context['truststore'] == truststore
 
@@ -623,16 +663,16 @@ class TestDevIdRegistrationCreateView:
         """Test get_success_url returns correct URL."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = DevIdRegistrationCreateView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         success_url = view.get_success_url()
-        
+
         # The actual URL pattern is /pki/domains/config/<pk>/
         assert f'/pki/domains/config/{domain.id}/' in success_url
 
@@ -646,23 +686,16 @@ class TestDevIdRegistrationDeleteView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
         truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
         devid = DevIdRegistration.objects.create(
-            unique_name='test-devid',
-            domain=domain,
-            truststore=truststore,
-            serial_number_pattern='SN-*'
+            unique_name='test-devid', domain=domain, truststore=truststore, serial_number_pattern='SN-*'
         )
-        
+
         client.force_login(admin_user)
-        
-        response = client.post(
-            reverse('pki:devid_registration_delete', kwargs={'pk': devid.pk}),
-            follow=True
-        )
-        
+
+        response = client.post(reverse('pki:devid_registration_delete', kwargs={'pk': devid.pk}), follow=True)
+
         messages = list(get_messages(response.wsgi_request))
         # The view redirects to success_url, check if deletion was successful
         assert not DevIdRegistration.objects.filter(pk=devid.pk).exists()
@@ -679,16 +712,16 @@ class TestDevIdMethodSelectView:
         """Test get_context_data includes domain."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get(reverse('pki:devid_registration-method_select', kwargs={'pk': domain.pk}))
         request.user = admin_user
-        
+
         view = DevIdMethodSelectView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         context = view.get_context_data()
-        
+
         assert 'domain' in context
         assert context['domain'].id == domain.id
 
@@ -696,15 +729,15 @@ class TestDevIdMethodSelectView:
         """Test form_valid redirects to truststore add when import_truststore selected."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         client.force_login(admin_user)
-        
+
         response = client.post(
             reverse('pki:devid_registration-method_select', kwargs={'pk': domain.pk}),
             data={'method_select': 'import_truststore'},
-            follow=False
+            follow=False,
         )
-        
+
         assert response.status_code == 302
         assert f'/pki/truststores/add/{domain.pk}' in response.url
 
@@ -712,15 +745,15 @@ class TestDevIdMethodSelectView:
         """Test form_valid redirects to devid registration create when configure_pattern selected."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         client.force_login(admin_user)
-        
+
         response = client.post(
             reverse('pki:devid_registration-method_select', kwargs={'pk': domain.pk}),
             data={'method_select': 'configure_pattern'},
-            follow=False
+            follow=False,
         )
-        
+
         assert response.status_code == 302
         # The actual URL pattern is /pki/devid-registration/create/<pk>/
         assert f'/pki/devid-registration/create/{domain.pk}' in response.url
@@ -734,32 +767,32 @@ class TestIssuedCertificatesView:
         """Test get_domain method retrieves the domain."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         # Correct URL name is domain-issued_certificates
         request = rf.get(reverse('pki:domain-issued_certificates', kwargs={'pk': domain.pk}))
         request.user = admin_user
-        
+
         view = IssuedCertificatesView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         retrieved_domain = view.get_domain()
-        
+
         assert retrieved_domain.id == domain.id
 
     def test_issued_certificates_view_no_issuing_ca_raises_404(self, rf: RequestFactory, admin_user):
         """Test that view raises Http404 when domain has no issuing CA."""
         from django.http import Http404
-        
+
         domain = DomainModel.objects.create(unique_name='test-domain')
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = IssuedCertificatesView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
-        
+
         with pytest.raises(Http404, match='Domain has no issuing CA configured'):
             view.get_queryset()
 
@@ -767,19 +800,64 @@ class TestIssuedCertificatesView:
         """Test get_context_data includes domain."""
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = IssuedCertificatesView()
         view.request = request
         view.kwargs = {'pk': domain.pk}
         view.object_list = view.get_queryset()
-        
+
         context = view.get_context_data()
-        
+
         assert 'domain' in context
         assert context['domain'].id == domain.id
+
+    def test_issued_certificates_are_limited_to_the_requested_domain(
+        self, rf: RequestFactory, admin_user, issuing_ca_instance
+    ):
+        """Certificates from another domain on the same CA must not be listed."""
+        issuing_ca = issuing_ca_instance['issuing_ca']
+        ca_cert = issuing_ca_instance['cert']
+        ca_key = issuing_ca_instance['priv_key']
+        domain_a = DomainModel.objects.create(unique_name='domain-a', issuing_ca=issuing_ca)
+        domain_b = DomainModel.objects.create(unique_name='domain-b', issuing_ca=issuing_ca)
+        profile = CertificateProfileModel.objects.create(
+            unique_name='issued-cert-view-test',
+            credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION,
+            profile_json='{}',
+        )
+        cert_a, _ = CertificateGenerator.create_ee(ca_key, ca_cert.subject, 'device-a')
+        cert_b, _ = CertificateGenerator.create_ee(ca_key, ca_cert.subject, 'device-b')
+        records = {}
+        for name, domain, certificate in (
+            ('device-a', domain_a, cert_a),
+            ('device-b', domain_b, cert_b),
+        ):
+            device = DeviceModel.objects.create(common_name=name, serial_number=name, domain=domain)
+            credential = CredentialModel.objects.create(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+                certificate=CertificateModel.save_certificate(certificate),
+            )
+            records[name] = IssuedCredentialModel.objects.create(
+                common_name=name,
+                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                certificate_profile=profile,
+                credential=credential,
+                device=device,
+                domain=domain,
+            )
+
+        request = rf.get('')
+        request.user = admin_user
+        view = IssuedCertificatesView()
+        view.request = request
+        view.kwargs = {'pk': domain_a.pk}
+
+        certificates = list(view.get_queryset())
+
+        assert [cert.pk for cert in certificates] == [records['device-a'].credential.certificate.pk]
 
 
 @pytest.mark.django_db
@@ -791,26 +869,22 @@ class TestOnboardingMethodSelectIdevidHelpView:
         issuing_ca = issuing_ca_instance['issuing_ca']
         domain = DomainModel.objects.create(unique_name='test-domain', issuing_ca=issuing_ca)
         truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
         devid = DevIdRegistration.objects.create(
-            unique_name='test-devid',
-            domain=domain,
-            truststore=truststore,
-            serial_number_pattern='SN-*'
+            unique_name='test-devid', domain=domain, truststore=truststore, serial_number_pattern='SN-*'
         )
-        
+
         request = rf.get('')
         request.user = admin_user
-        
+
         view = OnboardingMethodSelectIdevidHelpView()
         view.request = request
         view.kwargs = {'pk': devid.pk}
         view.object = devid
-        
+
         context = view.get_context_data()
-        
+
         assert 'pk' in context
         assert context['pk'] == devid.pk
         assert 'devid_registration' in context

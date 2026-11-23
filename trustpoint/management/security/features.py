@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Management app feature."""
+
 from __future__ import annotations
 
 import threading
@@ -77,26 +78,7 @@ class AutoGenPkiFeature(SecurityFeature, LoggerMixin):
 
     @classmethod
     def disable(cls, **_kwargs: object) -> None:
-        """Starts a thread that disables the auto-generated PKI."""
+        """Disable the auto-generated PKI and revoke its certificates synchronously."""
         cls.logger.info('AutoGenPkiFeature.disable() called')
-
-        def _disable_with_error_handling() -> None:
-            """Wrapper to catch exceptions in the disable thread."""
-            try:
-                cls.logger.info('Starting disable auto-generated PKI in background thread')
-
-                AutoGenPki.disable_auto_gen_pki()
-                cls.logger.info('disable_auto_gen_pki() completed successfully')
-            except Exception:
-                cls.logger.exception('Failed to disable auto-generated PKI in background thread')
-
-        thread = threading.Thread(target=_disable_with_error_handling, name='AutoGenPKI-Disable')
-        thread.start()
-
-        conf = SecurityConfig.objects.first()
-        if conf:
-            conf.auto_gen_pki = False
-            conf.save()
-            cls.logger.info('SecurityConfig.auto_gen_pki set to False')
-        else:
-            cls.logger.warning('No SecurityConfig instance found to update auto_gen_pki')
+        AutoGenPki.disable_auto_gen_pki()
+        cls.logger.info('disable_auto_gen_pki() completed successfully')

@@ -187,6 +187,7 @@
                                         </span>
                                     </div>
 
+                                    {% if perms.users.manage_system_configuration %}
                                     <button
                                         type="button"
                                         id="rebuild-docs-btn"
@@ -196,7 +197,7 @@
                                     >
                                         {% trans "Rebuild Documentation" %}
                                     </button>
-
+                                    {% endif %}
                                 {% else %}
                                     <div class="mb-2">
                                         <span class="badge text-bg-secondary">
@@ -208,6 +209,7 @@
                                         {% trans "Internet access is required to view the external documentation." %}
                                     </p>
 
+                                    {% if perms.users.manage_system_configuration %}
                                     <button
                                         type="button"
                                         id="build-docs-btn"
@@ -217,6 +219,7 @@
                                     >
                                         {% trans "Build Local Documentation" %}
                                     </button>
+                                    {% endif %}
                                 {% endif %}
                             </div>
 

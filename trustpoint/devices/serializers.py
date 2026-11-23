@@ -92,7 +92,9 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
     opc_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
     opc_trust_store = serializers.PrimaryKeyRelatedField(
         queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH),
-        required=False, allow_null=True, write_only=True,
+        required=False,
+        allow_null=True,
+        write_only=True,
     )
 
     pki_protocols = serializers.ListField(
@@ -104,7 +106,7 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
             'List of PKI protocol names or values. '
             'Accepts: "CMP" (1), "EST" (2), "OPC_GDS_PUSH" (4), "REST" (8). '
             'Can use names ["CMP", "EST"] or values [1, 2] or mix both.'
-        )
+        ),
     )
 
     credential_ttl_seconds = serializers.IntegerField(
@@ -147,12 +149,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
                     'OPC_GDS_PUSH (7), REST_USERNAME_PASSWORD (8), AGENT (9)'
                 )
             },
-            'est_password': {
-                'help_text': 'Password for EST. Auto-generated if omitted for EST protocols.'
-            },
-            'cmp_shared_secret': {
-                'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'
-            },
+            'est_password': {'help_text': 'Password for EST. Auto-generated if omitted for EST protocols.'},
+            'cmp_shared_secret': {'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'},
         }
 
     def _parse_pki_protocol(self, value: str | int | OnboardingPkiProtocol) -> OnboardingPkiProtocol:
@@ -201,7 +199,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         if instance.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
             fields = ['cmp_shared_secret']
         elif instance.onboarding_protocol in (
-            OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.REST_USERNAME_PASSWORD,
+            OnboardingProtocol.EST_USERNAME_PASSWORD,
+            OnboardingProtocol.REST_USERNAME_PASSWORD,
         ):
             fields = ['est_password']
         try:
@@ -261,15 +260,26 @@ class NoOnboardingConfigSerializer(serializers.ModelSerializer[NoOnboardingConfi
 
         model = NoOnboardingConfigModel
         fields: ClassVar[list[str]] = [
-            'id', 'pki_protocols', 'trust_store', 'cmp_shared_secret', 'est_password', 'scep_challenge',
+            'id',
+            'pki_protocols',
+            'trust_store',
+            'cmp_shared_secret',
+            'est_password',
+            'scep_challenge',
         ]
         read_only_fields: ClassVar[list[str]] = ['id']
 
     def to_internal_value(self, data: Any) -> dict[str, Any]:
         """Reject expiry inputs even when this serializer is nested in a device request."""
-        if isinstance(data, dict) and {
-            'credential_ttl_seconds', 'credential_expires_at', 'scep_challenge_expires_at',
-        } & data.keys():
+        if (
+            isinstance(data, dict)
+            and {
+                'credential_ttl_seconds',
+                'credential_expires_at',
+                'scep_challenge_expires_at',
+            }
+            & data.keys()
+        ):
             msg = 'Per-device expiry overrides are not supported here.'
             raise serializers.ValidationError(msg)
         return cast('dict[str, Any]', super().to_internal_value(data))
@@ -382,6 +392,27 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
     no_onboarding_config = NoOnboardingConfigSerializer(required=False)
     opc_ua_gds_push_config = OpcUaGdsPushConfigSerializer(required=False)
     opc_server_port = serializers.IntegerField(required=False, min_value=1, max_value=65535, write_only=True)
+    initial_secrets = serializers.SerializerMethodField()
+
+    def get_initial_secrets(self, obj: DeviceModel) -> dict[str, str]:
+        """Return generated enrollment secrets once, only for the create response."""
+        if not self.context.get('include_initial_secrets'):
+            return {}
+        config = obj.onboarding_config or obj.no_onboarding_config
+        if config is None:
+            return {}
+        return {
+            field: value
+            for field in ('est_password', 'cmp_shared_secret', 'scep_challenge')
+            if (value := getattr(config, field, ''))
+        }
+
+    def to_representation(self, instance: DeviceModel) -> dict[str, Any]:
+        """Keep generated secrets out of list and detail responses."""
+        data = super().to_representation(instance)
+        if not self.context.get('include_initial_secrets'):
+            data.pop('initial_secrets', None)
+        return data
 
     def _extract_gds_push_config(self, data: dict[str, Any]) -> dict[str, Any]:
         """Accept both the dedicated config and legacy OPC request field locations."""
@@ -448,13 +479,17 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         device = super().create(validated_data)
         self._check_protocol_policy(device)
         self._save_gds_push_config(device, config_data)
+        try:
+            device.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         for config in (device.onboarding_config, device.no_onboarding_config):
             if config is not None:
                 audit_assignments(config, device=device, actor=getattr(self.context.get('request'), 'user', None))
         return device
 
     @transaction.atomic
-    def update(self, instance: DeviceModel, validated_data: dict[str, Any]) -> DeviceModel:
+    def update(self, instance: DeviceModel, validated_data: dict[str, Any]) -> DeviceModel:  # noqa: C901
         """Update DeviceModel instance, handling nested onboarding_config updates."""
         config_data = self._extract_gds_push_config(validated_data)
         config_context = {**self.context, 'defer_secret_audit': True}
@@ -494,6 +529,10 @@ class DeviceSerializer(serializers.ModelSerializer[DeviceModel]):
         if onboarding_config_data is not None or no_onboarding_data is not None:
             self._check_protocol_policy(device)
         self._save_gds_push_config(device, config_data)
+        try:
+            device.full_clean()
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
         for config in (device.onboarding_config, device.no_onboarding_config):
             if config is not None:
                 audit_assignments(config, device=device, actor=getattr(self.context.get('request'), 'user', None))

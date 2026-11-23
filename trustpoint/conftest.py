@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """pytest configuration for the tests in the PKI app."""
+
 import base64
 import uuid
 from pathlib import Path
@@ -70,6 +71,16 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 
 @pytest.fixture(autouse=True)
+def clear_throttle_cache_between_tests() -> Any:
+    """Keep DRF throttle counters from leaking between tests."""
+    from django.core.cache import cache  # noqa: PLC0415
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture(autouse=True)
 def set_advertised_port_for_tests(settings: Any) -> None:
     """Set TP_HTTPS_PORT in Django settings for tests that need it."""
     settings.TP_HTTPS_PORT = '8443'
@@ -82,9 +93,7 @@ def enable_db_access_for_all_tests(request: pytest.FixtureRequest) -> None:
         return
 
     test_path = str(request.node.fspath)
-    excluded_paths = (
-        '/trustpoint/tests/test_settings.py',
-    )
+    excluded_paths = ('/trustpoint/tests/test_settings.py',)
     if any(path_fragment in test_path for path_fragment in excluded_paths):
         return
 
@@ -117,15 +126,15 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
 
 
 @pytest.fixture(autouse=True)
-def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest, tmp_path_factory: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+def configure_app_secret_backend_for_tests(
+    request: pytest.FixtureRequest, tmp_path_factory: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Provide a development app-secret backend for tests that save encrypted model fields."""
     if _is_db_less_django_simple_test(request):
         return
 
     test_path = str(request.node.fspath)
-    excluded_paths = (
-        '/trustpoint/tests/test_settings.py',
-    )
+    excluded_paths = ('/trustpoint/tests/test_settings.py',)
     if any(path_fragment in test_path for path_fragment in excluded_paths):
         return
 
@@ -206,9 +215,9 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if (
-            not isinstance(issuing_ca, CaModel)
-            or not isinstance(cert, x509.Certificate)
-            or not isinstance(priv_key, RSAPrivateKey)
+        not isinstance(issuing_ca, CaModel)
+        or not isinstance(cert, x509.Certificate)
+        or not isinstance(priv_key, RSAPrivateKey)
     ):
         msg = 'Issuing CA not created properly'
         raise TypeError(msg)
@@ -259,9 +268,7 @@ def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a test device linked with a domain."""
     domain: DomainModel = domain_instance['domain']
 
-    no_onboarding_pki_protocols = [
-        NoOnboardingPkiProtocol.MANUAL
-    ]
+    no_onboarding_pki_protocols = [NoOnboardingPkiProtocol.MANUAL]
     no_onboarding_config_model = NoOnboardingConfigModel()
     no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
 
@@ -277,14 +284,13 @@ def device_instance(domain_instance: dict[str, Any]) -> dict[str, Any]:
     domain_instance.update({'device': device})
     return domain_instance
 
+
 @pytest.fixture
 def device_instance_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a test device linked with a domain."""
     domain: DomainModel = domain_instance['domain']
 
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.EST
-    ]
+    onboarding_pki_protocols = [OnboardingPkiProtocol.EST]
     onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.MANUAL)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -302,8 +308,9 @@ def device_instance_onboarding(domain_instance: dict[str, Any]) -> dict[str, Any
 
 
 @pytest.fixture
-def est_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
-                                  ) -> dict[str, Any]:
+def est_device_without_onboarding(
+    domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
+) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
 
@@ -323,16 +330,15 @@ def est_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_
 
 
 @pytest.fixture
-def est_device_with_onboarding(domain_instance: dict[str, Any],
-                               cert_profile_instance: None, cert_profile_instance_tls_server: None
-                               ) -> dict[str, Any]:
+def est_device_with_onboarding(
+    domain_instance: dict[str, Any], cert_profile_instance: None, cert_profile_instance_tls_server: None
+) -> dict[str, Any]:
     """Fixture to create a device using the EST protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.EST
-    ]
+    onboarding_pki_protocols = [OnboardingPkiProtocol.EST]
     onboarding_config_model = OnboardingConfigModel(
-        onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD, est_password='test_est_password')  # noqa: S106
+        onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD, est_password='test_est_password'
+    )  # noqa: S106
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
     onboarding_config_model.full_clean()
@@ -342,15 +348,16 @@ def est_device_with_onboarding(domain_instance: dict[str, Any],
         common_name='EST_Onboarding',
         serial_number='SN-EST-ONBOARD',
         domain=domain,
-        onboarding_config=onboarding_config_model
+        onboarding_config=onboarding_config_model,
     )
     domain_instance.update({'device': device})
     return domain_instance
 
 
 @pytest.fixture
-def cmp_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
-                                  ) -> dict[str, Any]:
+def cmp_device_without_onboarding(
+    domain_instance: dict[str, Any], cert_profile_instance_tls_server: None
+) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol without onboarding."""
     domain: DomainModel = domain_instance['domain']
     no_onboarding_config = NoOnboardingConfigModel(cmp_shared_secret='test_cmp_secret')  # noqa: S106
@@ -369,16 +376,13 @@ def cmp_device_without_onboarding(domain_instance: dict[str, Any], cert_profile_
 
 
 @pytest.fixture
-def cmp_device_with_onboarding(domain_instance: dict[str, Any],
-                               cert_profile_instance: None, cert_profile_instance_tls_server: None
-                               ) -> dict[str, Any]:
+def cmp_device_with_onboarding(
+    domain_instance: dict[str, Any], cert_profile_instance: None, cert_profile_instance_tls_server: None
+) -> dict[str, Any]:
     """Fixture to create a device using the CMP protocol with onboarding."""
     domain: DomainModel = domain_instance['domain']
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.CMP
-    ]
-    onboarding_config_model = OnboardingConfigModel(
-        onboarding_protocol=OnboardingProtocol.CMP_IDEVID)
+    onboarding_pki_protocols = [OnboardingPkiProtocol.CMP]
+    onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.CMP_IDEVID)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
     onboarding_config_model.full_clean()
@@ -388,7 +392,7 @@ def cmp_device_with_onboarding(domain_instance: dict[str, Any],
         common_name='CMP_Onboarding',
         serial_number='SN-CMP-ONBOARD',
         domain=domain,
-        onboarding_config=onboarding_config_model
+        onboarding_config=onboarding_config_model,
     )
     domain_instance.update({'device': device})
     return domain_instance
@@ -410,9 +414,7 @@ def tls_client_credential_instance(device_instance: dict[str, Any]) -> dict[str,
 
 
 @pytest.fixture
-def remote_device_credential_download_instance(
-        tls_client_credential_instance: dict[str, Any]
-) -> dict[str, Any]:
+def remote_device_credential_download_instance(tls_client_credential_instance: dict[str, Any]) -> dict[str, Any]:
     """Fixture to create a RemoteDeviceCredentialDownloadModel."""
     tls_client_credential: IssuedCredentialModel = tls_client_credential_instance['issued_credential']
     device: DeviceModel = tls_client_credential_instance['device']
@@ -463,8 +465,7 @@ def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
 
 @pytest.fixture
 def domain_credential_est_onboarding(
-        est_device_with_onboarding: dict[str, Any],
-        rsa_private_key: rsa.RSAPrivateKey
+    est_device_with_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
     """Fixture to create a domain credential linked to an EST device."""
     device: DeviceModel = est_device_with_onboarding['device']
@@ -488,10 +489,10 @@ def domain_credential_est_onboarding(
     est_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return est_device_with_onboarding
 
+
 @pytest.fixture
 def domain_credential_cmp_onboarding(
-        cmp_device_with_onboarding: dict[str, Any],
-        rsa_private_key: rsa.RSAPrivateKey
+    cmp_device_with_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
     """Fixture to create a domain credential linked to an CMP device."""
     device: DeviceModel = cmp_device_with_onboarding['device']
@@ -515,10 +516,10 @@ def domain_credential_cmp_onboarding(
     cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return cmp_device_with_onboarding
 
+
 @pytest.fixture
 def tls_client_certificate_instance_est_onboarding(
-        est_device_with_onboarding: dict[str, Any],
-                                    rsa_private_key: rsa.RSAPrivateKey
+    est_device_with_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
     """Fixture to issue a TLS client certificate for an EST device WITH onboarding."""
     device: DeviceModel = est_device_with_onboarding['device']
@@ -544,7 +545,7 @@ def tls_client_certificate_instance_est_onboarding(
 
 @pytest.fixture
 def tls_client_certificate_instance_est_no_onboarding(
-        est_device_without_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
+    est_device_without_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
     """Fixture to issue a TLS client certificate for an EST device WITHOUT onboarding."""
     device: DeviceModel = est_device_without_onboarding['device']
@@ -571,8 +572,7 @@ def tls_client_certificate_instance_est_no_onboarding(
 
 @pytest.fixture
 def domain_credential_instance_for_cmp(
-        cmp_device_with_onboarding: dict[str, Any],
-        rsa_private_key: rsa.RSAPrivateKey
+    cmp_device_with_onboarding: dict[str, Any], rsa_private_key: rsa.RSAPrivateKey
 ) -> dict[str, Any]:
     """Fixture to create a domain credential linked to a CMP device."""
     device: DeviceModel = cmp_device_with_onboarding['device']
@@ -596,10 +596,10 @@ def domain_credential_instance_for_cmp(
     cmp_device_with_onboarding.update({'domain_credential': issued_domain_credential})
     return cmp_device_with_onboarding
 
+
 @pytest.fixture
 def tls_client_request_with_client_cert_header(
-    domain_credential_instance: CertificateModel,
-    rsa_private_key: rsa.RSAPrivateKey
+    domain_credential_instance: CertificateModel, rsa_private_key: rsa.RSAPrivateKey
 ) -> tuple[HttpRequest, str, str, str]:
     """Fixture to create an HttpRequest for a tls_client certificate request.
 
@@ -612,9 +612,11 @@ def tls_client_request_with_client_cert_header(
         raise ValueError(msg)
 
     csr_builder = x509.CertificateSigningRequestBuilder().subject_name(
-        x509.Name([
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'TLS Client Certificate'),
-        ])
+        x509.Name(
+            [
+                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'TLS Client Certificate'),
+            ]
+        )
     )
     csr = csr_builder.sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
 
@@ -647,18 +649,22 @@ class CSRFixture:
 
         builder = x509.CertificateSigningRequestBuilder()
         builder = builder.subject_name(
-            x509.Name([
-                x509.NameAttribute(NameOID.COMMON_NAME, 'Test Device'),
-                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
-                x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, 'Test Unit'),
-                x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
-            ])
+            x509.Name(
+                [
+                    x509.NameAttribute(NameOID.COMMON_NAME, 'Test Device'),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
+                    x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, 'Test Unit'),
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+                ]
+            )
         )
 
         builder = builder.add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName('test.example.com'),
-            ]),
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName('test.example.com'),
+                ]
+            ),
             critical=False,
         )
 
@@ -702,7 +708,7 @@ class CSRFixture:
         der_bytes = self.get_der()
         base64_bytes = base64.b64encode(der_bytes)
         # Add newlines every 64 characters to mimic common base64 formatting
-        lines = [base64_bytes[i:i + 64] for i in range(0, len(base64_bytes), 64)]
+        lines = [base64_bytes[i : i + 64] for i in range(0, len(base64_bytes), 64)]
         return b'\n'.join(lines) + b'\n'
 
     def get_cryptography_object(self) -> x509.CertificateSigningRequest:

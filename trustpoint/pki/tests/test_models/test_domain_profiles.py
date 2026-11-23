@@ -38,6 +38,17 @@ def domain_credential_profile() -> CertificateProfileModel:
 
 
 @pytest.fixture
+def custom_domain_profile() -> CertificateProfileModel:
+    """Return a second domain-credential profile for precedence tests."""
+    return CertificateProfileModel.objects.create(
+        unique_name='custom_domain_credential',
+        display_name='Custom Domain Credential',
+        credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN,
+        profile_json={'type': 'cert_profile'},
+    )
+
+
+@pytest.fixture
 def domain(issuing_ca_instance: dict[str, Any]) -> DomainModel:
     """Return a domain backed by a real issuing CA."""
     return DomainModel.objects.create(
@@ -98,23 +109,23 @@ class TestDomainCredentialProfile:
     """Resolution of the profile used for domain credentials."""
 
     def test_configured_profile_is_returned(
-        self, domain: DomainModel, profile: CertificateProfileModel
+        self, domain: DomainModel, custom_domain_profile: CertificateProfileModel
     ) -> None:
         """An explicitly configured profile takes precedence."""
-        domain.domain_credential_profile = profile
+        domain.domain_credential_profile = custom_domain_profile
         domain.save()
 
-        assert domain.get_domain_credential_profile() == profile
-        assert domain.get_domain_credential_profile_name() == 'tls_server'
+        assert domain.get_domain_credential_profile() == custom_domain_profile
+        assert domain.get_domain_credential_profile_name() == 'custom_domain_credential'
 
     def test_configured_profile_is_added_to_allowed_profiles(
-        self, domain: DomainModel, profile: CertificateProfileModel
+        self, domain: DomainModel, custom_domain_profile: CertificateProfileModel
     ) -> None:
         """Saving links the domain credential profile into the allowed set."""
-        domain.domain_credential_profile = profile
+        domain.domain_credential_profile = custom_domain_profile
         domain.save()
 
-        assert domain.certificate_profiles.filter(certificate_profile=profile).exists()
+        assert domain.certificate_profiles.filter(certificate_profile=custom_domain_profile).exists()
 
     def test_default_profile_is_used_as_fallback(
         self, domain: DomainModel, domain_credential_profile: CertificateProfileModel
@@ -141,9 +152,7 @@ class TestDomainAllowedProfiles:
             unique_name='optional_profile', profile_json={'type': 'cert_profile'}, is_default=False
         )
 
-        domain = DomainModel.objects.create(
-            unique_name='defaults_domain', issuing_ca=issuing_ca_instance['issuing_ca']
-        )
+        domain = DomainModel.objects.create(unique_name='defaults_domain', issuing_ca=issuing_ca_instance['issuing_ca'])
 
         assert [entry.certificate_profile for entry in domain.certificate_profiles.all()] == [default]
 
@@ -177,22 +186,18 @@ class TestDomainAllowedProfiles:
         assert aliases == {'dup', ''}
 
     def test_domain_credential_profile_is_always_allowed(
-        self, domain: DomainModel, profile: CertificateProfileModel
+        self, domain: DomainModel, custom_domain_profile: CertificateProfileModel
     ) -> None:
         """The domain credential profile cannot be removed from the allowed set."""
-        domain.domain_credential_profile = profile
+        domain.domain_credential_profile = custom_domain_profile
         domain.save()
-        other = CertificateProfileModel.objects.create(
-            unique_name='unrelated', profile_json={'type': 'cert_profile'}
-        )
+        other = CertificateProfileModel.objects.create(unique_name='unrelated', profile_json={'type': 'cert_profile'})
 
         domain.set_allowed_cert_profiles({str(other.id): ''})
 
-        assert domain.certificate_profiles.filter(certificate_profile=profile).exists()
+        assert domain.certificate_profiles.filter(certificate_profile=custom_domain_profile).exists()
 
-    def test_lookup_by_alias_and_unique_name(
-        self, domain: DomainModel, profile: CertificateProfileModel
-    ) -> None:
+    def test_lookup_by_alias_and_unique_name(self, domain: DomainModel, profile: CertificateProfileModel) -> None:
         """Profiles resolve by alias first and then by unique name."""
         domain.set_allowed_cert_profiles({str(profile.id): 'web'})
 
@@ -213,9 +218,7 @@ class TestDomainAllowedProfiles:
         """Allowed profiles can be narrowed to a credential type."""
         domain.set_allowed_cert_profiles({str(profile.id): '', str(domain_credential_profile.id): ''})
 
-        domain_scoped = domain.get_allowed_cert_profiles(
-            CertificateProfileModel.ProfileCredentialType.DOMAIN
-        )
+        domain_scoped = domain.get_allowed_cert_profiles(CertificateProfileModel.ProfileCredentialType.DOMAIN)
 
         assert [entry.certificate_profile for entry in domain_scoped] == [domain_credential_profile]
 
@@ -223,9 +226,7 @@ class TestDomainAllowedProfiles:
 class TestDomainAllowedCertificateProfileModel:
     """Display helpers for allowed profile entries."""
 
-    def test_str_includes_alias_when_present(
-        self, domain: DomainModel, profile: CertificateProfileModel
-    ) -> None:
+    def test_str_includes_alias_when_present(self, domain: DomainModel, profile: CertificateProfileModel) -> None:
         """The string form mentions the alias only when one is configured."""
         with_alias = DomainAllowedCertificateProfileModel.objects.create(
             domain=domain, certificate_profile=profile, alias='web'
@@ -248,8 +249,9 @@ class TestDomainAllowedCertificateProfileModel:
             DomainAllowedCertificateProfileModel.objects.create(domain=domain, certificate_profile=second),
         ]
 
-        titles = [title for _id, title, _name in
-                  DomainAllowedCertificateProfileModel.get_list_of_display_names(entries)]
+        titles = [
+            title for _id, title, _name in DomainAllowedCertificateProfileModel.get_list_of_display_names(entries)
+        ]
 
         assert titles == ['Shared - profile_a', 'Shared - profile_b']
 
@@ -271,9 +273,7 @@ class TestDomainAllowedCertificateProfileModel:
         plain = CertificateProfileModel.objects.create(
             unique_name='plain_profile', profile_json={'type': 'cert_profile'}
         )
-        entry = DomainAllowedCertificateProfileModel.objects.create(
-            domain=domain, certificate_profile=plain
-        )
+        entry = DomainAllowedCertificateProfileModel.objects.create(domain=domain, certificate_profile=plain)
 
         result = DomainAllowedCertificateProfileModel.get_list_of_display_names([entry])
 

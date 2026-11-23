@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from cryptography.hazmat.primitives import hashes
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import CredentialSerializer
 
     from devices.models import DeviceModel
+    from pki.models.certificate import CertificateModel
     from pki.models.credential import CredentialModel  # noqa: F401
     from pki.models.domain import DomainModel
 
@@ -89,15 +91,23 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
-        from pki.services.revocation import revoke_certificates  # noqa: PLC0415
+        from pki.services.revocation import resolve_revocation_ca, revoke_certificates  # noqa: PLC0415
 
         domain = self.domain
-        if domain is None or domain.issuing_ca is None:
-            return
+        ca = domain.issuing_ca if domain is not None else None
+        certificates = list(self.credential.certificates.all())
+        now = timezone.now()
+        if any(
+            resolve_revocation_ca(certificate, ca) is None
+            for certificate in certificates
+            if certificate.not_valid_after > now
+        ):
+            msg = _('Cannot revoke a credential certificate without a known issuing CA.')
+            raise ValidationError(msg)
         revoke_certificates(
-            self.credential.certificates.all(),
+            certificates,
             reason=RevokedCertificateModel.ReasonCode.CESSATION,
-            ca=domain.issuing_ca,
+            ca=ca,
             only_unexpired=True,
         )
 
@@ -284,6 +294,53 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         """Delete the underlying credential (cascades back to this model)."""
         self.credential.delete()
 
+    def is_valid_domain_credential(self) -> tuple[bool, str]:
+        """Return whether this remote credential may enroll new application credentials."""
+        if self.issued_credential_type != RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL:
+            return False, 'Invalid issued credential type: Must be DOMAIN_CREDENTIAL.'
+        return self.credential.is_valid_issued_credential()
+
+    @staticmethod
+    def get_credential_for_certificate(cert: x509.Certificate) -> RemoteIssuedCredentialModel:
+        """Return the remote credential holding the given active certificate."""
+        cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
+        remote_credential = (
+            RemoteIssuedCredentialModel.objects.filter(
+                credential__certificates__sha256_fingerprint=cert_fingerprint,
+            )
+            .select_related('credential', 'device')
+            .first()
+        )
+        if remote_credential is None:
+            error_message = f'No remote issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise RemoteIssuedCredentialModel.DoesNotExist(error_message)
+
+        presented = remote_credential.credential.certificates.get(sha256_fingerprint=cert_fingerprint)
+        if presented.certificate_status != presented.CertificateStatus.OK:
+            error_message = 'The presented certificate is not active.'
+            raise RemoteIssuedCredentialModel.DoesNotExist(error_message)
+        return remote_credential
+
+    @staticmethod
+    def get_credential_for_serial_number(
+        domain: DomainModel, device: DeviceModel, serial_number: str
+    ) -> RemoteIssuedCredentialModel:
+        """Return the remote credential for a serial number within the given device and domain."""
+        from pki.models.credential import CredentialModel  # noqa: PLC0415
+
+        credential_obj = CredentialModel.objects.filter(certificates__serial_number=serial_number).first()
+        if not credential_obj:
+            error_message = f'No credential found for certificate with serial {serial_number}'
+            raise RemoteIssuedCredentialModel.DoesNotExist(error_message)
+
+        remote_credential = RemoteIssuedCredentialModel.objects.filter(
+            credential=credential_obj, domain=domain, device=device
+        ).first()
+        if remote_credential is None:
+            error_message = f'No remote issued credential found for certificate with serial {serial_number}'
+            raise RemoteIssuedCredentialModel.DoesNotExist(error_message)
+        return remote_credential
+
     @classmethod
     def create_imported_dev_owner_id(
         cls,
@@ -344,3 +401,47 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
             )
 
         return dev_owner_id
+
+
+IssuedCredentialLike = IssuedCredentialModel | RemoteIssuedCredentialModel
+
+
+def get_credential_for_certificate(cert: x509.Certificate) -> IssuedCredentialLike:
+    """Return the local or remote credential that holds the given active certificate."""
+    for model in (IssuedCredentialModel, RemoteIssuedCredentialModel):
+        try:
+            return model.get_credential_for_certificate(cert)
+        except (model.DoesNotExist, TypeError):
+            continue
+    fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
+    msg = f'No issued credential found for certificate with fingerprint {fingerprint}'
+    raise IssuedCredentialModel.DoesNotExist(msg)
+
+
+def get_credential_for_serial_number(
+    domain: DomainModel, device: DeviceModel, serial_number: str
+) -> IssuedCredentialLike:
+    """Return the local or remote credential for a serial number within a device and domain."""
+    for model in (IssuedCredentialModel, RemoteIssuedCredentialModel):
+        try:
+            return model.get_credential_for_serial_number(domain, device, serial_number)
+        except model.DoesNotExist:
+            continue
+    msg = f'No issued credential found for certificate with serial {serial_number}'
+    raise IssuedCredentialModel.DoesNotExist(msg)
+
+
+def get_credential_for_certificate_model(certificate_model: CertificateModel) -> IssuedCredentialLike | None:
+    """Return the local or remote credential whose primary certificate is the given model."""
+    for model in (IssuedCredentialModel, RemoteIssuedCredentialModel):
+        try:
+            found = (
+                model.objects.filter(credential__certificate=certificate_model)
+                .select_related('domain', 'device', 'credential__certificate')
+                .first()
+            )
+        except (TypeError, ValueError):
+            continue
+        if found is not None:
+            return found
+    return None

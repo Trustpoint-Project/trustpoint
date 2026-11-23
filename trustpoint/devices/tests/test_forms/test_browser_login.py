@@ -46,7 +46,7 @@ def test_browser_login_form_invalid_otp_structure() -> None:
     assert not form.is_valid(), 'The form should be invalid if the OTP structure is incorrect.'
 
     assert '__all__' in form.errors, 'A general form-level error should be raised.'
-    assert form.errors['__all__'][0] == 'The provided OTP is invalid.', (
+    assert form.errors['__all__'][0] == 'The OTP is invalid or the download process has expired.', (
         'Incorrect error message for invalid OTP structure.'
     )
 
@@ -64,7 +64,7 @@ def test_browser_login_form_nonexistent_credential(remote_device_credential_down
     assert not form.is_valid(), 'The form should be invalid if the credential ID does not exist.'
 
     assert '__all__' in form.errors, 'A general form-level error should be raised.'
-    assert form.errors['__all__'][0] == 'The credential download process is not valid, it may have expired.', (
+    assert form.errors['__all__'][0] == 'The OTP is invalid or the download process has expired.', (
         'Incorrect error message for non-existent credential ID.'
     )
 
@@ -82,7 +82,9 @@ def test_browser_login_form_invalid_otp_value(remote_device_credential_download_
     assert not form.is_valid(), 'The form should be invalid if the OTP value is incorrect.'
 
     assert '__all__' in form.errors, 'A general form-level error should be raised.'
-    assert form.errors['__all__'][0] == 'OTP is invalid.', 'Incorrect error message for invalid OTP value.'
+    assert form.errors['__all__'][0] == 'The OTP is invalid or the download process has expired.', (
+        'Incorrect error message for invalid OTP value.'
+    )
 
 
 @pytest.mark.django_db
@@ -94,3 +96,12 @@ def test_browser_login_form_missing_otp() -> None:
 
     assert 'otp' in form.errors, "The 'otp' field should have an error."
     assert form.errors['otp'][0] == 'This field is required.', 'Incorrect error message for missing OTP.'
+
+
+@pytest.mark.django_db
+def test_browser_login_form_rejects_out_of_range_credential_id() -> None:
+    """A huge numeric id is invalid input, not a database error."""
+    form = BrowserLoginForm(data={'otp': f'{"9" * 30}.otp'})
+
+    assert not form.is_valid()
+    assert '__all__' in form.errors

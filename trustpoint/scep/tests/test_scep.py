@@ -463,6 +463,14 @@ def test_rejection_is_audited_without_secret(client: Client, rsa_env: ScepEnv) -
     assert 'wrong-secret-value' not in entry.target_display
 
 
+def test_anonymous_rejection_audit_is_rate_limited(client: Client, rsa_env: ScepEnv) -> None:
+    """A rejection flood must not add one permanent audit row per request."""
+    key = support.make_key('rsa')
+    _enroll(client, rsa_env, key, secret='wrong-secret-value')  # noqa: S106
+    _enroll(client, rsa_env, key, secret='wrong-secret-value')  # noqa: S106
+    assert AuditLog.objects.filter(operation_type=AuditLog.OperationType.SCEP_REJECTED).count() == 1
+
+
 # ---------------------------------------------------------------- independent verification with OpenSSL
 
 
@@ -543,12 +551,14 @@ def test_rotation_between_authentication_and_issuance_fails_safely(client: Clien
     assert rep.status == PkiStatus.SUCCESS
 
 
-@pytest.mark.parametrize('chosen', [' ', ' edge spaces ', 'a' * 128])
+@pytest.mark.parametrize('chosen', [' ' * 16, ' edge spaces    ', 'a' * 128])
 def test_custom_scep_challenge_authorizes_enrollment_exactly(client: Client, rsa_env: ScepEnv, chosen: str) -> None:
     """Printable ASCII, including an all-space value, remains usable as the exact SCEP challenge."""
 
-    policy = SecurityConfig.objects.create(pk=1, allow_user_defined_device_secrets=True)
+    policy, _ = SecurityConfig.objects.get_or_create(pk=1)
     policy.apply_security_settings()
+    policy.allow_user_defined_device_secrets = True
+    policy.save(update_fields=['allow_user_defined_device_secrets'])
     config = rsa_env.config
     assign_secret(config, 'scep_challenge', custom=True, value=chosen)
     rsa_env.secret = chosen

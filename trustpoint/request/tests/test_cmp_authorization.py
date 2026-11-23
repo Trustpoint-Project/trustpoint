@@ -94,10 +94,19 @@ class TestCmpRevocationAuthorization:
                 CmpRevocationAuthorization().authorize(ctx)
 
     def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+        device, domain = Mock(), Mock()
         ctx = CmpRevocationRequestContext(
-            operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock()
+            operation='revocation',
+            cert_serial_number='1234',
+            client_certificate=Mock(),
+            device=device,
+            domain=domain,
         )
-        issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')))
+        issued = Mock(
+            credential=Mock(certificate_or_error=Mock(serial_number='1234')),
+            device_id=device.id,
+            domain_id=domain.id,
+        )
         with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
             CmpRevocationAuthorization().authorize(ctx)
         assert ctx.credential_to_revoke is issued
@@ -122,10 +131,20 @@ class TestCmpRevocationAuthorization:
         assert ctx.http_response_status == 403
 
         def test_self_revocation_authorizes_matching_signer_certificate(self) -> None:
+            device, domain = Mock(), Mock()
             ctx = CmpRevocationRequestContext(
-                operation='revocation', cert_serial_number='1234', client_certificate=Mock(), domain=Mock()
+                operation='revocation',
+                cert_serial_number='1234',
+                client_certificate=Mock(),
+                device=device,
+                domain=domain,
             )
-            issued = Mock(credential=Mock(certificate_or_error=Mock(serial_number='1234')), common_name='device-cert')
+            issued = Mock(
+                credential=Mock(certificate_or_error=Mock(serial_number='1234')),
+                common_name='device-cert',
+                device_id=device.id,
+                domain_id=domain.id,
+            )
             with patch.object(IssuedCredentialModel, 'get_credential_for_certificate', return_value=issued):
                 CmpRevocationAuthorization().authorize(ctx)
             assert ctx.credential_to_revoke is issued
@@ -473,3 +492,28 @@ class TestCmpAuthorization:
         auth = CmpAuthorization()
         op_comp = next(c for c in auth.components if isinstance(c, CmpOperationAuthorization))
         assert set(op_comp.allowed_operations) == {'certification', 'initialization', 'keyupdate', 'getcacerts'}
+
+
+def test_self_revocation_rejects_signer_from_another_device() -> None:
+    """A shared-secret request cannot revoke a peer by supplying the peer certificate."""
+    context = CmpRevocationRequestContext(
+        operation='revocation',
+        cert_serial_number='1234',
+        client_certificate=Mock(),
+        device=Mock(id=7),
+        domain=Mock(id=11),
+    )
+    other_device_credential = Mock(
+        credential=Mock(certificate_or_error=Mock(serial_number='1234')),
+        device_id=8,
+        domain_id=11,
+    )
+    with patch.object(
+        IssuedCredentialModel,
+        'get_credential_for_certificate',
+        return_value=other_device_credential,
+    ):
+        with pytest.raises(ValueError, match='outside the request device scope'):
+            CmpRevocationAuthorization().authorize(context)
+
+    assert context.http_response_status == 403

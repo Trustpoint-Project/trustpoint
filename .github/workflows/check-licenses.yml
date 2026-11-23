@@ -19,6 +19,10 @@ on:
       - "docs/source/*.jar"
       - "docker/trustpoint/Dockerfile"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check-licenses:
     runs-on: ubuntu-latest
@@ -50,7 +54,7 @@ jobs:
 
       - name: Generate license report
         run: |
-          uv tool run pip-licenses \
+          uv tool run --from 'pip-licenses==5.5.5' pip-licenses \
             --python .venv/bin/python \
             --format=markdown \
             --order=license \
@@ -58,7 +62,7 @@ jobs:
 
       - name: Check for incompatible licenses
         run: |
-          LICENSES="$(uv tool run pip-licenses \
+          LICENSES="$(uv tool run --from 'pip-licenses==5.5.5' pip-licenses \
             --python .venv/bin/python \
             --format=plain)"
 
@@ -67,7 +71,7 @@ jobs:
           # Reject GPL licenses, excluding LGPL.
           GPL_LICENSES="$(
             echo "$LICENSES" \
-              | grep -iE "GPL-[0-9]|GPLv[0-9]" \
+              | grep -iE "GPL-[0-9]|GPLv[0-9]|GPL$" \
               | grep -vi "LGPL" \
               || true
           )"

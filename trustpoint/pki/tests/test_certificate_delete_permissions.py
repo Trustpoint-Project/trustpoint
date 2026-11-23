@@ -10,9 +10,10 @@ from unittest.mock import patch
 import pytest
 from django.db import DatabaseError, connection, connections, transaction
 from django.db.models import QuerySet
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from pki.models import CertificateModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator
 from pki.views.certificates import CertificateViewSet
@@ -72,3 +73,16 @@ def test_certificate_is_locked_before_membership_authorization(certificate):
 
     assert checks
     assert not CertificateModel.objects.filter(pk=certificate_pk).exists()
+
+
+def test_revoked_certificate_cannot_be_deleted(certificate):
+    """Deleting a revoked certificate would silently drop its CRL entry."""
+    RevokedCertificateModel.objects.create(certificate=certificate)
+    view = CertificateViewSet()
+    view.request = SimpleNamespace(user=SimpleNamespace(has_perm=lambda name: True))
+
+    with pytest.raises(ValidationError, match='CRL entry would be lost'):
+        view.perform_destroy(certificate)
+
+    assert CertificateModel.objects.filter(pk=certificate.pk).exists()
+    assert RevokedCertificateModel.objects.filter(certificate=certificate).exists()

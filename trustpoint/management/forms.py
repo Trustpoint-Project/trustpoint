@@ -283,7 +283,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
         # Disable form fields that correspond to features not allowed
         for feature_cls in features_not_allowed:
-            field_names = self.FEATURE_TO_FIELDS.get(type(feature_cls), [])
+            field_names = self.FEATURE_TO_FIELDS.get(cast('type[SecurityFeature]', feature_cls), [])
             for field_name in field_names:
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'

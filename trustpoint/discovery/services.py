@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django_q.conf import Conf
 from django_q.tasks import async_task
@@ -16,6 +17,10 @@ from django_q.tasks import async_task
 from discovery.models import DiscoveryScan
 
 SCAN_TIMEOUT_SECONDS = Conf.TIMEOUT if Conf.TIMEOUT and Conf.TIMEOUT > 0 else 120
+# shortcut: a fixed 30 min covers the documented 4096-host cap with the default
+# ports; a scan with dozens of custom ports needs a per-scan deadline.
+SCAN_RUN_TIMEOUT_SECONDS = 1800
+MAX_SCAN_HOSTS = 4096
 
 
 class ScanManager:
@@ -24,10 +29,15 @@ class ScanManager:
     @staticmethod
     def _expire_crashed_scan() -> None:
         # Django-Q kills timed-out workers; allow its termination buffer before releasing ownership.
-        cutoff = timezone.now() - timedelta(seconds=SCAN_TIMEOUT_SECONDS + 10)
-        DiscoveryScan.objects.filter(pk=1, is_running=True, started_at__lte=cutoff).update(
+        now = timezone.now()
+        queue_cutoff = now - timedelta(seconds=SCAN_TIMEOUT_SECONDS + 10)
+        run_cutoff = now - timedelta(seconds=SCAN_RUN_TIMEOUT_SECONDS + 10)
+        DiscoveryScan.objects.filter(pk=1, is_running=True).filter(
+            Q(started_at__isnull=True, claimed_at__lte=queue_cutoff) | Q(started_at__lte=run_cutoff)
+        ).update(
             is_running=False,
             stop_pending=False,
+            claimed_at=None,
             started_at=None,
         )
 
@@ -39,6 +49,9 @@ class ScanManager:
         if start > end:
             msg = 'The end address must not precede the start address.'
             raise ValueError(msg)
+        if int(end) - int(start) + 1 > MAX_SCAN_HOSTS:
+            msg = f'A scan may cover at most {MAX_SCAN_HOSTS} addresses. Narrow the range.'
+            raise ValueError(msg)
         cls._expire_crashed_scan()
         DiscoveryScan.objects.get_or_create(pk=1)
         scan_id = uuid4()
@@ -46,13 +59,14 @@ class ScanManager:
             scan_id=scan_id,
             is_running=True,
             stop_pending=False,
+            claimed_at=timezone.now(),
             started_at=None,
             start_ip=str(start),
             end_ip=str(end),
         )
         if not claimed:
             return False
-        async_task('discovery.tasks.run_scan', str(scan_id), timeout=SCAN_TIMEOUT_SECONDS, ack_failure=True)
+        async_task('discovery.tasks.run_scan', str(scan_id), timeout=SCAN_RUN_TIMEOUT_SECONDS, ack_failure=True)
         return True
 
     @staticmethod

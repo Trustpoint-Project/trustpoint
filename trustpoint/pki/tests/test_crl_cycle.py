@@ -160,16 +160,13 @@ def test_generate_crl_uses_configured_validity(issuing_ca_instance: dict[str, An
     issuing_ca.save()
 
     # Generate CRL
-    issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours))
+    issuing_ca.issue_crl(crl_validity_hours=issuing_ca.crl_validity_hours)
 
     # Parse the CRL to verify nextUpdate
     from cryptography import x509
     from cryptography.hazmat.backends import default_backend
 
-    crl_object = x509.load_pem_x509_crl(
-        str.encode(issuing_ca.crl_pem),
-        default_backend()
-    )
+    crl_object = x509.load_pem_x509_crl(str.encode(issuing_ca.crl_pem), default_backend())
 
     # Check that nextUpdate is approximately 72 hours after thisUpdate
     this_update = crl_object.last_update_utc

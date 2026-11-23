@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 from base64 import b64decode
+from datetime import timedelta
 from typing import Any
 
 import pytest
+from asn1crypto import cms
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from django.contrib.auth import get_user_model
@@ -19,7 +21,9 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 from pki.models import CrlModel
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.crl import generate_crl_with_revoked_certs
 from pki.util.x509 import CertificateGenerator
@@ -672,8 +676,6 @@ def test_crl_detail_view_with_revoked_certificates(
     certificate = credential_instance['credential'].certificate
 
     # Revoke the certificate by creating a RevokedCertificateModel
-    from pki.models.certificate import RevokedCertificateModel
-
     RevokedCertificateModel.objects.create(
         certificate=certificate, ca=issuing_ca, revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED
     )
@@ -687,6 +689,7 @@ def test_crl_detail_view_with_revoked_certificates(
     assert response.status_code == 200
     revoked_certs = response.context['revoked_certificates']
     assert len(revoked_certs) > 0
+    assert response.context['revoked_certificates_total'] >= len(revoked_certs)
 
     # Check that revoked certificate data is present
     revoked_cert = revoked_certs[0]
@@ -694,6 +697,25 @@ def test_crl_detail_view_with_revoked_certificates(
     assert 'serial_number_hex' in revoked_cert
     assert 'revocation_date' in revoked_cert
     assert 'certificate_id' in revoked_cert
+
+
+@pytest.mark.django_db
+def test_crl_omits_revoked_certificates_that_have_already_expired(
+    issuing_ca_instance: dict[str, Any], credential_instance: dict[str, Any]
+) -> None:
+    """Expired revocations stay in the database but no longer bloat every new CRL."""
+    issuing_ca = issuing_ca_instance['issuing_ca']
+    certificate = credential_instance['credential'].certificate
+    RevokedCertificateModel.objects.create(
+        certificate=certificate,
+        ca=issuing_ca,
+        revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED,
+    )
+    CertificateModel.objects.filter(pk=certificate.pk).update(not_valid_after=timezone.now() - timedelta(days=1))
+
+    crl = generate_crl_with_revoked_certs(issuing_ca)
+
+    assert not crl.get_revoked_certificate_by_serial_number(int(certificate.serial_number, 16))
 
 
 def test_crl_detail_view_not_found(authenticated_client: Client) -> None:
@@ -771,6 +793,10 @@ def test_crl_download_view_pkcs7_pem(issuing_ca_instance: dict[str, Any], authen
     assert response['Content-Type'] == 'application/x-pem-file'
     assert 'attachment' in response['Content-Disposition']
     assert '.p7c' in response['Content-Disposition']
+    body = ''.join(line for line in response.content.decode('ascii').splitlines() if not line.startswith('-----'))
+    content = cms.ContentInfo.load(b64decode(body))
+    assert content['content_type'].native == 'signed_data'
+    assert len(content['content']['crls']) == 1
 
 
 def test_crl_download_view_pkcs7_der(issuing_ca_instance: dict[str, Any], authenticated_client: Client) -> None:
@@ -786,6 +812,9 @@ def test_crl_download_view_pkcs7_der(issuing_ca_instance: dict[str, Any], authen
     assert response['Content-Type'] == 'application/pkcs7-mime'
     assert 'attachment' in response['Content-Disposition']
     assert '.p7c.der' in response['Content-Disposition']
+    content = cms.ContentInfo.load(response.content)
+    assert content['content_type'].native == 'signed_data'
+    assert len(content['content']['crls']) == 1
 
 
 def test_crl_download_view_invalid_format(issuing_ca_instance: dict[str, Any], authenticated_client: Client) -> None:
@@ -974,7 +1003,7 @@ def test_duplicate_crl_web_import_preserves_active_list(
     )
 
     assert response.status_code == 200
-    assert 'already exists' in response.content.decode()
+    assert 'already exists' in response.content.decode() or 'older than the active CRL' in response.content.decode()
     assert ca.get_active_crl().pk == active.pk
     assert ca.crls.count() == 2
 

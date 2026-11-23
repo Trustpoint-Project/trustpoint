@@ -5,8 +5,10 @@
 
 Defines routes that map API requests to their corresponding viewsets and views.
 """
+
 from rest_framework.routers import DefaultRouter
 
+from management.views.audit_log import AuditLogViewSet
 from management.views.backup import BackupViewSet
 from management.views.capabilities import CapabilitiesViewSet
 from management.views.health import HealthViewSet
@@ -16,6 +18,7 @@ from management.views.tls import TlsViewSet
 from management.views.user_management import UserViewSet
 
 router = DefaultRouter()
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 router.register(r'backups', BackupViewSet, basename='backup')
 router.register(r'capabilities', CapabilitiesViewSet, basename='capabilities')
 router.register(r'logging', LoggingViewSet, basename='logging')

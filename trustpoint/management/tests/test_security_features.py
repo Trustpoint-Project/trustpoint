@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for security features."""
+
 import threading
 from unittest.mock import patch
 
@@ -133,6 +134,7 @@ class AutoGenPkiFeatureTest(TestCase):
 
             # Wait a bit to ensure thread doesn't start
             import time
+
             time.sleep(0.1)
 
             mock_enable.assert_not_called()
@@ -184,78 +186,24 @@ class AutoGenPkiFeatureTest(TestCase):
         mock_enable.assert_called_with(AutoGenPkiKeyAlgorithm.SECP256R1)
 
     @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
-    def test_disable_starts_thread(self, mock_disable):
-        """Test disable starts a background thread."""
+    def test_disable_runs_synchronously(self, mock_disable):
+        """Test disable revokes synchronously instead of on a detached thread."""
         AutoGenPkiFeature.disable()
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Disable':
-                thread.join(timeout=2)
-                break
 
         mock_disable.assert_called_once()
 
     @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
-    def test_disable_updates_security_config(self, mock_disable):
-        """Test disable updates SecurityConfig.auto_gen_pki to False."""
-        self.security_config.auto_gen_pki = True
-        self.security_config.save()
-
-        AutoGenPkiFeature.disable()
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Disable':
-                thread.join(timeout=2)
-                break
-
-        self.security_config.refresh_from_db()
-        self.assertFalse(self.security_config.auto_gen_pki)
-
-    @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
-    def test_disable_handles_no_security_config(self, mock_disable):
-        """Test disable handles case when no SecurityConfig exists."""
-        SecurityConfig.objects.all().delete()
-
-        # Should not raise exception
-        AutoGenPkiFeature.disable()
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Disable':
-                thread.join(timeout=2)
-                break
-
-        mock_disable.assert_called_once()
-
-    @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
-    def test_disable_handles_exceptions_in_thread(self, mock_disable):
-        """Test disable handles exceptions that occur in the background thread."""
+    def test_disable_propagates_errors(self, mock_disable):
+        """Test disable reports failure so the caller can keep the setting enabled."""
         mock_disable.side_effect = Exception('Test exception')
 
-        # Should not raise exception even though thread encounters error
-        AutoGenPkiFeature.disable()
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Disable':
-                thread.join(timeout=2)
-                break
-
-        mock_disable.assert_called_once()
+        with self.assertRaises(Exception):  # noqa: B017, PT011 - the caller only needs any failure.
+            AutoGenPkiFeature.disable()
 
     @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
     def test_disable_accepts_kwargs(self, mock_disable):
         """Test disable accepts kwargs (even though they're unused)."""
-        # Should not raise exception with kwargs
         AutoGenPkiFeature.disable(some_param='value', another_param=123)
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Disable':
-                thread.join(timeout=2)
-                break
 
         mock_disable.assert_called_once()
 

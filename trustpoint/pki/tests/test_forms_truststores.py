@@ -20,7 +20,7 @@ from pki.forms.truststores import (
     validate_and_create_ca_chain,
 )
 from pki.models.ca import CaModel
-from pki.models.truststore import TruststoreModel
+from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator
 
 pytestmark = pytest.mark.django_db
@@ -58,9 +58,7 @@ class TestTruststoreAddFormValidation:
 
     def test_duplicate_unique_name_is_rejected(self) -> None:
         """A name already used by another truststore fails field validation."""
-        TruststoreModel.objects.create(
-            unique_name='taken', intended_usage=TruststoreModel.IntendedUsage.GENERIC
-        )
+        TruststoreModel.objects.create(unique_name='taken', intended_usage=TruststoreModel.IntendedUsage.GENERIC)
         root, _ = CertificateGenerator.create_root_ca('Dup Root')
         form = TruststoreAddForm(
             data={'unique_name': 'taken', 'intended_usage': TruststoreModel.IntendedUsage.GENERIC.value},
@@ -183,9 +181,7 @@ class TestValidateAndCreateCaChain:
     def test_single_non_self_signed_certificate_is_incomplete(self) -> None:
         """A lone intermediate without its root is an incomplete chain."""
         _root, root_key = CertificateGenerator.create_root_ca('Incomplete Root')
-        intermediate, _ = CertificateGenerator.create_issuing_ca(
-            root_key, 'Incomplete Root', 'Incomplete Intermediate'
-        )
+        intermediate, _ = CertificateGenerator.create_issuing_ca(root_key, 'Incomplete Root', 'Incomplete Intermediate')
 
         with pytest.raises(ValidationError, match='Incomplete certificate chain'):
             validate_and_create_ca_chain([intermediate], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)
@@ -196,9 +192,7 @@ class TestValidateAndCreateCaChain:
         intermediate, intermediate_key = CertificateGenerator.create_issuing_ca(
             root_key, 'Missing Root', 'Missing Intermediate'
         )
-        leaf, _ = CertificateGenerator.create_issuing_ca(
-            intermediate_key, 'Missing Intermediate', 'Missing Leaf'
-        )
+        leaf, _ = CertificateGenerator.create_issuing_ca(intermediate_key, 'Missing Intermediate', 'Missing Leaf')
 
         with pytest.raises(ValidationError, match='do not form a single complete chain'):
             validate_and_create_ca_chain([leaf, intermediate], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)
@@ -217,6 +211,30 @@ class TestValidateAndCreateCaChain:
         intermediate_ca = keyless.get(certificate__common_name='Chain Intermediate')
         assert root_ca.parent_ca is None
         assert intermediate_ca.parent_ca == root_ca
+
+    def test_uploaded_root_first_chain_is_saved_leaf_first(
+        self,
+        chain: tuple[x509.Certificate, ...],
+        security_config: SecurityConfig,
+    ) -> None:
+        """Stored order must let the RA association read the leaf and issuer in order."""
+        root, intermediate, leaf = chain
+        form = TruststoreAddForm(
+            data={
+                'unique_name': 'root-first-chain',
+                'intended_usage': TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN.value,
+            },
+            files={'trust_store_file': SimpleUploadedFile('ts.pem', _pem(root, intermediate, leaf))},
+        )
+
+        assert form.is_valid(), form.errors
+        truststore = form.cleaned_data['truststore']
+        order = list(
+            TruststoreOrderModel.objects.filter(trust_store=truststore)
+            .order_by('order')
+            .values_list('certificate__common_name', flat=True)
+        )
+        assert order == ['Chain Leaf', 'Chain Intermediate', 'Chain Root']
 
     def test_self_signed_root_only_chain_creates_no_parent_cas(self, security_config: SecurityConfig) -> None:
         """A single self-signed root is a valid chain with no issuer above it."""

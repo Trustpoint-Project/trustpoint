@@ -1,0 +1,22 @@
+@startuml
+!theme plain
+
+actor Operator
+participant "Restore Workflow" as Restore
+participant "CryptoBackend" as Backend
+participant "Pkcs11Backend" as P11
+database "Managed Key Records" as Repo
+
+Operator -> Restore : restore DB + provider profile
+Restore -> Backend : verify_provider()
+Backend -> P11 : load profile and probe
+P11 --> Backend : provider OK
+Restore -> Repo : list managed key refs
+loop for each managed key
+  Restore -> Backend : verify_key(ref)
+  Backend -> P11 : locate by provider id
+  P11 --> Backend : public key
+  Backend --> Restore : matches / missing / mismatch
+end
+Restore --> Operator : restore report
+@enduml

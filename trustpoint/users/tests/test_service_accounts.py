@@ -432,6 +432,7 @@ class TestServiceAccountAPI:
     ) -> None:
         """A valid HTTP Basic auth header should authenticate real API calls for service accounts."""
         credential, secret = service_credential
+        credential.service_account.role.permissions.add(Permission.objects.get(codename='manage_devices'))
         client = APIClient()
         basic_value = base64.b64encode(f'{credential.client_id}:{secret}'.encode()).decode()
         client.credentials(HTTP_AUTHORIZATION=f'Basic {basic_value}')
@@ -542,29 +543,55 @@ class TestServiceAccountAPI:
 class TestHumanUserAPI:
     """Tests for human user API authentication."""
 
-    def test_failed_password_counts_once_and_locks_at_configured_limit(self) -> None:
-        """Each failed request counts once, and the final attempt blocks further login."""
+    def test_failed_password_counts_once_and_locks_temporarily(self) -> None:
+        """Each failed request counts once; the limit gives a temporary, not permanent, lock."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
         from management.models import AccountSecurityConfig
 
         AccountSecurityConfig.objects.update_or_create(pk=1, defaults={'failed_login_attempts': 3})
         user = TrustpointUser.objects.create_user(username='limited', password='TestPassword123!')
         client = APIClient()
 
-        for attempt in range(1, 4):
+        for attempt in range(1, 3):
             response = client.post('/api/token/', {'username': user.username, 'password': 'wrong-password'})
 
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
             user.refresh_from_db()
             assert user.failed_login_attempts == attempt
-            assert user.is_active == (attempt < 3)
-            assert user.blocked_by_failed_logins == (attempt == 3)
+            assert user.is_active is True
+            assert user.failed_login_locked_until is None
+
+        response = client.post('/api/token/', {'username': user.username, 'password': 'wrong-password'})
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        user.refresh_from_db()
+        assert user.is_active is True
+        assert user.failed_login_locked_until is not None
+        assert user.failed_login_locked_until > timezone.now()
 
         response = client.post('/api/token/', {'username': user.username, 'password': 'TestPassword123!'})
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        user.refresh_from_db()
-        assert user.failed_login_attempts == 3
-        assert user.blocked_by_failed_logins
+
+        user.failed_login_locked_until = timezone.now() - timedelta(minutes=1)
+        user.save(update_fields=['failed_login_locked_until'])
+
+        permission = Permission.objects.get(
+            content_type__app_label='users',
+            content_type__model='apppermission',
+            codename='use_rest_api',
+        )
+        role = Group.objects.create(name='API access after lockout')
+        role.permissions.add(permission)
+        user.role = role
+        user.save()
+
+        response = client.post('/api/token/', {'username': user.username, 'password': 'TestPassword123!'})
+
+        assert response.status_code == status.HTTP_200_OK
 
     def test_token_requires_rest_api_permission(self) -> None:
         """A user without REST API access cannot obtain bearer tokens."""

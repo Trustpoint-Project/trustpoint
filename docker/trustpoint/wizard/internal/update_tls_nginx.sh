@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ "$#" -ne 1 ] || [[ "$1" != "hsm" && "$1" != "no_hsm" ]]; then
-    echo "Usage: $0 [hsm|no_hsm]" >&2
+if [ "$#" -ne 1 ] || [ "$1" != "no_hsm" ]; then
+    echo "Usage: $0 no_hsm" >&2
     exit 2
 fi
 

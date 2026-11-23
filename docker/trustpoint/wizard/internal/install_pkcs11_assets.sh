@@ -16,6 +16,14 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - install_pkcs11_assets.sh - ${level} - $*"
 }
 
+# Never let root follow a link planted in the web-writable parent directory.
+for path in "$HSM_ROOT" "$HSM_CONFIG_DIR" "$HSM_LIB_DIR"; do
+    if [ -L "$path" ]; then
+        log ERROR "Refusing symlinked PKCS#11 install path: $path"
+        exit 2
+    fi
+done
+
 case "${1:-}" in
     --clear-module)
         rm -f "$FINAL_MODULE_PATH" "$MODULE_PATH_FILE"
@@ -128,7 +136,20 @@ fi
 log INFO "Installing PKCS#11 assets into the protected HSM area."
 
 snapshot_dir="$(mktemp -d)"
-trap 'rm -rf -- "$snapshot_dir"' EXIT
+tmp_module=""
+tmp_pin=""
+tmp_config=""
+tmp_module_path=""
+# shellcheck disable=SC2329  # invoked by the EXIT trap
+cleanup() {
+    rm -rf -- "$snapshot_dir"
+    for path in "$tmp_module" "$tmp_pin" "$tmp_config" "$tmp_module_path"; do
+        if [ -n "$path" ]; then
+            rm -f -- "$path"
+        fi
+    done
+}
+trap cleanup EXIT
 snapshot_helper="$(dirname "$0")/snapshot_pkcs11_file.py"
 if [ "$install_module" -eq 1 ]; then
     python3 -I "$snapshot_helper" "$STAGING_ROOT" "$staged_module" "$snapshot_dir/module"
@@ -142,36 +163,53 @@ fi
 
 install -o root -g www-data -m 0750 -d "$HSM_CONFIG_DIR" "$HSM_LIB_DIR"
 
+# Stage every file next to its final name, then rename. A failure leaves the
+# currently installed assets untouched.
 if [ "$install_module" -eq 1 ]; then
-    if ! install -o root -g www-data -m 0640 "$snapshot_dir/module" "$FINAL_MODULE_PATH"; then
-        log ERROR "Failed to install PKCS#11 module into $FINAL_MODULE_PATH"
+    tmp_module="${FINAL_MODULE_PATH}.new.$$"
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/module" "$tmp_module"; then
+        log ERROR "Failed to stage PKCS#11 module for $FINAL_MODULE_PATH"
         exit 4
     fi
 fi
 
 if [ "$use_installed_pin" -eq 0 ]; then
-    if ! install -o root -g www-data -m 0640 "$snapshot_dir/pin" "$PIN_FILE_PATH"; then
-        log ERROR "Failed to install PKCS#11 user PIN file into $PIN_FILE_PATH"
+    tmp_pin="${PIN_FILE_PATH}.new.$$"
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/pin" "$tmp_pin"; then
+        log ERROR "Failed to stage PKCS#11 user PIN for $PIN_FILE_PATH"
         exit 5
     fi
 fi
 
 if [ "$install_config" -eq 1 ]; then
-    if ! install -o root -g www-data -m 0640 "$snapshot_dir/config" "$FINAL_CONFIG_PATH"; then
-        log ERROR "Failed to install PKCS#11 provider config into $FINAL_CONFIG_PATH"
+    tmp_config="${FINAL_CONFIG_PATH}.new.$$"
+    if ! install -o root -g www-data -m 0640 "$snapshot_dir/config" "$tmp_config"; then
+        log ERROR "Failed to stage PKCS#11 provider config for $FINAL_CONFIG_PATH"
         exit 8
     fi
 fi
 
 if [ "$install_module" -eq 1 ]; then
-    tmp_module_path_file="$(mktemp)"
-    printf '%s\n' "$FINAL_MODULE_PATH" > "$tmp_module_path_file"
-    if ! install -o root -g www-data -m 0640 "$tmp_module_path_file" "$MODULE_PATH_FILE"; then
-        rm -f "$tmp_module_path_file"
-        log ERROR "Failed to persist PKCS#11 module path into $MODULE_PATH_FILE"
+    tmp_module_path="${MODULE_PATH_FILE}.new.$$"
+    if ! printf '%s\n' "$FINAL_MODULE_PATH" > "$tmp_module_path"; then
+        log ERROR "Failed to stage PKCS#11 module path for $MODULE_PATH_FILE"
         exit 6
     fi
-    rm -f "$tmp_module_path_file"
+    chown root:www-data "$tmp_module_path"
+    chmod 0640 "$tmp_module_path"
+fi
+
+if [ -n "$tmp_module" ]; then
+    mv -f -- "$tmp_module" "$FINAL_MODULE_PATH"
+fi
+if [ -n "$tmp_pin" ]; then
+    mv -f -- "$tmp_pin" "$PIN_FILE_PATH"
+fi
+if [ -n "$tmp_config" ]; then
+    mv -f -- "$tmp_config" "$FINAL_CONFIG_PATH"
+fi
+if [ -n "$tmp_module_path" ]; then
+    mv -f -- "$tmp_module_path" "$MODULE_PATH_FILE"
 fi
 
 if [ "$use_installed_pin" -eq 0 ]; then

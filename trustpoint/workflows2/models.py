@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: MIT
 
 """Database models used by the Workflow 2 compiler, runtime, and UI."""
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta
-from typing import ClassVar
+from typing import Any, ClassVar
 
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
@@ -47,6 +49,21 @@ class Workflow2Definition(models.Model):
     def __str__(self) -> str:
         """Return a human-readable representation of the definition."""
         return f'{self.name} ({self.id})'
+
+    @transaction.atomic
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Keep execution rules stable until every referencing instance is finished."""
+        from workflows2.services.transitions import WorkflowInstanceTransitionService  # noqa: PLC0415
+
+        if not self._state.adding:
+            persisted = type(self).objects.select_for_update().get(pk=self.pk)
+            if (
+                self.ir_json != persisted.ir_json
+                and self.instances.exclude(status__in=WorkflowInstanceTransitionService.TERMINAL_STATUSES).exists()
+            ):
+                message = 'Cannot edit workflow rules while unfinished instances exist. Finish or cancel them first.'
+                raise ValidationError(message)
+        super().save(*args, **kwargs)
 
 
 class Workflow2Run(models.Model):
@@ -336,7 +353,7 @@ class Workflow2Job(models.Model):
     run_after = models.DateTimeField(default=timezone.now)
 
     attempts = models.PositiveIntegerField(default=0)
-    max_attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=3)
     last_error = models.TextField(blank=True, default='')
 
     locked_until = models.DateTimeField(null=True, blank=True)

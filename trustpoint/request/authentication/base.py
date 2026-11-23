@@ -8,11 +8,17 @@ from abc import ABC, abstractmethod
 from typing import Never
 
 from cryptography import x509
+from django.utils.crypto import constant_time_compare
 
 from devices.models import DeviceModel
 from devices.secrets import remember_secret
 from onboarding.models import OnboardingConfigModel
-from pki.models import CredentialModel, IssuedCredentialModel
+from pki.models import (
+    CredentialModel,
+    IssuedCredentialModel,
+    RemoteIssuedCredentialModel,
+    get_credential_for_certificate,
+)
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -31,11 +37,11 @@ class DevicePasswordAuthentication(AuthenticationComponent, LoggerMixin):
 
     def _authenticate_credentials(self, context: BaseRequestContext, username: str, password: str) -> None:
         """Authenticate an existing device with its current enrollment password."""
-        device = DeviceModel.objects.select_related(
-            'onboarding_config', 'no_onboarding_config'
-        ).filter(
-            common_name=username
-        ).first()
+        device = (
+            DeviceModel.objects.select_related('onboarding_config', 'no_onboarding_config')
+            .filter(common_name=username)
+            .first()
+        )
 
         if not device:
             self.logger.warning('Authentication failed: Unknown username %s', username)
@@ -55,7 +61,7 @@ class DevicePasswordAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.warning('Authentication failed: Credential has expired for %s', username)
             self._raise_authentication_error()
 
-        if password != device_config.est_password:
+        if not constant_time_compare(password, device_config.est_password):
             self.logger.warning('Authentication failed: Invalid password for %s', username)
             self._raise_authentication_error()
 
@@ -87,7 +93,7 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
         client_certificate = context.client_certificate
 
         try:
-            issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_certificate)
+            issued_credential = get_credential_for_certificate(client_certificate)
 
             if self.domain_credential_only:
                 is_valid, reason = issued_credential.is_valid_domain_credential()
@@ -178,10 +184,12 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
 
         return True
 
-    def _get_issued_credential(self, client_cert: x509.Certificate) -> IssuedCredentialModel:
-        """Retrieve the issued credential for the client certificate."""
+    def _get_issued_credential(
+        self, client_cert: x509.Certificate
+    ) -> IssuedCredentialModel | RemoteIssuedCredentialModel:
+        """Retrieve the local or remote issued credential for the client certificate."""
         try:
-            return IssuedCredentialModel.get_credential_for_certificate(client_cert)
+            return get_credential_for_certificate(client_cert)
         except IssuedCredentialModel.DoesNotExist:
             error_message = 'Issued credential not found for client certificate during reenrollment'
             self.logger.warning(error_message)
@@ -199,19 +207,13 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
 
         cert = credential_model.certificate_or_error
 
-        if (
-            not cert.subjects_match(csr.subject) or
-            not cert.subjects_match(client_cert.subject)
-        ):
+        if not cert.subjects_match(csr.subject) or not cert.subjects_match(client_cert.subject):
             error_message = "CSR/client subject does not match the credential certificate's subject"
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
     def _validate_certificate_extensions(
-        self,
-        credential_cert: x509.Certificate,
-        client_cert: x509.Certificate,
-        csr: x509.CertificateSigningRequest
+        self, credential_cert: x509.Certificate, client_cert: x509.Certificate, csr: x509.CertificateSigningRequest
     ) -> None:
         """Validate that certificate extensions match between credential, client cert, and CSR."""
         try:
@@ -315,8 +317,8 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.debug('IP resolution skipped: META is not a dict')
             return None
 
-
-        # Prefer the original client address when running behind a reverse proxy.
+        # Prefer the address the TLS proxy asserts for the direct peer. The
+        # left-most X-Forwarded-For entry is client-supplied and spoofable.
         real_ip = meta.get('HTTP_X_REAL_IP')
         forwarded_for = meta.get('HTTP_X_FORWARDED_FOR')
         remote_addr = meta.get('REMOTE_ADDR')
@@ -330,42 +332,28 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
                 'remote_addr': remote_addr,
             },
         )
-        if isinstance(forwarded_for, str) and forwarded_for.strip():
-            candidate = forwarded_for.split(',', 1)[0].strip()
-            try:
-                resolved_ip = str(ipaddress.ip_address(candidate))
-            except ValueError:
-                self.logger.warning(
-                    'Invalid IP in X-Forwarded-For header',
-                    extra={'forwarded_for': forwarded_for},
-                )
-            else:
-                self.logger.info(
-                    'Resolved client IP from X-Forwarded-For header: %s (raw: %s)',
-                    resolved_ip,
-                    forwarded_for,
-                    extra={'ip_address': resolved_ip, 'raw_forwarded_for': forwarded_for},
-                )
-                return resolved_ip
 
-        remote_addr = meta.get('REMOTE_ADDR')
+        candidates: list[str] = []
+        if isinstance(real_ip, str) and real_ip.strip():
+            candidates.append(real_ip.strip())
+        if isinstance(forwarded_for, str) and forwarded_for.strip():
+            # nginx appends the real peer, so only the last hop is trustworthy.
+            candidates.append(forwarded_for.rsplit(',', 1)[-1].strip())
         if isinstance(remote_addr, str) and remote_addr.strip():
-            candidate = remote_addr.strip()
+            candidates.append(remote_addr.strip())
+
+        for candidate in candidates:
             try:
                 resolved_ip = str(ipaddress.ip_address(candidate))
             except ValueError:
-                self.logger.warning(
-                    'Invalid IP in REMOTE_ADDR',
-                    extra={'remote_addr': remote_addr},
-                )
-                return None
-            else:
-                self.logger.info(
-                    'Resolved client IP from REMOTE_ADDR: %s',
-                    resolved_ip,
-                    extra={'ip_address': resolved_ip},
-                )
-                return resolved_ip
+                self.logger.warning('Invalid client IP address in request headers', extra={'candidate': candidate})
+                continue
+            self.logger.info(
+                'Resolved client IP address from request headers: %s',
+                resolved_ip,
+                extra={'ip_address': resolved_ip},
+            )
+            return resolved_ip
 
         self.logger.warning('No valid IP address found in request headers')
         return None
@@ -427,8 +415,9 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         """Authenticate the request using all registered components."""
         authentication_errors = []
 
-        self.logger.debug('Authentication components to try: %s',
-                          [component.__class__.__name__ for component in self.components])
+        self.logger.debug(
+            'Authentication components to try: %s', [component.__class__.__name__ for component in self.components]
+        )
         for component in self.components:
             try:
                 component.authenticate(context)

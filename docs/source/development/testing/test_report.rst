@@ -29,8 +29,8 @@ The repository currently provides these workflow entry points:
      - ``behave.yml`` / ``behave-test-template.yml``
      - Devices, PKI, API, security, and system matrix results
    * - Coverage
-     - ``codecov-upload.yml``
-     - Measured coverage for the tested commit and actual configured gate
+     - ``pytest.yml``
+     - Measured coverage and Codecov upload for the tested commit; no numeric gate
    * - Lint/type/shell checks
      - ``ruff.yml``, ``mypy.yml``, ``shellcheck.yml``
      - Exit status with locked tool versions; formatting is a separate check

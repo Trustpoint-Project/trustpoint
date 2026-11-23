@@ -30,6 +30,7 @@ from django.utils.translation import gettext as _
 from django.views.generic import FormView
 from django.views.generic.detail import DetailView
 
+from appsecrets.service import CIPHERTEXT_PREFIX, decrypt_app_secret, encrypt_app_secret
 from crypto.domain.errors import CryptoError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from pki.forms import TruststoreAddForm
@@ -60,6 +61,7 @@ class CertificateRequestStateMixin:
     """Session-scoped pending-request state shared by all certificate request wizard steps."""
 
     session_scope: ClassVar[str] = 'cert-request'
+    secret_state_fields: ClassVar[tuple[str, ...]] = ('est_password', 'cmp_shared_secret')
     credential_type: CredentialModel.CredentialTypeChoice
     key_extractable: bool = False
 
@@ -68,9 +70,30 @@ class CertificateRequestStateMixin:
     state: dict[str, Any]
     session_key: str
 
+    @classmethod
+    def _protect_state(cls, state: dict[str, Any]) -> dict[str, Any]:
+        """Encrypt third-party PKI credentials before they enter the session store."""
+        protected = dict(state)
+        for field in cls.secret_state_fields:
+            value = protected.get(field)
+            if isinstance(value, str) and value:
+                protected[field] = encrypt_app_secret(value)
+        return protected
+
+    @classmethod
+    def _unprotect_state(cls, state: dict[str, Any]) -> dict[str, Any]:
+        """Decrypt wizard credentials, leaving legacy plaintext values unchanged."""
+        restored = dict(state)
+        for field in cls.secret_state_fields:
+            value = restored.get(field)
+            if isinstance(value, str) and value.startswith(CIPHERTEXT_PREFIX):
+                restored[field] = decrypt_app_secret(value)
+        return restored
+
     def _load_state(self, pk: int) -> None:
         self.session_key = f'{self.session_scope}_{pk}'
-        self.state = self.request.session.get(self.session_key, {})
+        stored = self.request.session.get(self.session_key, {})
+        self.state = self._unprotect_state(stored) if isinstance(stored, dict) else {}
 
     def _resolve_credential(self, pk: int) -> CredentialModel:
         return get_object_or_404(
@@ -83,7 +106,9 @@ class CertificateRequestStateMixin:
 
     def save_state(self) -> None:
         """Persist only the current credential's JSON-safe state."""
-        self.request.session[self.session_key] = json.loads(json.dumps(self.state, cls=DjangoJSONEncoder))
+        self.request.session[self.session_key] = json.loads(
+            json.dumps(self._protect_state(self.state), cls=DjangoJSONEncoder)
+        )
 
     def _generate_pending_credential(self, key_type: str) -> tuple[CredentialModel, str]:
         """Generate the managed key for the pending request, returning the credential and its scope."""
@@ -159,13 +184,12 @@ class CertificateRequestView(CertificateRequestWizardView[Form]):
         """Create the managed key and store the connection settings in the session."""
         try:
             credential, scope = self._generate_pending_credential(form.cleaned_data['key_type'])
-        except (CryptoError, ValidationError) as exception:
+            self.session_key = f'{self.session_scope}_{credential.pk}'
+            self.state = {'scope': scope, **form.cleaned_data}
+            self.save_state()
+        except (CryptoError, ValidationError, RuntimeError) as exception:
             form.add_error(None, str(exception))
             return self.form_invalid(form)
-        self.request.session[f'{self.session_scope}_{credential.pk}'] = {
-            'scope': scope,
-            **form.cleaned_data,
-        }
         return redirect(self.truststore_url_name, pk=credential.pk)
 
 

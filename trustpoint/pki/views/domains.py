@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import FieldError, PermissionDenied
 from django.db import transaction
 from django.forms import BaseModelForm
 from django.http import Http404, HttpResponse, HttpResponseRedirect
@@ -129,7 +129,10 @@ class DomainTableView(ExportMixin, DomainContextMixin, SortableTableMixin[Domain
         """Return all domains with the issuing CA relationship prefetched."""
         base_qs = DomainModel.objects.select_related('organization', 'issuing_ca__credential__certificate')
         qs = self.apply_filters(base_qs)
-        return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
+        try:
+            return qs.order_by(self.request.GET.get('sort', self.default_sort_param))
+        except FieldError:
+            return qs.order_by(self.default_sort_param)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add filter state to the context."""
@@ -219,12 +222,6 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         context = super().get_context_data(**kwargs)
         domain: DomainModel = cast('DomainModel', self.get_object())
 
-        issued_credentials = domain.issued_credentials.all()
-
-        certificates = CertificateModel.objects.filter(
-            credential__in=[issued_credential.credential for issued_credential in issued_credentials]
-        )
-
         context['profile_data'] = {
             profile.id: {'unique_name': profile.unique_name, 'alias': '', 'is_allowed': False}
             for profile in CertificateProfileModel.objects.all()
@@ -243,7 +240,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             domain.domain_credential_profile.id if domain.domain_credential_profile else None
         )
 
-        context['certificates'] = certificates
+        context['certificate_count'] = CertificateModel.objects.filter(
+            credential__issued_credential__domain=domain
+        ).count()
         context['domain_options'] = {}
         context['domain_help_texts'] = {}
         context['domain_verbose_name'] = {}
@@ -275,6 +274,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             if domain_cred_profile_id:
                 try:
                     profile = CertificateProfileModel.objects.get(pk=int(domain_cred_profile_id))
+                    if profile.credential_type != CertificateProfileModel.ProfileCredentialType.DOMAIN:
+                        messages.error(request, _('The selected profile is not a domain credential profile.'))
+                        return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
                     domain.domain_credential_profile = profile
                 except (CertificateProfileModel.DoesNotExist, ValueError):
                     messages.error(request, _('Invalid domain credential profile selected.'))
@@ -493,14 +495,15 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
 
 
 class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
-    """View to list certificates issued by a specific Issuing CA for a Domain."""
+    """View to list certificates issued to devices in a specific domain."""
 
     model = CertificateModel
     template_name = 'pki/domains/issued_certificates.html'
     context_object_name = 'issued_certificates'
+    paginate_by = UIConfig.paginate_by
 
     def get_queryset(self) -> QuerySet[CertificateModel]:
-        """Return only certificates associated with the domain's issued credentials."""
+        """Return only the primary certificates of this domain's issued credentials."""
         domain: DomainModel = self.get_domain()
         if domain.issuing_ca is None:
             msg = 'Domain has no issuing CA configured.'
@@ -508,9 +511,11 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         if domain.issuing_ca.credential is None:
             msg = 'Issuing CA has no credential configured.'
             raise Http404(msg)
-        # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
-        return CertificateModel.objects.filter(
-            issuer_public_bytes=domain.issuing_ca.credential.certificate_or_error.subject_public_bytes
+        return (
+            CertificateModel.objects.select_related('revoked_certificate')
+            .filter(credential_set__issued_credential__device__domain=domain)
+            .distinct()
+            .order_by('common_name')
         )
 
     def get_domain(self) -> DomainModel:

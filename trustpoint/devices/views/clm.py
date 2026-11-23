@@ -7,7 +7,7 @@ import abc
 from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import FieldError, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet, Value
 from django.db.models.functions import Coalesce, NullIf
@@ -48,6 +48,7 @@ from trustpoint.page_context import (
     PageContextMixin,
 )
 from trustpoint.settings import UIConfig
+from trustpoint.views.base import UserPermissionRequiredMixin
 from users.permissions import AppPermissions
 
 if TYPE_CHECKING:
@@ -106,7 +107,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 )
             )
             sort_param = sort_param.replace('issued_using_cert_profile', 'profile_label')
-        return issued_creds_qs.order_by(sort_param)
+        try:
+            return issued_creds_qs.order_by(sort_param)
+        except FieldError:
+            return issued_creds_qs.order_by(self.default_sort_param)
 
     def get_remote_issued_creds_qs(self) -> QuerySet[RemoteIssuedCredentialModel]:
         """Gets a sorted queryset of all RemoteIssuedCredentialModels for RA-issued certs."""
@@ -124,7 +128,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 )
             )
             sort_param = sort_param.replace('issued_using_cert_profile', 'profile_label')
-        return issued_creds_qs.order_by(sort_param)
+        try:
+            return issued_creds_qs.order_by(sort_param)
+        except FieldError:
+            return issued_creds_qs.order_by(self.default_sort_param)
 
     def get_domain_credentials_qs(
         self,
@@ -509,9 +516,12 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
         return super().dispatch(request, *args, **kwargs)
 
 
-class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
+class OpcUaGdsPushCertificateLifecycleManagementSummaryView(
+    UserPermissionRequiredMixin, AbstractCertificateLifecycleManagementSummaryView
+):
     """Certificate Lifecycle Management Summary View for OPC UA GDS Push devices."""
 
+    permission_required = AppPermissions.MANAGE_DEVICES
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -566,6 +576,8 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
         Returns:
             The HttpResponse.
         """
+        if not request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         self.object = self.get_object()
 
         if self.object.onboarding_config:

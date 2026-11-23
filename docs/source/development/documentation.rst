@@ -15,15 +15,14 @@ documentation dependencies:
 
    uv sync --frozen --group docs
 
-Install a Java runtime and Graphviz (including the ``dot`` command) for diagram
-rendering. Sphinx uses the PlantUML JAR checked into ``docs/source/``; a separate
-PlantUML installation is not needed locally. Check that both tools are on your
-``PATH``:
+Sphinx renders the checked-in PlantUML diagrams from
+``docs/source/diagrams/*.svg``. The diagrams are pre-rendered so hosted builds
+do not need Java; after editing a ``.puml`` file, regenerate the SVGs with a
+Java runtime on your ``PATH``:
 
 .. code-block:: console
 
-   java -version
-   dot -V
+   make -C docs diagrams
 
 Build HTML with unresolved-reference checks and warnings treated as errors:
 
@@ -76,8 +75,8 @@ maintained separately; do not overwrite maintained guides with generated output.
 Hosted builds
 -------------
 
-Read the Docs uses ``.readthedocs.yaml`` to select Python, install the frozen
-documentation dependencies, and provide diagram tools. Sphinx enables
+Read the Docs uses ``.readthedocs.yaml`` to select Python and install the frozen
+documentation dependencies. Sphinx enables
 unresolved-reference warnings in ``conf.py``, and the hosted configuration treats
 warnings as build failures. Pull-request previews depend on the Read the Docs
 project's integration settings. See :doc:`testing/ci_cd` for the full build

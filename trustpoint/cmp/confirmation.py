@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 logger = logging.getLogger(__name__)
+CMP_TRANSACTION_RETENTION_DAYS = 30
 
 
 def initialize_confirmation_expiry(*, using: str = 'default', **_kwargs: Any) -> None:
@@ -157,4 +158,22 @@ def expire_due_confirmations() -> int:
             expired += expire_confirmation(transaction_pk, now=now)
         except Exception:
             logger.exception('Failed to expire CMP confirmation for transaction %s', transaction_pk)
+    trim_finalized_cmp_transactions(now=now)
     return expired
+
+
+def trim_finalized_cmp_transactions(*, now: datetime | None = None) -> int:
+    """Drop the original DER payload from old finalized transactions.
+
+    Transaction rows stay for traceability and replay checks; the large request
+    bytes are no longer needed after the retention window.
+    """
+    cutoff = (now or timezone.now()) - timedelta(days=CMP_TRANSACTION_RETENTION_DAYS)
+    return (
+        CmpTransactionModel.objects.filter(
+            finalized_at__isnull=False,
+            finalized_at__lt=cutoff,
+        )
+        .exclude(request_der=b'')
+        .update(request_der=b'')
+    )

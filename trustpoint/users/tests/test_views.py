@@ -107,6 +107,16 @@ class TrustpointProfileViewTest(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    def test_user_manager_cannot_reset_administrator_password(self) -> None:
+        """A non-superuser user manager cannot take over an administrator account."""
+        administrator = User.objects.create_superuser(username='administrator', password='AdminPass123!')
+        self.user.user_permissions.add(Permission.objects.get(codename='manage_users'))
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('users:user-profile-password', kwargs={'pk': administrator.pk}))
+
+        self.assertEqual(response.status_code, 403)
+
     def test_get_renders_profile_page_for_authenticated_user(self) -> None:
         """The authenticated user can open their profile page."""
         self.client.force_login(self.user)
@@ -208,6 +218,14 @@ class TrustpointProfileViewTest(TestCase):
 
         self.assertIn('role', form.fields)
         self.assertIn('organization', form.fields)
+        self.assertTrue(form.fields['role'].disabled)
+        self.assertTrue(form.fields['organization'].disabled)
+
+    def test_user_manager_without_superuser_cannot_assign_roles(self) -> None:
+        """Managing users must not allow promoting oneself or others to Administrator."""
+        self.user.user_permissions.add(Permission.objects.get(codename='manage_users'))
+        form = TrustpointUserProfileForm(instance=self.user, user=self.user)
+
         self.assertTrue(form.fields['role'].disabled)
         self.assertTrue(form.fields['organization'].disabled)
 

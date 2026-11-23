@@ -28,7 +28,13 @@ from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
-from .issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
+from .issued_credential import (
+    IssuedCredentialModel,
+    RemoteIssuedCredentialModel,
+    get_credential_for_certificate,
+    get_credential_for_certificate_model,
+    get_credential_for_serial_number,
+)
 from .ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 
 __all__ = [
@@ -52,4 +58,7 @@ __all__ = [
     'RevokedCertificateModel',
     'TruststoreModel',
     'TruststoreOrderModel',
+    'get_credential_for_certificate',
+    'get_credential_for_certificate_model',
+    'get_credential_for_serial_number',
 ]

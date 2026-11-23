@@ -46,6 +46,17 @@ def profile_form(raw_json: object, unique_name: str = '') -> MagicMock:
             'valid',
         ),
         ('{"type": "cert_profile", "subj": {}}', {'type': 'cert_profile', 'subj': {}}, 'valid'),
+        (
+            '{"type": "cert_profile", "subj": {"common_name": "Müller"}}',
+            {'type': 'cert_profile', 'subj': {'common_name': 'Müller'}},
+            'valid',
+        ),
+        (
+            '"{\\"type\\": \\"cert_profile\\", \\"subj\\": {}}"',
+            {'type': 'cert_profile', 'subj': {}},
+            'valid',
+        ),
+        ('{"a": "\\x"}', '{"a": "\\x"}', 'invalid'),
         ('not-json', 'not-json', 'invalid'),
     ],
 )

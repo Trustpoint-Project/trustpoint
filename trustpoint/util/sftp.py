@@ -16,6 +16,8 @@ from management.models import BackupOptions
 from util.ssh import parse_ssh_host_key
 
 SSH_DEFAULT_PORT = 22
+SFTP_CONNECT_TIMEOUT_SECONDS = 10
+SFTP_OPERATION_TIMEOUT_SECONDS = 60
 
 
 class SftpError(Exception):
@@ -85,12 +87,16 @@ class SftpClient:
             msg = 'No private key provided.'
             raise SftpError(msg)
 
-        try:
-            key_stream = io.StringIO(self.private_key_text)
-            return paramiko.RSAKey.from_private_key(key_stream, password=self.passphrase or None)
-        except paramiko.SSHException as e:
-            msg = f'Failed to load private key: {e}'
-            raise SftpError(msg) from e
+        key_stream = io.StringIO(self.private_key_text)
+        last_error: paramiko.SSHException | None = None
+        for key_type in (paramiko.RSAKey, paramiko.Ed25519Key, paramiko.ECDSAKey):
+            key_stream.seek(0)
+            try:
+                return key_type.from_private_key(key_stream, password=self.passphrase or None)
+            except paramiko.SSHException as exc:
+                last_error = exc
+        msg = f'Failed to load private key: {last_error}'
+        raise SftpError(msg) from last_error
 
     def _connect_sftp(self) -> tuple[paramiko.SSHClient, paramiko.SFTPClient]:
         """Verify the pinned server key, then authenticate and open SFTP.
@@ -129,11 +135,17 @@ class SftpClient:
                     pkey=pkey,
                     allow_agent=False,
                     look_for_keys=False,
+                    timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+                    banner_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
+                    auth_timeout=SFTP_CONNECT_TIMEOUT_SECONDS,
                 )
                 sftp = ssh.open_sftp()
                 if sftp is None:
                     msg = 'Authentication failed.'
                     raise SftpError(msg)
+                channel = sftp.get_channel()
+                if channel is not None:
+                    channel.settimeout(SFTP_OPERATION_TIMEOUT_SECONDS)
                 stack.pop_all()  # The caller closes the connected SSH client.
                 return ssh, sftp
 

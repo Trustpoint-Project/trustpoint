@@ -79,7 +79,7 @@ def create_service_account(username: str = 'behave_service') -> tuple[Trustpoint
     credential = ServiceAccountCredential.objects.create(
         service_account=account,
         client_id=client_id,
-        hashed_secret=make_password(secret),
+        hashed_secret=make_password(secret, hasher='unsalted_sha256'),
         description='Behave test credential',
     )
     return account, credential, secret

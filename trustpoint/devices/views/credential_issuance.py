@@ -62,6 +62,8 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
+DISCOVERY_TIMEOUT_SECONDS = 20
+
 
 class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, DetailView[DeviceModel]):
     """Abstract view for selecting how to issue a new application credential for a no-onboarding device."""
@@ -559,10 +561,11 @@ class AbstractIssueCredentialView[FormClass: forms.Form](
         return self.render_to_response(self.get_context_data(form=form))
 
 
-class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
-    """View to discover OPC UA server information without authentication."""
+class OpcUaGdsPushDiscoverServerView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+    """View to discover OPC UA server information without server-side authentication."""
 
     http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
     model = DeviceModel
     context_object_name = 'device'
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
@@ -574,7 +577,9 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
         try:
             service = GdsPushService(device=self.object, insecure=True)
 
-            success, message, server_info = asyncio.run(service.discover_server())
+            success, message, server_info = asyncio.run(
+                asyncio.wait_for(service.discover_server(), timeout=DISCOVERY_TIMEOUT_SECONDS)
+            )
 
             if success and server_info:
                 messages.success(request, message)
@@ -588,6 +593,8 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             else:
                 messages.error(request, f'Failed to discover server: {message}')
 
+        except TimeoutError:
+            messages.error(request, 'Failed to discover server: the request timed out.')
         except Exception as e:  # noqa: BLE001
             messages.error(request, f'Unexpected error during discovery: {e}')
 

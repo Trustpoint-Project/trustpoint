@@ -6,14 +6,13 @@
 from __future__ import annotations
 
 import json
-import re
-from io import BytesIO
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.http import HttpRequest
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ParseError, PermissionDenied
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -39,56 +38,17 @@ from .serializers import (
 )
 
 if TYPE_CHECKING:
+    from io import BytesIO
+
     from rest_framework.request import Request
-
-
-def _sanitise_json_body(raw: bytes) -> bytes:
-    r"""Replace literal newlines inside JSON string values with escaped ``\n`` sequences.
-
-    DRF's :class:`~rest_framework.parsers.JSONParser` (and the stdlib
-    :func:`json.loads`) reject raw control characters (including ``0x0A``
-    newline) inside JSON string values, which is correct per RFC 7159.
-    However, Swagger UI and some ``curl`` invocations embed PEM blocks with
-    literal newlines in the JSON body, making the payload technically invalid.
-
-    This helper performs a best-effort sanitisation pass: for every JSON
-    string value in the body it escapes bare ``\n`` and ``\r`` characters so
-    that the subsequent JSON parse succeeds.
-
-    The replacement is done inside string literals only (between unescaped
-    double-quotes), leaving structural JSON characters untouched.
-
-    Args:
-        raw: The raw request body bytes.
-
-    Returns:
-        Sanitised body bytes suitable for :func:`json.loads`.
-    """
-    # Replace literal newlines/carriage-returns that appear inside JSON string
-    # literals.  We use a simple state-machine-style regex: match the content
-    # between double-quote delimiters (non-greedy) and replace bare control
-    # chars within each match.  This is intentionally conservative and only
-    # targets the most common PEM-embedding pattern.
-    try:
-        text = raw.decode('utf-8')
-    except UnicodeDecodeError:
-        return raw
-
-    def _escape_string_content(m: re.Match[str]) -> str:
-        inner = m.group(1)
-        inner = inner.replace('\r\n', '\\n').replace('\r', '\\n').replace('\n', '\\n')
-        return f'"{inner}"'
-
-    sanitised = re.sub(r'"((?:[^"\\]|\\.)*)"', _escape_string_content, text, flags=re.DOTALL)
-    return sanitised.encode('utf-8')
 
 
 class LenientJSONParser(JSONParser):
     """JSON parser that tolerates literal newlines inside string values.
 
-    Before delegating to the standard DRF JSON parser this parser sanitises
-    the request body so that PEM-encoded values with bare newline characters
-    do not cause a ``JSON parse error``.
+    Swagger UI and some ``curl`` invocations embed PEM blocks with bare newline
+    characters. ``json.loads(strict=False)`` accepts those control characters
+    without rewriting the body.
     """
 
     def parse(  # type: ignore[override]
@@ -97,10 +57,18 @@ class LenientJSONParser(JSONParser):
         media_type: str | None = None,
         parser_context: dict[str, object] | None = None,
     ) -> object:
-        """Parse the stream, sanitising literal newlines in string values first."""
-        raw = stream.read()
-        sanitised = _sanitise_json_body(raw)
-        return super().parse(BytesIO(sanitised), media_type, parser_context)
+        """Parse the stream with control characters allowed inside strings."""
+        del media_type, parser_context
+        max_bytes = getattr(settings, 'DATA_UPLOAD_MAX_MEMORY_SIZE', 2_621_440)
+        data = stream.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            message = 'JSON body is too large.'
+            raise ParseError(message)
+        try:
+            return json.loads(data, strict=False)
+        except (UnicodeDecodeError, ValueError) as exc:
+            message = 'Malformed JSON body.'
+            raise ParseError(message) from exc
 
 
 def _build_synthetic_request(csr_value: str) -> HttpRequest:

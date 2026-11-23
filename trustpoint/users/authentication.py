@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
@@ -14,7 +15,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from cryptography.x509.verification import Criticality, ExtensionPolicy, PolicyBuilder, Store, VerificationError
 from django.conf import settings
 from django.contrib.auth.backends import BaseBackend, ModelBackend
-from django.contrib.auth.hashers import check_password
+from django.contrib.auth.hashers import check_password, identify_hasher, make_password
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -115,7 +116,15 @@ class ClientCertificateBackend(ModelBackend):
     @staticmethod
     def _validate_proxy(request: HttpRequest) -> None:
         """Trust TLS proof only from the configured proxy, which must overwrite these headers."""
-        if request.META.get('REMOTE_ADDR') not in settings.CLIENT_CERTIFICATE_TRUSTED_PROXY_IPS:
+        remote_addr = request.META.get('REMOTE_ADDR', '')
+        try:
+            peer = ipaddress.ip_address(remote_addr)
+            trusted = any(
+                peer in ipaddress.ip_network(network, strict=False) for network in settings.TRUSTPOINT_TRUSTED_PROXY_IPS
+            )
+        except ValueError:
+            trusted = False
+        if not trusted:
             raise ValidationError(_('The client certificate was not supplied by a trusted TLS proxy.'))
         if request.META.get('HTTP_X_FORWARDED_PROTO') != 'https':
             raise ValidationError(_('Client certificate login requires HTTPS.'))
@@ -241,6 +250,12 @@ class ServiceAccountBackend(BaseBackend):
 
         if not check_password(secret, credential.hashed_secret):
             return None
+
+        # Upgrade legacy Argon2 secrets on first use; they are random, not user passwords.
+        if identify_hasher(credential.hashed_secret).algorithm != 'unsalted_sha256':
+            ServiceAccountCredential.objects.filter(pk=credential.pk).update(
+                hashed_secret=make_password(secret, hasher='unsalted_sha256'),
+            )
 
         credential.record_usage()
 

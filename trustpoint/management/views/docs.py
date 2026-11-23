@@ -15,6 +15,9 @@ from django.http import FileResponse, HttpRequest, HttpResponseBase, JsonRespons
 from django.shortcuts import redirect
 from django.views import View
 
+from trustpoint.views.base import UserPermissionRequiredMixin
+from users.permissions import AppPermissions
+
 BUILD_TIMEOUT_SECONDS = 300
 
 
@@ -41,8 +44,10 @@ class ServeLocalDocsView(LoginRequiredMixin, View):
         return redirect(f'https://trustpoint.readthedocs.io/en/latest/{safe_path}')
 
 
-class BuildDocsTriggerView(LoginRequiredMixin, View):
-    """It triggers documentation build directly."""
+class BuildDocsTriggerView(UserPermissionRequiredMixin, View):
+    """Build local documentation on request."""
+
+    permission_required = AppPermissions.MANAGE_SYSTEM_CONFIGURATION
 
     def post(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> JsonResponse:
         """Handle POST request to build documentation."""

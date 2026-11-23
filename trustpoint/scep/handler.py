@@ -14,6 +14,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.x509.oid import AttributeOID
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 
@@ -27,6 +28,7 @@ from request.authorization import ScepAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.profile_validator import ProfileValidator
 from request.request_context import ScepCertificateRequestContext
+from request.security_hardening import require_single_security_config
 from scep.protocol.cms import (
     KeyTransRecipient,
     ParsedPkiMessage,
@@ -48,6 +50,7 @@ if TYPE_CHECKING:
     from onboarding.models import ScepEnrollmentModelMixin
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
 _CLOCK_SKEW = dt.timedelta(days=1)
+_MAX_SCEP_TRANSACTIONS = 64
 _ACCEPTED_CSR_HASHES = (hashes.SHA256, hashes.SHA384, hashes.SHA512)
 _GENERIC_FAILURE_TEXT = 'The request could not be processed.'
 _INVALID_AUTHORIZATION = 'The enrollment authorization is not valid.'
@@ -220,6 +223,7 @@ class ScepPkiOperationHandler(LoggerMixin):
             scep_signer_certificate=signer,
         )
         try:
+            require_single_security_config(ctx)
             ScepAuthorization().authorize(ctx)
         except ValueError as exc:
             raise ScepProtocolError(FailInfo.BAD_REQUEST, 'The request was rejected by the enrollment policy.') from exc
@@ -294,6 +298,8 @@ class ScepPkiOperationHandler(LoggerMixin):
                 'digest': request_digest,
                 'cert_sha256': ctx.issued_certificate.fingerprint(hashes.SHA256()).hex().upper(),
             }
+            # Replay protection only needs recent transaction IDs. Keep the JSON bounded.
+            transactions = dict(list(transactions.items())[-_MAX_SCEP_TRANSACTIONS:])
             locked.scep_transactions = transactions
             update_fields = ['scep_transactions']
             if ctx.operation == 'pkcsreq':
@@ -555,6 +561,15 @@ class ScepPkiOperationHandler(LoggerMixin):
         target = device if device is not None else self.domain
         label = f'Device: {device.common_name} | ' if device is not None else ''
         try:
+            # shortcut: one rejection audit per target per minute; failure notifications keep the details.
+            recent = AuditLog.objects.filter(
+                operation_type=AuditLog.OperationType.SCEP_REJECTED,
+                target_content_type=ContentType.objects.get_for_model(target),
+                target_object_id=str(target.pk),
+                timestamp__gte=timezone.now() - dt.timedelta(minutes=1),
+            )
+            if recent.exists():
+                return
             AuditLog.create_entry(
                 operation_type=AuditLog.OperationType.SCEP_REJECTED,
                 target=target,

@@ -335,6 +335,7 @@ class KeyUsageExtension(CertificateExtension, models.Model):
 
     class Meta:  # noqa: D106
         unique_together = (
+            'critical',
             'digital_signature',
             'content_commitment',
             'key_encipherment',
@@ -462,23 +463,13 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         return f'GeneralNamesModel({"; ".join(parts)})' if parts else 'GeneralNamesModel(Empty)'
 
     def _save_rfc822_name(self, entry: x509.RFC822Name) -> None:
-        existing_entry = GeneralNameRFC822Name.objects.filter(value=entry.value).first()
-        if existing_entry:
-            self.rfc822_names.add(existing_entry)
-        else:
-            rfc822_name = GeneralNameRFC822Name(value=entry.value)
-            rfc822_name.save()
-            self.rfc822_names.add(rfc822_name)
+        rfc822_name, _ = GeneralNameRFC822Name.objects.get_or_create(value=entry.value)
+        self.rfc822_names.add(rfc822_name)
         self.save()
 
     def _save_dns_name(self, entry: x509.DNSName) -> None:
-        existing_entry = GeneralNameDNSName.objects.filter(value=entry.value).first()
-        if existing_entry:
-            self.dns_names.add(existing_entry)
-        else:
-            dns_name = GeneralNameDNSName(value=entry.value)
-            dns_name.save()
-            self.dns_names.add(dns_name)
+        dns_name, _ = GeneralNameDNSName.objects.get_or_create(value=entry.value)
+        self.dns_names.add(dns_name)
         self.save()
 
     def _save_ip_address(self, entry: x509.IPAddress) -> None:
@@ -494,45 +485,25 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
             msg = f'Unknown IP address type: {type(entry.value).__name__}.'
             raise TypeError(msg)
 
-        existing_entry = GeneralNameIpAddress.objects.filter(ip_type=ip_type, value=entry.value).first()
-        if existing_entry:
-            self.ip_addresses.add(existing_entry)
-        else:
-            ip_address = GeneralNameIpAddress(ip_type=ip_type, value=str(entry.value))
-            ip_address.save()
-            self.ip_addresses.add(ip_address)
+        ip_address, _ = GeneralNameIpAddress.objects.get_or_create(ip_type=ip_type, value=str(entry.value))
+        self.ip_addresses.add(ip_address)
         self.save()
 
     def _save_uri(self, entry: x509.UniformResourceIdentifier) -> None:
-        existing_entry = GeneralNameUniformResourceIdentifier.objects.filter(value=entry.value).first()
-        if existing_entry:
-            self.uniform_resource_identifiers.add(existing_entry)
-        else:
-            uri = GeneralNameUniformResourceIdentifier(value=entry.value)
-            uri.save()
-            self.uniform_resource_identifiers.add(uri)
+        uri, _ = GeneralNameUniformResourceIdentifier.objects.get_or_create(value=entry.value)
+        self.uniform_resource_identifiers.add(uri)
         self.save()
 
     def _save_registered_id(self, entry: x509.RegisteredID) -> None:
-        existing_entry = GeneralNameRegisteredId.objects.filter(value=entry.value.dotted_string).first()
-        if existing_entry:
-            self.registered_ids.add(existing_entry)
-        else:
-            registered_id = GeneralNameRegisteredId(value=entry.value.dotted_string)
-            registered_id.save()
-            self.registered_ids.add(registered_id)
+        registered_id, _ = GeneralNameRegisteredId.objects.get_or_create(value=entry.value.dotted_string)
+        self.registered_ids.add(registered_id)
         self.save()
 
     def _save_other_name(self, entry: x509.OtherName) -> None:
-        type_id = entry.type_id.dotted_string
-        value = entry.value.hex().upper()
-        existing_entry = GeneralNameOtherName.objects.filter(type_id=type_id, value=value).first()
-        if existing_entry:
-            self.other_names.add(existing_entry)
-        else:
-            other_name = GeneralNameOtherName(type_id=type_id, value=value)
-            other_name.save()
-            self.other_names.add(other_name)
+        other_name, _ = GeneralNameOtherName.objects.get_or_create(
+            type_id=entry.type_id.dotted_string, value=entry.value.hex().upper()
+        )
+        self.other_names.add(other_name)
         self.save()
 
     def _save_directory_name(self, entry: x509.DirectoryName) -> None:
@@ -571,7 +542,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         Returns:
             GeneralNamesModel: The instance of the saved general names.
         """
-        general_names_list: (list[x509.GeneralName] | x509.ExtensionType)
+        general_names_list: list[x509.GeneralName] | x509.ExtensionType
         general_names_list = general_names.value if isinstance(general_names, x509.Extension) else general_names
 
         try:
@@ -591,7 +562,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
                     self._save_registered_id(entry=entry)
                 elif isinstance(entry, x509.OtherName):
                     self._save_other_name(entry=entry)
-        except TypeError as e: # non-iterable passed
+        except TypeError as e:  # non-iterable passed
             msg = f'Expected iterable of GeneralName, got {type(general_names_list).__name__}.'
             raise TypeError(msg) from e
 
@@ -1091,27 +1062,13 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
 
 
 class GeneralNameModel(OrphanDeletionMixin, CustomDeleteActionModel):
-    rfc822_name = models.ForeignKey(
-        GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT
-    )
-    dns_name = models.ForeignKey(
-        GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT
-    )
-    directory_name = models.ForeignKey(
-        GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT
-    )
-    uri = models.ForeignKey(
-        GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT
-    )
-    ip_address = models.ForeignKey(
-        GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT
-    )
-    registered_id = models.ForeignKey(
-        GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT
-    )
-    other_name = models.ForeignKey(
-        GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT
-    )
+    rfc822_name = models.ForeignKey(GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT)
+    dns_name = models.ForeignKey(GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT)
+    directory_name = models.ForeignKey(GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT)
+    uri = models.ForeignKey(GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT)
+    ip_address = models.ForeignKey(GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT)
+    registered_id = models.ForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT)
+    other_name = models.ForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT)
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameModel."""

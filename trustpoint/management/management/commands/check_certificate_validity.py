@@ -19,7 +19,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from management.models import NotificationConfig, NotificationModel, NotificationStatus
-from pki.models import CertificateModel
+from pki.models import CertificateModel, IssuedCredentialModel
 
 
 class Command(BaseCommand):
@@ -29,6 +29,9 @@ class Command(BaseCommand):
     """
 
     help = 'Check for expiring or expired certificates.'
+
+    _existing_notifications: set[tuple[str, int, int | None]]
+    _domains_by_certificate: dict[int, int]
 
     def handle(self, *args: Any, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
         """Entrypoint for the command.Args.
@@ -58,6 +61,19 @@ class Command(BaseCommand):
         expired_certificates = expired_certificates.select_related('user_client_certificate__user')
 
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
+
+        self._existing_notifications = set(
+            NotificationModel.objects.filter(
+                event__in=('CERTIFICATE_EXPIRING', 'CERTIFICATE_EXPIRED'),
+                certificate__isnull=False,
+            ).values_list('event', 'certificate_id', 'domain_id')
+        )
+        self._domains_by_certificate = dict(
+            IssuedCredentialModel.objects.filter(
+                credential__certificate__isnull=False,
+                domain__isnull=False,
+            ).values_list('credential__certificate_id', 'domain_id')
+        )
 
         # Handle expiring certificates
         for cert in expiring_certificates:
@@ -93,8 +109,6 @@ class Command(BaseCommand):
         If the certificate is associated with a domain through an issued credential, creates
         a domain-associated notification. Otherwise, creates a standalone notification.
         """
-        from pki.models import IssuedCredentialModel  # noqa: PLC0415
-
         message_data = {
             'common_name': certificate.common_name,
             'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S'),
@@ -111,16 +125,14 @@ class Command(BaseCommand):
                 identifier=association.identifier,
             )
 
-        issued_credential = (
-            IssuedCredentialModel.objects.filter(credential__certificate=certificate).select_related('domain').first()
-        )
+        issued_credential_domain_id = self._domains_by_certificate.get(certificate.pk)
+        key: tuple[str, int, int | None]
 
-        if issued_credential and issued_credential.domain:
-            if not NotificationModel.objects.filter(
-                event=event, certificate=certificate, domain=issued_credential.domain
-            ).exists():
+        if issued_credential_domain_id is not None:
+            key = (event, certificate.pk, issued_credential_domain_id)
+            if key not in self._existing_notifications:
                 notification = NotificationModel.objects.create(
-                    domain=issued_credential.domain,
+                    domain_id=issued_credential_domain_id,
                     certificate=certificate,
                     created_at=timezone.now(),
                     notification_source=NotificationModel.NotificationSource.CERTIFICATE,
@@ -130,14 +142,18 @@ class Command(BaseCommand):
                     message_data=message_data,
                 )
                 notification.statuses.add(new_status)
-        elif not NotificationModel.objects.filter(event=event, certificate=certificate, domain__isnull=True).exists():
-            notification = NotificationModel.objects.create(
-                certificate=certificate,
-                created_at=timezone.now(),
-                notification_source=NotificationModel.NotificationSource.CERTIFICATE,
-                notification_type=notification_type,
-                message_type=message_type,
-                event=event,
-                message_data=message_data,
-            )
-            notification.statuses.add(new_status)
+                self._existing_notifications.add(key)
+        else:
+            key = (event, certificate.pk, None)
+            if key not in self._existing_notifications:
+                notification = NotificationModel.objects.create(
+                    certificate=certificate,
+                    created_at=timezone.now(),
+                    notification_source=NotificationModel.NotificationSource.CERTIFICATE,
+                    notification_type=notification_type,
+                    message_type=message_type,
+                    event=event,
+                    message_data=message_data,
+                )
+                notification.statuses.add(new_status)
+                self._existing_notifications.add(key)

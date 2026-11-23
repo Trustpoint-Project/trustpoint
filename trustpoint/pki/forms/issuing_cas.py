@@ -699,10 +699,10 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
         return cleaned_data
 
-    def _create_credential(self) -> CredentialModel:
+    def _create_credential(self, *, alias: str | None = None) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
         return generate_pending_credential(
-            alias=self.cleaned_data['unique_name'],
+            alias=alias or self.cleaned_data['unique_name'],
             key_type=self.cleaned_data['key_type'],
             credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
             backend=TrustpointCryptoBackend(),

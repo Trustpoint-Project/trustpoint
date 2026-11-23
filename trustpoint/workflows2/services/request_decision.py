@@ -37,20 +37,17 @@ def resolve_request_decision(run: Workflow2Run | Any) -> Workflow2RequestDecisio
         decision = Workflow2RequestDecision.FAIL
     elif run_status == Workflow2Run.STATUS_REJECTED:
         decision = Workflow2RequestDecision.REJECT
-    elif (
-        Workflow2Approval.STATUS_PENDING in approval_statuses
-        or run_status in {
-            *WorkflowRunTransitionService.ACTIVE_STATUSES,
-            *WorkflowRunTransitionService.BLOCKED_STATUSES,
-        }
-    ):
-        decision = Workflow2RequestDecision.WAIT
     elif run_status in {
         Workflow2Run.STATUS_TIMED_OUT,
         Workflow2Run.STATUS_CANCELLED,
         Workflow2Run.STATUS_STOPPED,
     }:
         decision = Workflow2RequestDecision.FAIL
+    elif Workflow2Approval.STATUS_PENDING in approval_statuses or run_status in {
+        *WorkflowRunTransitionService.ACTIVE_STATUSES,
+        *WorkflowRunTransitionService.BLOCKED_STATUSES,
+    }:
+        decision = Workflow2RequestDecision.WAIT
     elif run_status in {
         Workflow2Run.STATUS_APPROVED,
         Workflow2Run.STATUS_FINISHED,
@@ -64,6 +61,4 @@ def _approval_statuses_for_run(run: Workflow2Run | Any) -> set[str]:
     if not isinstance(run, Workflow2Run) or run.pk is None:
         return set()
 
-    return set(
-        Workflow2Approval.objects.filter(instance__run=run).values_list('status', flat=True)
-    )
+    return set(Workflow2Approval.objects.filter(instance__run=run).values_list('status', flat=True))

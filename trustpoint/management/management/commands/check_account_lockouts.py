@@ -7,6 +7,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from management.models import NotificationConfig, NotificationModel
 from management.notifications import notify_operational_issue, resolve_operational_issue
@@ -22,11 +23,18 @@ class Command(BaseCommand):
         """Keep one alert per locked account and solve it after unblocking."""
         if not NotificationConfig.get().enabled:
             return
+        now = timezone.now()
         active_events = []
-        for user_id in TrustpointUser.objects.filter(blocked_by_failed_logins=True).values_list('pk', flat=True):
+        locked = TrustpointUser.objects.filter(blocked_by_failed_logins=True) | TrustpointUser.objects.filter(
+            failed_login_locked_until__gt=now
+        )
+        for user_id in locked.values_list('pk', flat=True):
             with transaction.atomic():
                 user = TrustpointUser.objects.select_for_update().filter(pk=user_id).first()
-                if user is None or not user.blocked_by_failed_logins:
+                if user is None or (
+                    not user.blocked_by_failed_logins
+                    and (user.failed_login_locked_until is None or user.failed_login_locked_until <= now)
+                ):
                     continue
                 event = f'ACCOUNT_LOCKED_{user.pk}'
                 active_events.append(event)
@@ -52,6 +60,9 @@ class Command(BaseCommand):
                     )
                     .first()
                 )
-                if user is None or not user.blocked_by_failed_logins:
+                if user is None or (
+                    not user.blocked_by_failed_logins
+                    and (user.failed_login_locked_until is None or user.failed_login_locked_until <= now)
+                ):
                     resolve_operational_issue(event, strict=True)
         self.stdout.write(self.style.SUCCESS('Account lockout check completed.'))

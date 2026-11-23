@@ -19,7 +19,7 @@ class AccountSecurityConfig(models.Model):
 
     api_credential_expiry_days = models.PositiveIntegerField(null=True, blank=True, default=None)
     idle_timeout_minutes = models.PositiveIntegerField(default=30)
-    failed_login_attempts = models.PositiveIntegerField(null=True, blank=True, default=None)
+    failed_login_attempts = models.PositiveIntegerField(null=True, blank=True, default=5)
 
     class Meta:
         """Configure model metadata."""

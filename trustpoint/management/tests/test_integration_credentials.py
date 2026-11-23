@@ -267,6 +267,9 @@ def test_smtp_settings_page_does_not_render_saved_password(client):
     SmtpEmailConfig.objects.create(password='stored-smtp-secret-938')
     user = get_user_model().objects.create_user(username='settings-reader', password='synthetic-password')
     client.force_login(user)
+    assert client.get(reverse('management:settings')).status_code == 403
+
+    user.role.permissions.add(Permission.objects.get(codename='manage_system_configuration'))
     response = client.get(reverse('management:settings'))
     assert response.status_code == 200
     assert b'stored-smtp-secret-938' not in response.content

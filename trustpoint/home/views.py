@@ -804,29 +804,42 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         cert_counts_by_issuing_ca = []
         try:
-            issuing_cas = (
-                CaModel.objects.filter(credential__isnull=False)
+            issuing_cas = [
+                (issuing_ca.unique_name, credential.certificate_id)
+                for issuing_ca in CaModel.objects.filter(
+                    credential__isnull=False, credential__certificate__isnull=False
+                )
                 .exclude(
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
+                .select_related('credential')
                 .order_by('unique_name')
-            )
+                if (credential := issuing_ca.credential) is not None and credential.certificate_id is not None
+            ]
+            # Count all issuers at once instead of running one count per CA.
+            ca_certificate_ids = {certificate_id for _, certificate_id in issuing_cas}
+            counts = {
+                row['issuer_id']: row['cert_count']
+                for row in self._apply_created_at_date_range(
+                    CertificateModel.objects.filter(issuer_id__in=ca_certificate_ids)
+                    .exclude(pk__in=ca_certificate_ids)
+                    .filter(
+                        Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
+                        credential_set__issued_credential__isnull=False,
+                    ),
+                    start_date,
+                    end_date,
+                )
+                .values('issuer_id')
+                .annotate(cert_count=Count('pk', distinct=True))
+            }
 
             cert_counts_by_issuing_ca = [
                 {
-                    'ca_name': issuing_ca.unique_name,
-                    'cert_count': self._apply_created_at_date_range(
-                        issuing_ca.get_issued_certificates().filter(
-                            Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
-                            credential_set__issued_credential__isnull=False,
-                        ),
-                        start_date,
-                        end_date,
-                    )
-                    .distinct()
-                    .count(),
+                    'ca_name': ca_name,
+                    'cert_count': counts.get(certificate_id, 0),
                 }
-                for issuing_ca in issuing_cas
+                for ca_name, certificate_id in issuing_cas
             ]
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'

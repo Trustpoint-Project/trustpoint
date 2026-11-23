@@ -135,8 +135,12 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
         context['can_manage_account_security'] = context['can_change_password'] or self.request.user.has_perm(
             AppPermissions.MANAGE_USERS
         )
-        context['failed_login_blocked'] = bool(profile_user.blocked_by_failed_logins)
-        context['can_unblock_failed_login'] = profile_user.blocked_by_failed_logins and self.request.user.has_perm(
+        locked_until = profile_user.failed_login_locked_until
+        failed_login_blocked = bool(
+            profile_user.blocked_by_failed_logins or (locked_until is not None and locked_until > timezone.now())
+        )
+        context['failed_login_blocked'] = failed_login_blocked
+        context['can_unblock_failed_login'] = failed_login_blocked and self.request.user.has_perm(
             AppPermissions.MANAGE_USERS
         )
         context['certificate_authentication_enabled'] = CertificateAuthenticationConfig.objects.filter(
@@ -162,13 +166,20 @@ class TrustpointProfileView(LoginRequiredMixin, UpdateView[TrustpointUser, Trust
             self.object = self.get_object()
             if not request.user.has_perm(AppPermissions.MANAGE_USERS):
                 raise PermissionDenied
-            if self.object.blocked_by_failed_logins:
+            locked_until = self.object.failed_login_locked_until
+            if self.object.blocked_by_failed_logins or (locked_until is not None and locked_until > timezone.now()):
                 with transaction.atomic():
                     self.object.is_active = True
                     self.object.failed_login_attempts = 0
                     self.object.blocked_by_failed_logins = False
+                    self.object.failed_login_locked_until = None
                     self.object.save(
-                        update_fields=['is_active', 'failed_login_attempts', 'blocked_by_failed_logins'],
+                        update_fields=[
+                            'is_active',
+                            'failed_login_attempts',
+                            'blocked_by_failed_logins',
+                            'failed_login_locked_until',
+                        ],
                     )
                     resolve_operational_issue(f'ACCOUNT_LOCKED_{self.object.pk}')
                 messages.success(request, gettext('The user has been unblocked and can log in again.'))
@@ -327,7 +338,10 @@ class UserProfileCertificateAuthenticationView(UserProfileMixin, LoggerMixin, Fo
                     additional_certificates=[issuing_certificate] if issuing_certificate else [],
                 )
                 try:
-                    pkcs12_data = credential.as_pkcs12(friendly_name=identifier.encode('utf-8'))
+                    pkcs12_data = credential.as_pkcs12(
+                        password=form.cleaned_data['p12_password'].encode('utf-8'),
+                        friendly_name=identifier.encode('utf-8'),
+                    )
                 except TypeError as exc:
                     raise ValidationError(str(exc)) from exc
                 certificate_model = CertificateModel.save_certificate(certificate)
@@ -452,7 +466,7 @@ class UserProfilePasswordChangeView(UserProfileMixin, PasswordChangeView):
 
 
 class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswordSetForm]):
-    """Allow users with MANAGE_USERS to set another human user's password."""
+    """Allow user managers to set a non-administrator human user's password."""
 
     template_name = 'users/profile_form.html'
     form_class = TrustpointPasswordSetForm
@@ -464,6 +478,9 @@ class ManagedUserPasswordChangeView(UserProfileMixin, FormView[TrustpointPasswor
         if not request.user.is_authenticated:
             return self.handle_no_permission()
         if not request.user.has_perm(AppPermissions.MANAGE_USERS):
+            raise PermissionDenied
+        if not request.user.is_superuser and self.get_target_user().is_superuser:
+            # Resetting an administrator's password would be equivalent to becoming that administrator.
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 

@@ -77,6 +77,7 @@ DEPLOYMENT_DEFAULTS = {
     'TRUSTPOINT_HSM_ROOT': '/var/lib/trustpoint/hsm',
     'TRUSTPOINT_BOOTSTRAP_DB_PATH': '/var/lib/trustpoint/bootstrap/bootstrap.sqlite3',
     'TRUSTPOINT_SERVICE_ROLE': 'web',
+    'TRUSTPOINT_STOP_GRACE_SECONDS': '8',
     'UV_CACHE_DIR': '/run/trustpoint/uv-cache',
     'UV_NO_CACHE': '1',
     'WWW_DATA_HOME': '/run/trustpoint/home',
@@ -96,7 +97,6 @@ PRIVILEGED_SCRIPTS = frozenset(
         'update_tls.sh',
         'update_tls_nginx.sh',
         'install_pkcs11_assets.sh',
-        'wizard_restore.sh',
     }
 )
 
@@ -317,7 +317,8 @@ def run_application(job: str) -> None:
             '--id',
             os.environ.get('WORKFLOWS2_WORKER_ID', os.uname().nodename),
             '--lease',
-            os.environ.get('WORKFLOWS2_WORKER_LEASE', '30'),
+            # Must exceed the 300 s maximum webhook step, or live jobs look crashed.
+            os.environ.get('WORKFLOWS2_WORKER_LEASE', '360'),
             '--batch',
             os.environ.get('WORKFLOWS2_WORKER_BATCH', '10'),
             '--sleep',
@@ -328,7 +329,7 @@ def run_application(job: str) -> None:
             '--chdir',
             str(APP_DIR / 'trustpoint'),
             '--bind',
-            f'0.0.0.0:{os.environ["TRUSTPOINT_OPERATIONAL_GUNICORN_PORT"]}',
+            f'127.0.0.1:{os.environ["TRUSTPOINT_OPERATIONAL_GUNICORN_PORT"]}',
             '--workers',
             '4',
             '--timeout',
@@ -342,7 +343,7 @@ def run_application(job: str) -> None:
     }
     commands['web'] = [*commands['gunicorn']]
     bind_index = commands['web'].index('--bind') + 1
-    commands['web'][bind_index] = f'0.0.0.0:{os.environ["TRUSTPOINT_BOOTSTRAP_GUNICORN_PORT"]}'
+    commands['web'][bind_index] = f'127.0.0.1:{os.environ["TRUSTPOINT_BOOTSTRAP_GUNICORN_PORT"]}'
     if job not in commands:
         msg = 'Unsupported application operation.'
         raise ValueError(msg)
@@ -371,6 +372,9 @@ def prepare_bootstrap_storage(deployment: dict[str, str]) -> None:
                 child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
                 os.close(descriptor)
                 descriptor = child
+            if directory.name != 'bootstrap':
+                msg = 'Bootstrap storage must use a dedicated "bootstrap" directory.'
+                raise ValueError(msg)
             os.fchown(descriptor, account.pw_uid, account.pw_gid)
             os.fchmod(descriptor, 0o750)
             if directory != database.parent:

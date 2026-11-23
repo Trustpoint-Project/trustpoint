@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlencode
 
+from django.core.exceptions import FieldError
 from django.db import transaction
 from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -24,6 +25,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
@@ -148,7 +150,10 @@ class CertificateTableView(
         base_qs = self.get_base_queryset()
         filtered_qs = self.apply_filters(base_qs)
         sort_param = getattr(self, 'ordering', None) or self.default_sort_param
-        return filtered_qs.order_by(sort_param)
+        try:
+            return filtered_qs.order_by(sort_param)
+        except FieldError:
+            return filtered_qs.order_by(self.default_sort_param)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add filter state metadata required by the certificates table UI."""
@@ -264,7 +269,7 @@ class IssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
         if not pk:
             raise Http404
 
-        certificate_serializer = CertificateModel.objects.get(pk=pk).get_certificate_serializer()
+        certificate_serializer = get_object_or_404(CertificateModel, pk=pk).get_certificate_serializer()
         file_bytes = certificate_serializer.as_pem()
 
         response = HttpResponse(file_bytes, content_type=CertificateFormat.PEM.mime_type)
@@ -321,7 +326,7 @@ class CertificateDownloadView(CertificatesContextMixin, DetailView[CertificateMo
         except Exception as exception:
             raise Http404 from exception
 
-        certificate_model = CertificateModel.objects.get(pk=pk)
+        certificate_model = get_object_or_404(CertificateModel, pk=pk)
         file_name = self.kwargs.get('file_name', None)
         if not file_name:
             if certificate_model.common_name:
@@ -419,14 +424,9 @@ class CertificateMultipleDownloadView(
             raise Http404 from exception
 
         data_to_archive = {}
-        for i, certificate_model in enumerate(self.queryset):
-            # Generate filename with certificate common name if available
-            if certificate_model.common_name:
-                # Sanitize common name for filename (replace spaces and special chars with underscores)
-                common_name_safe = ''.join(c if c.isalnum() else '_' for c in certificate_model.common_name)
-                file_key = f'{common_name_safe}'
-            else:
-                file_key = f'certificate-{i}'
+        for certificate_model in self.queryset:
+            # The pk suffix keeps certificates with the same common name from overwriting each other.
+            file_key = certificate_filename(certificate_model, file_format_enum.file_extension)
             data_to_archive[file_key] = certificate_model.get_certificate_serializer().as_format(file_format_enum)
 
         file_bytes = Archiver.archive(data_to_archive, archive_format_enum)
@@ -479,6 +479,7 @@ class CertificateViewSet(
     ).order_by('-created_at')
     serializer_class = CertificateSerializer
     permission_classes = (IsAuthenticated,)
+    pagination_class = PageNumberPagination
     filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
@@ -502,6 +503,15 @@ class CertificateViewSet(
             AppPermissions.MANAGE_TRUSTSTORES
         ):
             raise PermissionDenied
+        if instance.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+            msg = 'Revoked certificates cannot be deleted; the CRL entry would be lost.'
+            raise ValidationError(msg)
+        if (
+            instance.certificate_status == CertificateModel.CertificateStatus.OK
+            and instance.credential_set.filter(issued_credential__isnull=False).exists()
+        ):
+            msg = 'Issued certificates cannot be deleted. Revoke them first.'
+            raise ValidationError(msg)
         super().perform_destroy(instance)
 
     def _download_certificates(

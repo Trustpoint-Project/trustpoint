@@ -2,9 +2,21 @@ name: Tests / Docker Compose
 
 on:
   pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
   push:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -26,6 +38,15 @@ jobs:
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
+
+      - name: Test nginx TLS channel binding
+        run: |
+          docker compose exec -T trustpoint env \
+            NGINX_BINARY=/usr/sbin/nginx \
+            NGINX_MODULE=/usr/lib/nginx/modules/ngx_http_trustpoint_tls_binding_module.so \
+            TLS_CERT=/etc/trustpoint/tls/nginx-tls-server-cert.pem \
+            TLS_KEY=/etc/trustpoint/tls/nginx-tls-server-key.key \
+            bash /etc/trustpoint/nginx/tls-binding/check_binding.sh
 
       - name: Test Home Page with curl (self-signed HTTPS)
         run: |

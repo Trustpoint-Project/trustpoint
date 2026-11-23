@@ -5,21 +5,37 @@
 
 from __future__ import annotations
 
+import logging
 import threading
+import time
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from workflows2.engine.executor import MAX_WEBHOOK_TIMEOUT_SECONDS
 from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.transitions import WorkflowInstanceTransitionService, save_instance_status
 
 if TYPE_CHECKING:
     from workflows2.services.runtime import WorkflowRuntimeService
+
+# A lease shorter than the longest step recovers jobs that are still running.
+DEFAULT_LEASE_SECONDS = MAX_WEBHOOK_TIMEOUT_SECONDS + 60
+
+logger = logging.getLogger(__name__)
+
+# Mechanical job rows are kept only long enough to debug recent runs.
+JOB_RETENTION_DAYS = 30
+JOB_PURGE_INTERVAL_SECONDS = 3600
+APPROVAL_EXPIRY_INTERVAL_SECONDS = 30
+_last_purge_at: float | None = None
+_last_approval_expiry_at: float | None = None
 
 
 @dataclass(frozen=True)
@@ -41,7 +57,7 @@ class Workflow2DbWorker:
         *,
         runtime: WorkflowRuntimeService,
         worker_id: str,
-        lease_seconds: int = 30,
+        lease_seconds: int = DEFAULT_LEASE_SECONDS,
         batch_limit: int = 1,
         heartbeat_enabled: bool = True,
     ) -> None:
@@ -63,11 +79,9 @@ class Workflow2DbWorker:
         # "database is locked". For inline drain we also disable it explicitly.
         self.heartbeat_enabled = bool(heartbeat_enabled) and (connection.vendor != 'sqlite')
 
-    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread:
+    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread | None:
         if not self.heartbeat_enabled:
-            t = threading.Thread(target=lambda: None, daemon=True)
-            t.start()
-            return t
+            return None
 
         # renew at half the lease; never less than 1s
         interval = max(1.0, self.lease_seconds / 2)
@@ -82,9 +96,11 @@ class Workflow2DbWorker:
         t.start()
         return t
 
-    def tick(self) -> WorkerStats:
-        """Process up to one batch of queued jobs."""
+    def tick(self, *, run_id: str | None = None) -> WorkerStats:
+        """Process up to one batch of queued jobs, optionally scoped to one run."""
         recovered = self._recover_stale_running_jobs()
+        self._purge_old_jobs()
+        self._expire_due_approvals()
 
         claimed = 0
         processed = 0
@@ -92,15 +108,15 @@ class Workflow2DbWorker:
         skipped = 0
 
         for _ in range(self.batch_limit):
-            job = self._claim_one()
+            job = self._claim_one(run_id=run_id)
             if job is None:
                 break
             claimed += 1
 
             _ok, made_next, did_skip = self._process_job(job)
             processed += 1
-            created_next += (1 if made_next else 0)
-            skipped += (1 if did_skip else 0)
+            created_next += 1 if made_next else 0
+            skipped += 1 if did_skip else 0
 
         return WorkerStats(
             claimed=claimed,
@@ -109,6 +125,40 @@ class Workflow2DbWorker:
             skipped=skipped,
             recovered=recovered,
         )
+
+    def _expire_due_approvals(self) -> None:
+        """Expire due approvals at most once per interval for this process."""
+        global _last_approval_expiry_at  # noqa: PLW0603 - one throttle per process, not per worker instance
+        now = time.monotonic()
+        if _last_approval_expiry_at is not None and now - _last_approval_expiry_at < APPROVAL_EXPIRY_INTERVAL_SECONDS:
+            return
+        _last_approval_expiry_at = now
+        from workflows2.services.runtime import expire_pending_approvals  # noqa: PLC0415
+
+        try:
+            expire_pending_approvals()
+        except Exception:
+            logger.exception('Failed to expire due Workflow 2 approvals.')
+
+    def _purge_old_jobs(self) -> None:
+        """Delete finished job rows past the retention window, at most once per interval."""
+        global _last_purge_at  # noqa: PLW0603 - one throttle per process, not per worker instance
+        now = time.monotonic()
+        if _last_purge_at is not None and now - _last_purge_at < JOB_PURGE_INTERVAL_SECONDS:
+            return
+        _last_purge_at = now
+        cutoff = timezone.now() - timedelta(days=JOB_RETENTION_DAYS)
+        try:
+            Workflow2Job.objects.filter(
+                status__in=[
+                    Workflow2Job.STATUS_DONE,
+                    Workflow2Job.STATUS_CANCELLED,
+                    Workflow2Job.STATUS_FAILED,
+                ],
+                updated_at__lt=cutoff,
+            ).delete()
+        except Exception:
+            logger.exception('Failed to purge old Workflow 2 jobs.')
 
     @transaction.atomic
     def heartbeat(self, job_id: str) -> bool:
@@ -188,7 +238,7 @@ class Workflow2DbWorker:
         return self.retry_instance(instance=instance)
 
     @transaction.atomic
-    def _claim_one(self) -> Workflow2Job | None:
+    def _claim_one(self, *, run_id: str | None = None) -> Workflow2Job | None:
         now = timezone.now()
         lease_until = now + timedelta(seconds=self.lease_seconds)
 
@@ -201,6 +251,8 @@ class Workflow2DbWorker:
             .filter(Q(locked_until__isnull=True) | Q(locked_until__lte=now))
             .order_by('run_after', 'created_at')
         )
+        if run_id:
+            qs = qs.filter(instance__run_id=UUID(str(run_id)))
 
         job = qs.first()
         if job is None:
@@ -247,6 +299,8 @@ class Workflow2DbWorker:
 
             # Important: execute step OUTSIDE the outer atomic to reduce SQLite lock duration.
             # run_one_step() has its own transaction handling and failure persistence.
+            # shortcut: a crash after the side effect but before the step row is written
+            # can still repeat the step; add a pre-write marker if that ever matters.
             step_res = self.runtime.run_one_step(inst)
 
             with transaction.atomic():
@@ -268,7 +322,8 @@ class Workflow2DbWorker:
             return True, created_next, skipped
         finally:
             stop_evt.set()
-            hb_thread.join(timeout=1.0)
+            if hb_thread is not None:
+                hb_thread.join(timeout=1.0)
 
     @transaction.atomic
     def _mark_done(self, job: Workflow2Job) -> None:

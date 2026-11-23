@@ -10,6 +10,19 @@ from discovery.models import DiscoveredDevice, DiscoveryPort, DiscoveryScan
 from discovery.scanner import OTScanner
 from pki.models.certificate import CertificateModel
 
+_WRITE_BATCH_SIZE = 200
+
+
+def _flush_batch(batch: list[DiscoveredDevice]) -> None:
+    """Write one batch of hosts with a single upsert statement."""
+    with transaction.atomic():
+        DiscoveredDevice.objects.bulk_create(
+            batch,
+            update_conflicts=True,
+            unique_fields=['ip_address'],
+            update_fields=['hostname', 'open_ports', 'ssl_info', 'certificate_record', 'last_seen'],
+        )
+
 
 def run_scan(scan_id: str) -> None:
     """Claim one queued scan, honor shared cancellation, and release its state."""
@@ -27,27 +40,32 @@ def run_scan(scan_id: str) -> None:
         ports = list(DiscoveryPort.objects.values_list('port_number', flat=True))
         scanner = OTScanner(target_ports=ports)
         results = scanner.scan_network(state.start_ip, state.end_ip, should_stop=should_stop)
+        batch: list[DiscoveredDevice] = []
         for result in results:
-            with transaction.atomic():
-                if not active.select_for_update().filter(stop_pending=False).exists():
-                    break
-                pki_cert = None
-                ssl_info = result.get('ssl_info')
-                if ssl_info and 'cert_object' in ssl_info:
-                    try:
-                        cert_obj = ssl_info.pop('cert_object')
-                        with transaction.atomic():
-                            pki_cert = CertificateModel.save_certificate(cert_obj)
-                    except Exception:  # noqa: BLE001, S110
-                        pass
-                DiscoveredDevice.objects.update_or_create(
+            if should_stop():
+                break
+            pki_cert = None
+            ssl_info = result.get('ssl_info')
+            if ssl_info and 'cert_object' in ssl_info:
+                try:
+                    cert_obj = ssl_info.pop('cert_object')
+                    with transaction.atomic():
+                        pki_cert = CertificateModel.save_certificate(cert_obj)
+                except Exception:  # noqa: BLE001, S110
+                    pass
+            batch.append(
+                DiscoveredDevice(
                     ip_address=result['ip'],
-                    defaults={
-                        'hostname': result.get('hostname') or '',
-                        'open_ports': result['ports'],
-                        'ssl_info': ssl_info,
-                        'certificate_record': pki_cert,
-                    },
+                    hostname=result.get('hostname') or '',
+                    open_ports=result['ports'],
+                    ssl_info=ssl_info,
+                    certificate_record=pki_cert,
                 )
+            )
+            if len(batch) >= _WRITE_BATCH_SIZE:
+                _flush_batch(batch)
+                batch.clear()
+        if batch:
+            _flush_batch(batch)
     finally:
-        active.update(is_running=False, stop_pending=False, started_at=None)
+        active.update(is_running=False, stop_pending=False, claimed_at=None, started_at=None)

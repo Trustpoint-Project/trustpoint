@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import io
-import logging
 import os
 import secrets
 from pathlib import Path
@@ -35,8 +34,6 @@ from users.models import BuiltinRole
 if TYPE_CHECKING:
     from django.db.backends.base.schema import BaseDatabaseSchemaEditor
     from django.db.models import Model
-
-logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -117,7 +114,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _create_bootstrap_login(output: CommandOutputWrapper) -> None:
-        """Create or rotate the temporary bootstrap login and log the password."""
+        """Create or rotate the temporary bootstrap login and print the password to the console."""
         username = getattr(settings, 'TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
         password = secrets.token_urlsafe(8)
         admin_group = Command._ensure_admin_group()
@@ -140,7 +137,6 @@ class Command(BaseCommand):
             f'Trustpoint bootstrap password: {password}',
         )
         for message in messages:
-            logger.warning(message)
             output.write(message)
 
     @staticmethod

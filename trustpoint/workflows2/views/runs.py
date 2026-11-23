@@ -14,6 +14,7 @@ from django.db import transaction
 from django.db.models import Count, Q, TextField
 from django.db.models.functions import Cast
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2RunListView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """List workflow runs with filtering and status summaries."""
 
     page_category = 'workflows2'
@@ -191,7 +192,7 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
         return 'text-bg-light text-dark'
 
 
-class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
+class Workflow2RunDetailView(WF2DefPermReqMixin, PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow run with its instances and event context."""
 
     page_category = 'workflows2'
@@ -339,8 +340,9 @@ class Workflow2RunCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
         run = get_object_or_404(Workflow2Run, id=run_id)
 
         with transaction.atomic():
+            # Lock instances before the run, matching the worker's instance -> run order.
+            insts = list(Workflow2Instance.objects.select_for_update().filter(run_id=run.id))
             run = Workflow2Run.objects.select_for_update().get(id=run.id)
-            insts = list(Workflow2Instance.objects.select_for_update().filter(run=run))
 
             Workflow2Job.objects.filter(
                 instance__in=insts,
@@ -350,6 +352,10 @@ class Workflow2RunCancelView(WF2DefPermReqMixin, LoginRequiredMixin, View):
                 locked_until=None,
                 locked_by='',
             )
+            Workflow2Approval.objects.filter(
+                instance__in=insts,
+                status=Workflow2Approval.STATUS_PENDING,
+            ).update(status=Workflow2Approval.STATUS_EXPIRED, decided_at=timezone.now())
 
             for inst in insts:
                 if inst.status not in {

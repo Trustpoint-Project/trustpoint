@@ -38,9 +38,34 @@ def test_secure_cookie_defaults_follow_container_mode():
     assert settings.CSRF_COOKIE_SECURE is settings.DOCKER_CONTAINER
 
 
-def test_debug_setting():
-    """Ensure DEBUG tracks the configured container mode."""
-    assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
+def test_debug_setting(monkeypatch):
+    """Ensure DEBUG is off unless explicitly requested."""
+    monkeypatch.delenv('TRUSTPOINT_DEBUG', raising=False)
+    importlib.reload(settings)
+    try:
+        assert settings.DEBUG is False
+        monkeypatch.setenv('TRUSTPOINT_DEBUG', '1')
+        importlib.reload(settings)
+        assert settings.DEBUG is True
+    finally:
+        monkeypatch.delenv('TRUSTPOINT_DEBUG', raising=False)
+        importlib.reload(settings)
+
+
+def test_container_mode_comes_from_environment(monkeypatch, tmp_path):
+    """The image declares container mode instead of editing source at build time."""
+    secret_file = tmp_path / 'django_secret_key'
+    secret_file.write_text('x' * 64, encoding='utf-8')
+    monkeypatch.setenv('TRUSTPOINT_CONTAINER', '1')
+    monkeypatch.setenv('DJANGO_SECRET_KEY_FILE', str(secret_file))
+    importlib.reload(settings)
+    try:
+        assert settings.DOCKER_CONTAINER is True
+        assert settings.DEBUG is False
+    finally:
+        monkeypatch.delenv('TRUSTPOINT_CONTAINER', raising=False)
+        monkeypatch.delenv('DJANGO_SECRET_KEY_FILE', raising=False)
+        importlib.reload(settings)
 
 
 def test_tls_addresses_not_set_keeps_default_hosts_and_origins(monkeypatch):
@@ -180,49 +205,6 @@ def test_env_bool_treats_other_values_as_false(monkeypatch):
         assert settings._env_bool('POSTGRESQL', default=True) is False
 
 
-def test_env_value_prefers_direct_environment_variable(monkeypatch, tmp_path):
-    """Ensure direct environment variables win over Docker secret files."""
-    secret_file = tmp_path / 'db_user'
-    secret_file.write_text('secret-user\n')
-    monkeypatch.setenv('DATABASE_USER', 'env-user')
-    monkeypatch.setenv('DATABASE_USER_FILE', str(secret_file))
-
-    assert settings._env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE') == 'env-user'
-
-
-def test_env_value_reads_docker_secret_file(monkeypatch, tmp_path):
-    """Ensure settings can be loaded from Docker secret files."""
-    secret_file = tmp_path / 'db_password'
-    secret_file.write_text('secret-password\n')
-    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
-    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(secret_file))
-
-    assert (
-        settings._env_value(
-            'DATABASE_PASSWORD',
-            'testing321',
-            file_var='DATABASE_PASSWORD_FILE',
-        )
-        == 'secret-password'
-    )
-
-
-def test_env_value_falls_back_when_secret_file_is_unreadable(monkeypatch, tmp_path):
-    """Ensure unreadable Docker secret paths do not break settings import."""
-    missing_file = tmp_path / 'missing_secret'
-    monkeypatch.delenv('DATABASE_PASSWORD', raising=False)
-    monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(missing_file))
-
-    assert (
-        settings._env_value(
-            'DATABASE_PASSWORD',
-            'testing321',
-            file_var='DATABASE_PASSWORD_FILE',
-        )
-        == 'testing321'
-    )
-
-
 def test_database_settings(monkeypatch):
     """Ensure operational database settings are explicit and do not probe availability."""
     monkeypatch.setenv('TRUSTPOINT_PHASE', 'operational')
@@ -341,6 +323,14 @@ def test_public_paths():
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
+
+
+def test_template_context_processors_include_alerts_and_workflow_counts():
+    """Global UI context processors must be registered for templates to receive them."""
+    processors = settings.TEMPLATES[0]['OPTIONS']['context_processors']
+
+    assert 'management.context_processors.ui_config' in processors
+    assert 'workflows2.context_processors.waiting_counts' in processors
 
 
 def test_hsm_paths():

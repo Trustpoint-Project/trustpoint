@@ -90,6 +90,7 @@ class WorkflowRuntimeService:
         run: Any | None = None,
     ) -> Workflow2Instance:
         """Create a new workflow instance positioned at `workflow.start`."""
+        definition = Workflow2Definition.objects.select_for_update().get(pk=definition.pk)
         wf = (definition.ir_json or {}).get('workflow') or {}
         start = wf.get('start')
         if not isinstance(start, str) or not start:
@@ -134,11 +135,26 @@ class WorkflowRuntimeService:
     def _raise_runtime_type_error(message: str) -> None:
         raise TypeError(message)
 
-    def _persist_run_one_step_failure(self, instance: Workflow2Instance, exc: Exception) -> None:
+    def _persist_run_one_step_failure(
+        self,
+        instance: Workflow2Instance,
+        exc: Exception,
+        *,
+        expected_run_count: int | None = None,
+        expected_step_id: str | None = None,
+    ) -> None:
         err = f'{type(exc).__name__}: {exc}'
 
         with transaction.atomic():
             instance = Workflow2Instance.objects.select_for_update().select_related('definition').get(id=instance.id)
+            if (
+                WorkflowInstanceTransitionService.is_terminal(instance.status)
+                or instance.status in WorkflowInstanceTransitionService.WAITING_STATUSES
+                or (expected_run_count is not None and int(instance.run_count) != expected_run_count)
+                or (expected_step_id is not None and instance.current_step != expected_step_id)
+            ):
+                # Another actor advanced or stopped the instance while the step ran.
+                return
 
             ir = instance.definition.ir_json if instance.definition_id else {}
             wf = (ir or {}).get('workflow') or {}
@@ -457,8 +473,10 @@ class WorkflowRuntimeService:
         else:
             instance.current_step = ''
 
-    def run_one_step(self, instance: Workflow2Instance) -> StepResult:  # noqa: PLR0915
+    def run_one_step(self, instance: Workflow2Instance) -> StepResult:  # noqa: C901, PLR0911, PLR0915
         """Execute exactly one workflow step and persist the checkpoint."""
+        expected_run_count: int | None = None
+        expected_step_id: str | None = None
         try:
             with transaction.atomic():
                 instance = (
@@ -530,14 +548,31 @@ class WorkflowRuntimeService:
 
                 ctx = RuntimeContext(event=instance.event_json, vars=dict(instance.vars_json))
                 run_index = int(instance.run_count) + 1
+                expected_run_count = run_index - 1
+                expected_step_id = step_id
 
-                run = self.executor.execute_single_step(
-                    ir=ir,
-                    step_id=step_id,
-                    run_index=run_index,
-                    ctx=ctx,
-                    transitions=transitions.get(step_id),
-                )
+            # Run the step outside the row lock: webhooks, email and HSM work must
+            # not block approvals or the next worker for seconds or minutes.
+            run = self.executor.execute_single_step(
+                ir=ir,
+                step_id=step_id,
+                run_index=run_index,
+                ctx=ctx,
+                transitions=transitions.get(step_id),
+            )
+
+            with transaction.atomic():
+                current = Workflow2Instance.objects.select_for_update().select_related('definition').get(id=instance.id)
+                if (
+                    WorkflowInstanceTransitionService.is_terminal(current.status)
+                    or current.status in WorkflowInstanceTransitionService.WAITING_STATUSES
+                    or int(current.run_count) != run_index - 1
+                    or current.current_step != step_id
+                ):
+                    # Another actor advanced or stopped the instance while the step ran.
+                    # Keep its state; do not replay this result over it.
+                    return StepResult(run=run, terminal=True)
+                instance = current
 
                 Workflow2StepRun.objects.create(
                     instance=instance,
@@ -584,7 +619,12 @@ class WorkflowRuntimeService:
         except _NonRunnableInstanceError:
             raise
         except Exception as e:
-            self._persist_run_one_step_failure(instance, e)
+            self._persist_run_one_step_failure(
+                instance,
+                e,
+                expected_run_count=expected_run_count,
+                expected_step_id=expected_step_id,
+            )
             raise
 
     def resolve_approval(
@@ -641,11 +681,18 @@ class WorkflowRuntimeService:
         if isinstance(timeout_seconds, int) and timeout_seconds > 0:
             expires_at = timezone.now() + timedelta(seconds=timeout_seconds)
 
-        obj, _ = Workflow2Approval.objects.get_or_create(
+        obj, created = Workflow2Approval.objects.get_or_create(
             instance=instance,
             step_id=step_id,
             defaults={'status': Workflow2Approval.STATUS_PENDING, 'expires_at': expires_at},
         )
+        if not created and obj.status != Workflow2Approval.STATUS_PENDING:
+            obj.status = Workflow2Approval.STATUS_PENDING
+            obj.expires_at = expires_at
+            obj.decided_at = None
+            obj.decided_by = ''
+            obj.comment = ''
+            obj.save(update_fields=['status', 'expires_at', 'decided_at', 'decided_by', 'comment'])
         return obj
 
     def _recompute_run_if_present(self, instance: Workflow2Instance) -> None:
@@ -667,3 +714,52 @@ class WorkflowRuntimeService:
         run.finalized = WorkflowRunTransitionService.is_finalized(run.status)
         run.save(update_fields=['status', 'finalized', 'updated_at'])
         CmpTransactionState.sync_from_workflow2_run(run=run)
+
+
+def expire_pending_approvals(*, limit: int = 100) -> None:
+    """Expire a bounded batch of due approvals and continue their instances once each.
+
+    This runs from the worker as well as the approval pages, so a configured
+    timeout fires even when nobody opens the UI. The limit keeps a page load
+    from executing a large batch of workflows after downtime.
+    """
+    now = timezone.now()
+    approval_ids = list(
+        Workflow2Approval.objects.filter(
+            status=Workflow2Approval.STATUS_PENDING,
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        )
+        .order_by('expires_at')
+        .values_list('id', flat=True)[:limit]
+    )
+    if not approval_ids:
+        return
+
+    from workflows2.engine.executor import WorkflowExecutor  # noqa: PLC0415
+    from workflows2.services.dispatch import WorkflowDispatchService  # noqa: PLC0415
+
+    executor = WorkflowExecutor()
+    runtime = WorkflowRuntimeService(executor=executor)
+    dispatch = WorkflowDispatchService(executor=executor)
+    for approval_id in approval_ids:
+        with transaction.atomic():
+            approval = (
+                Workflow2Approval.objects.select_for_update()
+                .select_related('instance', 'instance__run')
+                .get(id=approval_id)
+            )
+            if approval.status != Workflow2Approval.STATUS_PENDING:
+                continue
+
+            approval.status = Workflow2Approval.STATUS_EXPIRED
+            approval.decided_at = now
+            approval.decided_by = ''
+            approval.comment = ''
+            approval.save(update_fields=['status', 'decided_at', 'decided_by', 'comment'])
+
+            inst = approval.instance
+            if inst.status == Workflow2Instance.STATUS_AWAITING and inst.current_step == approval.step_id:
+                continued = runtime.record_approval_timeout_locked(inst=inst, approval=approval)
+                if continued:
+                    dispatch.continue_instance(instance=inst)

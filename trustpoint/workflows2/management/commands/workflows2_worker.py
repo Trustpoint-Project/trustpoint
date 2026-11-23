@@ -16,7 +16,7 @@ from django.utils import timezone
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2WorkerHeartbeat
 from workflows2.services.runtime import WorkflowRuntimeService
-from workflows2.services.worker import Workflow2DbWorker
+from workflows2.services.worker import DEFAULT_LEASE_SECONDS, Workflow2DbWorker
 
 HEARTBEAT_INTERVAL_SECONDS = 5
 
@@ -30,7 +30,7 @@ class Command(BaseCommand):
         """Register CLI arguments for the workflows2 worker."""
         parser.add_argument('--once', action='store_true', help='Run one tick and exit (debug).')
         parser.add_argument('--id', type=str, default='', help='Worker id (default: hostname).')
-        parser.add_argument('--lease', type=int, default=30, help='Lease seconds (legacy alias).')
+        parser.add_argument('--lease', type=int, default=DEFAULT_LEASE_SECONDS, help='Lease seconds (legacy alias).')
         parser.add_argument('--batch', type=int, default=10, help='Batch size (legacy alias).')
         parser.add_argument('--sleep', type=float, default=1.0, help='Sleep between ticks.')
         parser.add_argument('--lease-seconds', type=int, default=None, help='Job lease duration.')
@@ -81,7 +81,7 @@ class Command(BaseCommand):
             'workflows2_workflow2workerheartbeat',
         ]
         self.stdout.write(f'[workflows2_worker] worker_id={worker_id}')
-        self.stdout.write(f"[workflows2_worker] waiting for tables: {', '.join(required_tables)} ...")
+        self.stdout.write(f'[workflows2_worker] waiting for tables: {", ".join(required_tables)} ...')
         self._wait_for_tables(tables=required_tables, timeout_seconds=wait_seconds)
         self.stdout.write(self.style.SUCCESS('[workflows2_worker] migrations ready.'))
 
@@ -116,11 +116,7 @@ class Command(BaseCommand):
             try:
                 stats = worker.tick()
             except Exception as exc:  # noqa: BLE001
-                self.stderr.write(
-                    self.style.ERROR(
-                        f'[workflows2_worker] tick() crashed: {type(exc).__name__}: {exc}'
-                    )
-                )
+                self.stderr.write(self.style.ERROR(f'[workflows2_worker] tick() crashed: {type(exc).__name__}: {exc}'))
                 time.sleep(sleep_seconds)
                 continue
 

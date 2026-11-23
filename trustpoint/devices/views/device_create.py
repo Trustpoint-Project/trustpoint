@@ -229,6 +229,8 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
         Returns:
             The HTTP Response to be returned.
         """
+        if not self.request.user.has_perm(AppPermissions.MANAGE_DEVICES):
+            raise PermissionDenied
         try:
             self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
         except (ValidationError, ValueError) as exc:

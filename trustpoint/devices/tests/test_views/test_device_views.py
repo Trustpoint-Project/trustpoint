@@ -613,6 +613,23 @@ class TestOpcUaGdsPushCreateOnboardingView:
         assert device.ip_address == '192.168.1.100'
         assert device.opc_ua_gds_push_config.opc_server_port == 4840
 
+    def test_opcua_gds_push_create_requires_manage_devices(self, domain_instance: dict[str, Any]) -> None:
+        """A logged-in user without MANAGE_DEVICES cannot create a GDS Push device."""
+        user = get_user_model().objects.create_user(username='no-device-permission')
+        client = Client()
+        client.force_login(user)
+        post_data = {
+            'common_name': 'forbidden-gds-device',
+            'domain': domain_instance['domain'].pk,
+            'ip_address': '192.168.1.101',
+            'opc_server_port': 4840,
+        }
+
+        response = client.post(reverse('devices:devices_create_opc_ua_gds_push'), data=post_data)
+
+        assert response.status_code == HTTPStatus.FORBIDDEN
+        assert not DeviceModel.objects.filter(common_name='forbidden-gds-device').exists()
+
 
 @pytest.mark.django_db
 class TestDeviceCertificateLifecycleManagementSummaryView:
@@ -689,6 +706,22 @@ class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
         assert response.status_code == 200
         assert 'devices/credentials/certificate_lifecycle_management.html' in [t.name for t in response.templates]
         assert response.context['object'] == device
+
+    def test_opcua_gds_push_clm_post_requires_manage_devices(self, device_instance_onboarding: dict[str, Any]) -> None:
+        """A logged-in user without MANAGE_DEVICES cannot edit a GDS Push device."""
+        device = device_instance_onboarding['device']
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        device.save()
+        user = get_user_model().objects.create_user(username='no-clm-permission')
+        client = Client()
+        client.force_login(user)
+
+        url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
+        response = client.post(url, data={'common_name': 'hijacked-device'})
+
+        assert response.status_code == HTTPStatus.FORBIDDEN
+        device.refresh_from_db()
+        assert device.common_name != 'hijacked-device'
 
 
 @pytest.mark.django_db

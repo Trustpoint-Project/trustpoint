@@ -30,6 +30,7 @@ from rest_framework.response import Response
 from management.permissions import IsSuperUser
 from management.serializer.user import UserSerializer
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import UIConfig
 from trustpoint.views.base import ContextDataMixin, SortableTableMixin, SuperuserRequiredMixin
 from users.form import (
     TrustpointUserCreationForm,
@@ -68,10 +69,11 @@ class UserTableView(
     template_name = 'management/users/user_management.html'
     context_object_name = 'users'
     default_sort_param = 'username'
+    paginate_by = UIConfig.paginate_by
 
     def get_queryset(self) -> QuerySet[TrustpointUser]:
         """Return human users only."""
-        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN)
+        return TrustpointUser.objects.filter(account_type=TrustpointUser.AccountType.HUMAN).order_by('username')
 
 
 class UserCreateView(

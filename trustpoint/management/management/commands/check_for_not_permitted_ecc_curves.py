@@ -44,12 +44,19 @@ class Command(BaseCommand):
             spki_algorithm_oid=PublicKeyAlgorithmOid.ECC.dotted_string,
         )
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
+        notified_certificate_ids = set(
+            NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate__isnull=False).values_list(
+                'certificate_id', flat=True
+            )
+        )
 
         for cert in not_permitted_ecc_certificates.iterator():
-            if not any(failure.code == PolicyViolationCode.ECC_CURVE_BLOCKED
-                       for failure in evaluate_public_key(policy, stored_public_key_facts(cert))):
+            if not any(
+                failure.code == PolicyViolationCode.ECC_CURVE_BLOCKED
+                for failure in evaluate_public_key(policy, stored_public_key_facts(cert))
+            ):
                 continue
-            if not NotificationModel.objects.filter(event='WEAK_ECC_CURVE', certificate=cert).exists():
+            if cert.pk not in notified_certificate_ids:
                 message_data = {'common_name': cert.common_name, 'spki_ec_curve': cert.spki_ec_curve}
 
                 notification = NotificationModel.objects.create(
@@ -62,3 +69,4 @@ class Command(BaseCommand):
                     message_data=message_data,
                 )
                 notification.statuses.add(new_status)
+                notified_certificate_ids.add(cert.pk)

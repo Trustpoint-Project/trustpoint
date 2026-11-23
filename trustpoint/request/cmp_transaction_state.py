@@ -197,7 +197,7 @@ class CmpTransactionState:
         """Synchronize CMP transactions that are waiting on one workflows2 run."""
         run_id = getattr(run, 'id', None)
         run_status = str(run.status)
-        transaction_ids = list(
+        transactions = list(
             CmpTransactionModel.objects.filter(
                 backend=CmpTransactionModel.Backend.WORKFLOW2,
                 backend_reference=str(run_id),
@@ -205,11 +205,12 @@ class CmpTransactionState:
                     CmpTransactionModel.Status.WAITING,
                     CmpTransactionModel.Status.PROCESSING,
                 ],
-            ).values_list('pk', flat=True)
+            ).values_list('pk', 'backend', 'backend_reference', 'check_after_seconds')
         )
-        if not transaction_ids:
+        if not transactions:
             return
 
+        transaction_ids = [row[0] for row in transactions]
         request_decision = resolve_request_decision(run)
 
         if request_decision == Workflow2RequestDecision.CONTINUE:
@@ -221,18 +222,13 @@ class CmpTransactionState:
             return
 
         if request_decision == Workflow2RequestDecision.WAIT:
-            for transaction_pk in transaction_ids:
-                transaction_record = CmpTransactionModel.objects.only(
-                    'backend',
-                    'backend_reference',
-                    'check_after_seconds',
-                ).get(pk=transaction_pk)
+            for transaction_pk, backend, backend_reference, check_after_seconds in transactions:
                 CmpTransactionState.mark_waiting(
                     transaction_pk,
-                    backend=transaction_record.backend,
-                    backend_reference=transaction_record.backend_reference,
+                    backend=backend,
+                    backend_reference=backend_reference,
                     detail=CmpTransactionState._detail_for_pending_run_status(run_status),
-                    check_after_seconds=transaction_record.check_after_seconds,
+                    check_after_seconds=check_after_seconds,
                 )
             return
 

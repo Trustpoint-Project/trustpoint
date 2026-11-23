@@ -28,6 +28,17 @@ from crypto.models import (
 )
 from management.views.backend_configuration import BackendConfigurationPkcs11AssetDownloadView, BackendConfigurationView
 
+
+class _PermittedUser:
+    """Minimal authenticated user that grants the requested permission."""
+
+    is_authenticated = True
+
+    @staticmethod
+    def has_perm(_permission: str) -> bool:
+        return True
+
+
 class BackendConfigurationViewTest(TestCase):
     """Test suite for BackendConfigurationView."""
 
@@ -142,6 +153,7 @@ class BackendConfigurationViewTest(TestCase):
             )
 
             request = self.factory.get('/management/backend-configuration/pkcs11-assets/module/download/')
+            request.user = _PermittedUser()
             response = cast(
                 'FileResponse',
                 BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='module'),
@@ -172,6 +184,7 @@ class BackendConfigurationViewTest(TestCase):
             )
 
             request = self.factory.get('/management/backend-configuration/pkcs11-assets/provider-config/download/')
+            request.user = _PermittedUser()
             response = cast(
                 'FileResponse',
                 BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='provider-config'),
@@ -197,6 +210,7 @@ class BackendConfigurationViewTest(TestCase):
         )
 
         request = self.factory.get('/management/backend-configuration/pkcs11-assets/provider-config/download/')
+        request.user = _PermittedUser()
 
         with pytest.raises(Http404):
             BackendConfigurationPkcs11AssetDownloadView.as_view()(request, asset='provider-config')

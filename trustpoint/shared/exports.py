@@ -8,12 +8,12 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from django.db.models import Model, QuerySet
     from django.http import HttpRequest
@@ -75,24 +75,32 @@ class ExportConfig:
         return cls(columns=columns, filename=filename)
 
 
+class _Echo:
+    """Minimal file-like object that returns each written CSV row."""
+
+    def write(self, value: str) -> str:
+        """Return the written value unchanged."""
+        return value
+
+
 def generate_csv_response(
     queryset: QuerySet[Any],
     columns: list[ExportColumn],
     filename: str,
-) -> HttpResponse:
-    """Generate an HTTP response containing the queryset rows as a CSV file."""
+) -> StreamingHttpResponse:
+    """Stream the queryset rows as a CSV file without buffering the whole export."""
     timestamp = datetime.now(tz=timezone.utc).strftime('%Y%m%dT%H%M%SZ')  # noqa: UP017
     full_filename = f'tp_{filename}_{timestamp}.csv'
 
-    response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
+    def rows() -> Iterator[str]:
+        writer = csv.writer(_Echo())
+        # Preserve Excel's UTF-8 detection without buffering the response body.
+        yield '\ufeff' + writer.writerow([col.label for col in columns])
+        for obj in queryset.iterator():
+            yield writer.writerow([col.get_value(obj) for col in columns])
+
+    response = StreamingHttpResponse(rows(), content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{full_filename}"'
-
-    writer = csv.writer(response)
-    writer.writerow([col.label for col in columns])
-
-    for obj in queryset:
-        writer.writerow([col.get_value(obj) for col in columns])
-
     return response
 
 
@@ -133,7 +141,8 @@ class ExportMixin:
             msg = f'{self.__class__.__name__} has no get_queryset() method.'
             raise NotImplementedError(msg)
         queryset = get_queryset()
-        return generate_csv_response(queryset, config.columns, config.filename)
+        response = generate_csv_response(queryset, config.columns, config.filename)
+        return cast('HttpResponse', response)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Extend the template context with the export configuration."""

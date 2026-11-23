@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 
 
 _LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
+# Timestamps are needed only from the first and last entries, not the whole file.
+_LOG_DATE_SCAN_BYTES = 64 * 1024
+# The in-browser viewer shows the newest part of a rotated log, not all of it.
+_LOG_DETAIL_MAX_BYTES = 256 * 1024
 
 _CONTROL_CHAR_THRESHOLD = 32
 
@@ -121,15 +125,22 @@ def language(request: HttpRequest) -> HttpResponse:
 # ------------------------------------------------------- Logging ------------------------------------------------------
 
 
-class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromListMixin, ListView):  # type: ignore[type-arg,misc]
+class LoggingFilesTableView(  # type: ignore[misc]
+    UserPermissionRequiredMixin,
+    PageContextMixin,
+    LoggerMixin,
+    SortableTableFromListMixin,
+    ListView[Any],
+):
     """View to display all log files in the log directory in a table."""
 
     http_method_names = ('get',)
 
     template_name = 'management/logging/logging_files.html'
     context_object_name = 'log_files'
-    default_sort_param = 'updated_at'
+    default_sort_param = '-updated_at'
     paginate_by = None
+    permission_required = AppPermissions.VIEW_SYSTEM_LOGS
 
     page_category = 'management'
     page_name = 'logging'
@@ -138,50 +149,44 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     def _get_first_and_last_entry_date(
         log_file_path: Path,
     ) -> tuple[dt.datetime | None, dt.datetime | None]:
-        log_file = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
-
         date_regex = re.compile(r'\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\b')
-        matches = re.findall(date_regex, log_file)
-        if matches:
-            first_date = dt.datetime.strptime(matches[0], DATE_FORMAT).replace(tzinfo=dt.UTC)
-            last_date = dt.datetime.strptime(matches[-1], DATE_FORMAT).replace(tzinfo=dt.UTC)
-        else:
-            first_date = None
-            last_date = None
+        with log_file_path.open('rb') as log_file:
+            head = log_file.read(_LOG_DATE_SCAN_BYTES).decode('utf-8', errors='backslashreplace')
+            log_file.seek(0, os.SEEK_END)
+            size = log_file.tell()
+            if size > _LOG_DATE_SCAN_BYTES:
+                log_file.seek(-_LOG_DATE_SCAN_BYTES, os.SEEK_END)
+                tail = log_file.read().decode('utf-8', errors='backslashreplace')
+            else:
+                tail = head
 
+        head_matches = date_regex.findall(head)
+        tail_matches = date_regex.findall(tail) or head_matches
+        if not head_matches and not tail_matches:
+            return None, None
+
+        first_date = dt.datetime.strptime(head_matches[0], DATE_FORMAT).replace(tzinfo=dt.UTC) if head_matches else None
+        last_date = dt.datetime.strptime(tail_matches[-1], DATE_FORMAT).replace(tzinfo=dt.UTC) if tail_matches else None
         return first_date, last_date
-
-    @classmethod
-    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | dt.datetime | None]:
-        try:
-            log_file_path = _validate_log_filename(log_filename)
-        except Http404:
-            return {}
-
-        first_date, last_date = cls._get_first_and_last_entry_date(log_file_path)
-
-        return {
-            'filename': log_filename,
-            'created_at': first_date,
-            'updated_at': last_date,
-        }
 
     def get_queryset(self) -> list[dict[str, str | dt.datetime | None]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
-        all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
-
-        file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
+        file_data_list = []
+        for log_file_path in LOG_DIR_PATH.iterdir():
+            if not log_file_path.is_file() or not _LOG_FILENAME_RE.match(log_file_path.name):
+                continue
+            first_date, last_date = self._get_first_and_last_entry_date(log_file_path)
+            file_data_list.append(
+                {
+                    'filename': log_file_path.name,
+                    'created_at': first_date,
+                    'updated_at': last_date,
+                }
+            )
 
         queryset: list[dict[str, str | dt.datetime | None]] = [data for data in file_data_list if data]
-
-        def sort_key(item: dict[str, str | dt.datetime | None]) -> dt.datetime:
-            updated_at = item.get('updated_at')
-            if not isinstance(updated_at, dt.datetime):
-                return dt.datetime.min.replace(tzinfo=dt.UTC)
-            return updated_at
-
-        queryset.sort(key=sort_key, reverse=True)
-        return queryset
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return self._sort_list_of_dicts(queryset, sort_param)
 
 
 class LoggingFilesDetailsView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, TemplateView):
@@ -204,7 +209,17 @@ class LoggingFilesDetailsView(UserPermissionRequiredMixin, PageContextMixin, Log
 
         try:
             resolved_path = _validate_log_filename(log_filename)
-            context['log_content'] = resolved_path.read_text(encoding='utf-8', errors='backslashreplace')
+            with resolved_path.open('rb') as log_file:
+                log_file.seek(0, os.SEEK_END)
+                truncated = log_file.tell() > _LOG_DETAIL_MAX_BYTES
+                if truncated:
+                    log_file.seek(-_LOG_DETAIL_MAX_BYTES, os.SEEK_END)
+                else:
+                    log_file.seek(0)
+                content = log_file.read().decode('utf-8', errors='backslashreplace')
+            if truncated:
+                content = f'[showing the last {_LOG_DETAIL_MAX_BYTES // 1024} KiB]\n{content}'
+            context['log_content'] = content
         except Http404:
             context['log_content'] = 'Log-File not found.'
 
@@ -230,12 +245,13 @@ class LoggingFilesDownloadView(UserPermissionRequiredMixin, PageContextMixin, Lo
 
         resolved_path = _validate_log_filename(filename)
 
-        response = HttpResponse(
-            resolved_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
+        # Stream the file so a large rotated log does not have to fit in memory.
+        return FileResponse(  # type: ignore[return-value]  # FileResponse is a valid Django response.
+            resolved_path.open('rb'),
+            as_attachment=True,
+            filename=resolved_path.name,
+            content_type='text/plain',
         )
-        # Use the validated filename from the resolved path in the response header.
-        response['Content-Disposition'] = f'attachment; filename={resolved_path.name}'
-        return response
 
 
 class LoggingFilesDownloadMultipleView(UserPermissionRequiredMixin, PageContextMixin, LoggerMixin, View):

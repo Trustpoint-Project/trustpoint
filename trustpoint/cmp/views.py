@@ -13,7 +13,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import View
 
 from cmp.util import PkiOperation
-from est.views import LoggedHttpResponse  # TEMP
 from request.authorization import CmpAuthorization
 from request.enrollment import process_workflow_operation
 from request.message_parser import CmpMessageParser
@@ -38,6 +37,7 @@ from request.security_hardening import (
 )
 from request.workflow2_issuance import release_delivered_workflow2_request
 from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import LoggedHttpResponse
 
 if TYPE_CHECKING:
     from typing import Any
@@ -132,6 +132,7 @@ class CmpRequestView(LoggerMixin, View):
             # authorization succeeded, otherwise an attacker could burn a nonce.
             mark_cmp_client_nonce(ctx)
             authorized = True
+            ctx.cmp_authenticated = True
 
             process_workflow_operation(ctx, self._process_authorized_operation)
         except Exception:

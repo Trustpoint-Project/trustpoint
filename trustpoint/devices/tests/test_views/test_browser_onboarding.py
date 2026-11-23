@@ -86,6 +86,67 @@ def test_authorized_browser_grant_allows_remote_private_key_download(
     assert certificate == credential.credential.certificate.get_certificate_serializer().as_crypto()
 
 
+def test_refreshing_otp_page_does_not_replace_a_live_otp(
+    download_client: Client,
+    tls_client_credential_instance: dict[str, Any],
+) -> None:
+    """A page refresh must keep the OTP that was already given to the device."""
+    credential = tls_client_credential_instance['issued_credential']
+    url = reverse('devices:devices_browser_otp_view', args=[credential.pk])
+    assert download_client.get(url).status_code == 200
+    first = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+
+    assert download_client.get(url).status_code == 200
+    second = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+
+    assert second.pk == first.pk
+    assert second.otp == first.otp
+
+
+def test_refreshing_otp_page_keeps_a_consumed_download_token(
+    download_client: Client,
+    tls_client_credential_instance: dict[str, Any],
+) -> None:
+    """Refreshing the admin page must not invalidate the device's one-time token."""
+    credential = tls_client_credential_instance['issued_credential']
+    url = reverse('devices:devices_browser_otp_view', args=[credential.pk])
+    assert download_client.get(url).status_code == 200
+    grant = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+    assert grant.check_otp(grant.otp)
+    token = grant.download_token
+
+    assert download_client.get(url).status_code == 200
+    grant.refresh_from_db()
+
+    assert grant.check_token(token)
+    assert grant.otp == '-'
+
+
+def test_invalid_export_form_does_not_consume_download_token(
+    download_client: Client,
+    tls_client_credential_instance: dict[str, Any],
+) -> None:
+    """A failed download form must leave the one-time token usable."""
+    credential = tls_client_credential_instance['issued_credential']
+    response = download_client.get(reverse('devices:devices_browser_otp_view', args=[credential.pk]))
+    assert response.status_code == 200
+    grant = RemoteDeviceCredentialDownloadModel.objects.get(issued_credential_model=credential)
+    remote_client = Client()
+    response = remote_client.post(reverse('devices:browser_login'), {'otp': grant.get_otp_display()})
+    assert response.status_code == 302
+    grant.refresh_from_db()
+    token = grant.download_token
+
+    response = remote_client.post(
+        response.url,
+        {'password': '', 'file_format': CredentialFileFormat.PKCS12.value},
+    )
+
+    assert response.status_code == 200
+    grant.refresh_from_db()
+    assert grant.check_token(token)
+
+
 def test_authorized_browser_grant_cancellation_invalidates_download(
     download_client: Client,
     remote_device_credential_download_instance: dict[str, Any],

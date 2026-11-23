@@ -14,7 +14,7 @@ from django.apps import apps as django_apps
 from django.core.management.sql import emit_post_migrate_signal
 from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
-from django.db.migrations.recorder import MigrationRecorder
+from django.db.migrations.loader import MigrationLoader
 
 from aoki.views import AokiServiceMixin
 from crypto.local_development import ensure_local_software_backends
@@ -25,24 +25,16 @@ from pki.models.credential import IDevIDReferenceModel
 pytestmark = pytest.mark.django_db(
     transaction=True, available_apps=[config.name for config in django_apps.get_app_configs()]
 )
-OLD = [('pki', '0004_add_traceability_credential_type')]
+OLD = [('pki', '0002_initial')]
 
 
-def test_renamed_migration_accepts_existing_history():
-    recorder = MigrationRecorder(connection)
-    legacy = ('pki', '0004_tp_v1_0_1_dev0')
-    recorder.record_unapplied(*OLD[0])
-    recorder.record_unapplied(*legacy)
-    recorder.record_applied(*legacy)
-    try:
-        executor = MigrationExecutor(connection)
-        executor.loader.check_consistent_history(connection)
-        assert OLD[0] in executor.loader.applied_migrations
-        executor.migrate(executor.loader.graph.leaf_nodes())
-        assert OLD[0] in recorder.applied_migrations()
-    finally:
-        recorder.record_unapplied(*OLD[0])
-        recorder.record_applied(*OLD[0])
+def test_pki_has_one_upgrade_from_initial_to_v1_0_1() -> None:
+    """Keep the release upgrade independent of intermediate development migrations."""
+    loader = MigrationLoader(None)
+    target = ('pki', '0003_tp_v1_0_1')
+    pki_steps = [node for node in loader.graph.forwards_plan(target) if node[0] == 'pki']
+    assert pki_steps == [('pki', '0001_initial'), ('pki', '0002_initial'), target]
+    assert loader.graph.leaf_nodes('pki') == [target]
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -64,6 +56,9 @@ def test_fold_preserves_renewals_with_different_owner_and_credential_ids(pinned_
     owners = apps.get_model('pki', 'OwnerCredentialModel')
     owner = owners.objects.create(pk=10000, unique_name='renewed-owner')
     issued = apps.get_model('pki', 'RemoteIssuedCredentialModel')
+    profile = apps.get_model('pki', 'CertificateProfileModel').objects.create(
+        unique_name='migration-owner-profile', profile_json={}
+    )
     try:
         credentials = apps.get_model('pki', 'CredentialModel')
         reference = 'dev-owner:uri:urn:device:renewed'
@@ -99,6 +94,7 @@ def test_fold_preserves_renewals_with_different_owner_and_credential_ids(pinned_
                     common_name=kind,
                     issued_credential_type=0 if kind == 'domain' else 2,
                     owner_credential_id=owner.pk,
+                    issued_using_cert_profile=profile.unique_name,
                     credential_id=credential.pk,
                 )
             )
@@ -122,6 +118,8 @@ def test_fold_preserves_renewals_with_different_owner_and_credential_ids(pinned_
     finally:
         # The legacy table is retained in the database and is not flushed by Django.
         issued.objects.filter(owner_credential_id=owner.pk).update(owner_credential_id=None)
-        owners.objects.filter(pk=owner.pk).delete()
+        # The initial ORM's cascade collector references profile-label columns removed by 1.0.1.
+        with connection.cursor() as cursor:
+            cursor.execute('DELETE FROM pki_ownercredentialmodel WHERE id = %s', [owner.pk])
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())

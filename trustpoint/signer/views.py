@@ -125,17 +125,18 @@ class SignerAddFileImportFileTypeSelectView(SignerContextMixin, FormView[SignerA
 
 
 class SignerFileImportView(
-    SignerContextMixin, FormView[SignerAddFileImportPkcs12Form | SignerAddFileImportSeparateFilesForm]
+    UserPermissionRequiredMixin,
+    SignerContextMixin,
+    FormView[SignerAddFileImportPkcs12Form | SignerAddFileImportSeparateFilesForm],
 ):
     """Audit an imported signer and return to the signer list."""
 
     template_name = 'signer/add/file_import.html'
     success_url = reverse_lazy('signer:signer_list')
+    permission_required = AppPermissions.MANAGE_SIGNER
 
     def form_valid(self, form: SignerAddFileImportPkcs12Form | SignerAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
-        if not self.request.user.has_perm(AppPermissions.MANAGE_SIGNER):
-            raise PermissionDenied
         signer = form.created_signer
         user = getattr(self.request, 'user', None)
         actor = user if user is not None and user.is_authenticated else None

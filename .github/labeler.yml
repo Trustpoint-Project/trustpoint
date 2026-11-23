@@ -33,10 +33,6 @@
   - changed-files:
     - any-glob-to-any-file: '**/migrations/**'
 
-'database':
-  - changed-files:
-    - any-glob-to-any-file: '**/migrations/**'
-
 # Dependencies
 'dependencies':
   - changed-files:

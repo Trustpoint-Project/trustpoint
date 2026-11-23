@@ -24,15 +24,19 @@ from signer.views import SignHashView
 from users.permissions import AppPermissions
 from workflows2.views.instances import (
     Workflow2InstanceCancelView,
+    Workflow2InstanceDetailView,
     Workflow2InstanceResumeView,
     Workflow2InstanceRunInlineView,
     Workflow2InstanceStopView,
 )
 from workflows2.views.runs import (
     Workflow2RunCancelView,
+    Workflow2RunDetailView,
+    Workflow2RunListView,
     Workflow2RunReleaseIdempotencyView,
     Workflow2RunRunInlineView,
 )
+from workflows2.views.approvals import Workflow2ApprovalDetailView, Workflow2WaitingListView
 
 
 @pytest.mark.parametrize(
@@ -57,6 +61,11 @@ from workflows2.views.runs import (
         Workflow2RunCancelView,
         Workflow2RunReleaseIdempotencyView,
         Workflow2RunRunInlineView,
+        Workflow2RunListView,
+        Workflow2RunDetailView,
+        Workflow2InstanceDetailView,
+        Workflow2WaitingListView,
+        Workflow2ApprovalDetailView,
         Workflow2InstanceCancelView,
         Workflow2InstanceStopView,
         Workflow2InstanceResumeView,

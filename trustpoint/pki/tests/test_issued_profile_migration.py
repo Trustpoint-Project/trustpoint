@@ -9,7 +9,7 @@ from django.db.migrations.executor import MigrationExecutor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 OLD = [('pki', '0002_initial')]
-NEW = [('pki', '0003_issued_credential_certificate_profile')]
+NEW = [('pki', '0003_tp_v1_0_1')]
 
 
 @pytest.mark.parametrize('remote', [False, True])

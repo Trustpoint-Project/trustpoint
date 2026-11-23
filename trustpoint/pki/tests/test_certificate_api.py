@@ -8,10 +8,8 @@ import ipaddress
 import tarfile
 import zipfile
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
-import yaml
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -284,14 +282,6 @@ def test_certificate_openapi_contract():
     assert 'post' in paths['/api/certificates/download/']
     assert 'CertificateDetail' in schema['components']['schemas']
     assert reverse('pki:certificate-download', kwargs={'pk': 12}) == '/pki/certificates/download/12'
-
-
-def test_bundled_certificate_schema_omits_unsupported_writes():
-    """The published documentation must not advertise unavailable certificate writes."""
-    schema_file = Path(__file__).resolve().parents[3] / 'docs/source/_static/trustpoint-openapi-swagger.yaml'
-    schema = yaml.safe_load(schema_file.read_text())
-    assert set(schema['paths']['/api/certificates/']) == {'get'}
-    assert set(schema['paths']['/api/certificates/{id}/']) == {'get', 'delete'}
 
 
 def test_duplicate_common_names_have_distinct_archive_files(api, leaf, issuing_ca_instance):

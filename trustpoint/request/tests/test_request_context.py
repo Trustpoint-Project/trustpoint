@@ -163,6 +163,22 @@ class TestRequestContext:
         assert len(field_names) == len(expected_fields)
         assert set(field_names) == set(expected_fields)
 
+    def test_str_masks_credentials(self):
+        """Rendered contexts must not expose passwords or private keys."""
+        context = EstCertificateRequestContext(
+            protocol='est',
+            operation='simpleenroll',
+            est_password='SUPER-SECRET-PASSWORD',
+            est_client_key_pem='SUPER-SECRET-KEY',
+        )
+
+        rendered = str(context)
+
+        assert 'SUPER-SECRET-PASSWORD' not in rendered
+        assert 'SUPER-SECRET-KEY' not in rendered
+        assert 'est_password=***' in rendered
+        assert 'est_client_key_pem=***' in rendered
+
     def test_to_dict_after_clear(self):
         """Test that to_dict works correctly after clear()."""
         context = BaseRequestContext(operation='test', protocol='est', domain_str='domain')

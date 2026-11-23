@@ -32,7 +32,7 @@ from devices.secrets import retire_onboarding_secrets
 from management.models import SecurityConfig
 from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from onboarding.models import OnboardingConfigModel
-from pki.models import CaModel, IssuedCredentialModel
+from pki.models import CaModel, IssuedCredentialModel, get_credential_for_certificate
 from pki.util.certificate_path import validate_issued_certificate_path
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.authentication.base import ClientCertificateAuthentication, IDevIDAuthentication
@@ -175,7 +175,7 @@ def authenticate_est_request(context: EstCertificateRequestContext) -> None:
         # A presented certificate is authoritative. Do not silently downgrade to
         # a Basic credential if certificate authentication fails.
         try:
-            IssuedCredentialModel.get_credential_for_certificate(context.client_certificate)
+            get_credential_for_certificate(context.client_certificate)
         except IssuedCredentialModel.DoesNotExist:
             IDevIDAuthentication().authenticate(context)
         else:
@@ -210,7 +210,7 @@ def _require_active_issued_signer(context: CmpBaseRequestContext, *, domain_only
         msg = 'CMP signer certificate is missing.'
         raise ValueError(msg)
     try:
-        issued = IssuedCredentialModel.get_credential_for_certificate(cert)
+        issued = get_credential_for_certificate(cert)
     except IssuedCredentialModel.DoesNotExist as exc:
         msg = 'CMP signer certificate is not a Trustpoint-issued credential.'
         raise ValueError(msg) from exc
@@ -660,7 +660,7 @@ def _authenticate_certconf(  # noqa: C901, PLR0912, PLR0915
     # confirmation for an initialization transaction, the signer may instead be
     # the same IDevID used for onboarding.
     try:
-        issued = IssuedCredentialModel.get_credential_for_certificate(signer)
+        issued = get_credential_for_certificate(signer)
     except IssuedCredentialModel.DoesNotExist as lookup_exc:
         if tx.device is None:
             msg = 'certConf transaction has no device.'

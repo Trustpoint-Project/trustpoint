@@ -14,9 +14,10 @@ from django.views import View
 
 from workflows2.models import Workflow2Definition
 from workflows2.services.graph import WorkflowGraphService
+from workflows2.views.definitions import WF2DefPermReqMixin
 
 
-class Workflow2DefinitionGraphView(LoginRequiredMixin, View):
+class Workflow2DefinitionGraphView(WF2DefPermReqMixin, LoginRequiredMixin, View):
     """Serve graph JSON for a stored workflow definition."""
 
     def get(self, _request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:

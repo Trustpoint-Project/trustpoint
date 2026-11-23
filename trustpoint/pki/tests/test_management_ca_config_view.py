@@ -30,6 +30,8 @@ from pki.util.x509 import CertificateGenerator
 from users.models import UserClientCertificate
 from users.authentication import ClientCertificateBackend
 
+P12_PASSWORD = 'test-password-123'
+
 pytestmark = pytest.mark.django_db
 
 
@@ -185,9 +187,14 @@ def test_selected_profile_controls_issued_user_certificate(
     assert response.context['form']['certificate_profile'].value() == profile.pk
 
     CertificateAuthenticationConfig.objects.filter(issuing_ca=ca).update(enabled=True)
-    response = superuser_client.post(reverse('users:profile_certificate_authentication'), {'identifier': 'laptop'})
+    response = superuser_client.post(
+        reverse('users:profile_certificate_authentication'),
+        {'identifier': 'laptop', 'p12_password': P12_PASSWORD},
+    )
     assert response.status_code == 200
-    key, certificate, _chain = pkcs12.load_key_and_certificates(b''.join(response.streaming_content), None)
+    key, certificate, _chain = pkcs12.load_key_and_certificates(
+        b''.join(response.streaming_content), P12_PASSWORD.encode()
+    )
     assert key is not None
     assert certificate is not None
     ClientCertificateBackend._validate_issuer(certificate)
@@ -295,7 +302,7 @@ def test_unsupported_pkcs12_download_returns_form_error(superuser_client: Client
     with patch('users.views.CredentialSerializer.as_pkcs12', side_effect=TypeError(message)):
         response = superuser_client.post(
             reverse('users:profile_certificate_authentication'),
-            {'identifier': 'unsupported-key'},
+            {'identifier': 'unsupported-key', 'p12_password': P12_PASSWORD},
         )
 
     assert response.status_code == 200
