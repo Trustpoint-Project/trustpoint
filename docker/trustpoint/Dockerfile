@@ -1,6 +1,6 @@
 # Build the nginx dynamic module in a throw-away stage so the runtime image
 # does not need a compiler, cmake, git, or nginx headers.
-FROM python:3.14-slim-trixie AS nginx-builder
+FROM python:3.15-slim-trixie AS nginx-builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -25,7 +25,7 @@ RUN cd /usr/share/nginx/src && \
     nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
     rm -rf /tmp/trustpoint-tls-binding /tmp/trustpoint-nginx-module-check.conf
 
-FROM python:3.14-slim-trixie
+FROM python:3.15-slim-trixie
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
