@@ -34,9 +34,9 @@ Below is an overview of the key workflows included in the project:
 
 - **Documentation Pipeline**: Builds HTML with strict references and treats warnings as failures.
 - **Behave Pipeline**: Runs :term:`behave` tests and uploads the results.
-- **Codecov Pipeline**: Runs unit tests via pytest and uploads the test coverage. |codecov-badge|
 - **CodeQL Pipeline**: Runs CodeQL security analysis on the codebase. |codeql-badge|
-- **Pytest Pipeline**: Runs unit tests via pytest and uploads the results. |pytest-badge|
+- **Pytest Pipeline**: Runs unit tests via pytest, uploads the coverage and test results to Codecov, and posts the report.
+  |pytest-badge| |codecov-badge|
 - **mypy Pipeline**: Runs :term:`mypy` checks and uploads the results. |mypy-badge|
 - **Ruff Pipeline**: Runs :term:`ruff` checks and uploads the results. |ruff-badge|
 - **ZAP Pipeline**: Runs OWASP ZAP security scans on the web application. |zap-badge|
@@ -126,30 +126,17 @@ We provide an example on how to use this workflow below:
     :language: yaml
     :caption: Behave capability matrix
 
-.. _codecov_pipeline:
-
-================
-Codecov Pipeline
-================
+===============
+Pytest Pipeline
+===============
 
 We are using `Codecov <https://about.codecov.io/>`_ for analyzing our pytest code coverage and showing this with a badge.
 This workflow is also setting up :term:`uv` as in :ref:`composite_setup_action`
 and using it to run pytest with a coverage report. Coverage XML and JUnit results are retained as artifacts,
 including for fork pull requests where Codecov upload is skipped. There is no
 numeric coverage threshold enforced by this workflow.
-
-.. literalinclude:: ../../../../.github/workflows/codecov-upload.yml
-    :language: yaml
-    :caption: Upload to codecov workflow
-
-===============
-Pytest Pipeline
-===============
-
-This pipeline/workflow is kind of the same as :ref:`the coverage pipeline <codecov_pipeline>`
-except from not running the coverage reports and therefore also not uploading them.
 Here, we use a git flavored markdown report for printing the report nicely to the job summary.
-After this, there is the full report uploaded first and lastly,
+After this, the full report is uploaded and lastly,
 if one or more tests fail,
 we add a comment to the current pull request.
 
