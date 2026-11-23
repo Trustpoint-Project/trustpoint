@@ -1607,7 +1607,9 @@ class TestProfileSecretsAndEditor:
     def test_dumpdata_loaddata_preserves_encrypted_secrets(self, tmp_path: Path) -> None:
         """Restoring a fixture encrypts JSON secrets exactly once."""
         profile = AgentProfileDefinition.objects.create(
-            name='Restored Secrets', profile={'steps': []}, secrets={'password': 'Müller-secret'},
+            name='Restored Secrets',
+            profile={'steps': []},
+            secrets={'password': 'Müller-secret'},
         )
         output = StringIO()
         call_command('dumpdata', 'agents.AgentProfileDefinition', stdout=output)

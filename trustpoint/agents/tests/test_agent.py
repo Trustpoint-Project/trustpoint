@@ -1786,7 +1786,9 @@ class TestRotationRecovery:
 
     @pytest.mark.parametrize('interrupted_cleanup', [0, 1])
     def test_recovery_keeps_committed_pair_after_cleanup_interruption(
-        self, temp_dir: Path, interrupted_cleanup: int,
+        self,
+        temp_dir: Path,
+        interrupted_cleanup: int,
     ) -> None:
         """A completed rotation survives interruption at each backup deletion."""
         cert, key = temp_dir / 'domain-cert.pem', temp_dir / 'domain-key.pem'
@@ -1809,7 +1811,9 @@ class TestRotationRecovery:
             pytest.raises(KeyboardInterrupt),
         ):
             _commit_staged_credentials(
-                [(staged_cert, cert, 0o644), (staged_key, key, 0o600)], cert, key,
+                [(staged_cert, cert, 0o644), (staged_key, key, 0o600)],
+                cert,
+                key,
             )
 
         recover_interrupted_rotations(temp_dir)
