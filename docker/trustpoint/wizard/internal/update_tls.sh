@@ -9,7 +9,7 @@ set -eE -o pipefail
 
 log() {
     local level=$1; shift
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - update_tls_nginx.sh - $level - $*"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - update_tls.sh - $level - $*"
 }
 
 log INFO "Starting TLS certificate setup for nginx"

@@ -40,8 +40,17 @@ chown root:root /var/log/trustpoint
 chmod 755 /var/log/trustpoint
 
 wait_for_postgres() {
+  local attempt=1
+  local max_attempts=60
+  local output
   echo "Waiting for PostgreSQL database..."
-  until /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app db-ready &>/dev/null; do
+  until output=$(/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app db-ready 2>&1); do
+    if [ "$attempt" -ge "$max_attempts" ]; then
+      echo "ERROR: PostgreSQL did not become available after $max_attempts attempts."
+      printf '%s\n' "$output"
+      exit 1
+    fi
+    attempt=$((attempt + 1))
     sleep 1
   done
   echo "PostgreSQL database is available!"
@@ -59,15 +68,14 @@ start_gunicorn() {
   echo "Starting Gunicorn server..."
   mkdir -p "$WWW_DATA_HOME"
   chown www-data:www-data "$WWW_DATA_HOME"
-  /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app web > /var/log/trustpoint/gunicorn.log 2>&1 &
+  /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app web &
   GUNICORN_PID=$!
   echo "Gunicorn started with PID $GUNICORN_PID"
 
   sleep 2
 
   if ! kill -0 $GUNICORN_PID 2>/dev/null; then
-    echo "ERROR: Gunicorn failed to start. Check /var/log/trustpoint/gunicorn.log"
-    cat /var/log/trustpoint/gunicorn.log
+    echo "ERROR: Gunicorn failed to start. Check the container logs."
     exit 1
   fi
 }
@@ -135,8 +143,12 @@ stop_web_services() {
       kill -TERM "$pid" 2>/dev/null || true
     fi
   done
-  # Handoff services are not shell jobs; leave time within Docker's 10-second stop window.
-  local deadline=$((SECONDS + 8))
+  # Handoff services are not shell jobs. Keep two seconds for the final kill.
+  local grace="${TRUSTPOINT_STOP_GRACE_SECONDS:-8}"
+  if ! [[ "$grace" =~ ^[0-9]+$ ]] || [ "$grace" -lt 3 ]; then
+    grace=8
+  fi
+  local deadline=$((SECONDS + grace - 2))
   for pid in "${pids[@]}"; do
     [ -n "$pid" ] || continue
     while service_alive "$pid"; do
@@ -209,7 +221,7 @@ echo "Finished with initialisation"
 echo "Trustpoint version: $version"
 
 echo "Starting Django-Q2 qcluster worker..."
-/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster > /var/log/trustpoint/qcluster.log 2>&1 &
+/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster &
 QCLUSTER_PID=$!
 echo "Django-Q2 qcluster started with PID $QCLUSTER_PID"
 
@@ -217,8 +229,7 @@ sleep 3
 
 # Check if qcluster is still running
 if ! kill -0 $QCLUSTER_PID 2>/dev/null; then
-  echo "ERROR: Django-Q2 qcluster failed to start. Check /var/log/trustpoint/qcluster.log"
-  cat /var/log/trustpoint/qcluster.log
+  echo "ERROR: Django-Q2 qcluster failed to start. Check the container logs."
   exit 1
 fi
 

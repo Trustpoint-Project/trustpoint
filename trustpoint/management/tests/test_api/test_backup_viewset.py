@@ -96,7 +96,9 @@ class TestBackupViewSetList:
 class TestBackupViewSetRetrieve:
     """Tests for GET /api/backups/{id}/."""
 
-    def test_retrieve_existing_returns_200(self, authenticated_client: APIClient, backup_options: BackupOptions) -> None:
+    def test_retrieve_existing_returns_200(
+        self, authenticated_client: APIClient, backup_options: BackupOptions
+    ) -> None:
         """Retrieving an existing BackupOptions returns 200 with correct data."""
         url = reverse('backup-detail', args=[backup_options.pk])
         response = authenticated_client.get(url)

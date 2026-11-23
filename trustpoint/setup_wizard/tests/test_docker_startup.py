@@ -155,7 +155,7 @@ def test_shutdown_waits_for_handoff_service_outside_shell_job_table(tmp_path, ig
     source = source[source.index('service_alive()') : source.index('# ---------------- WORKER ROLE')]
     source = source.replace('/run/trustpoint-operational', str(tmp_path / 'operational'))
     if ignore_termination:
-        source = source.replace('SECONDS + 8', 'SECONDS + 1')
+        source = source.replace('${TRUSTPOINT_STOP_GRACE_SECONDS:-8}', '${TRUSTPOINT_STOP_GRACE_SECONDS:-3}')
     finished = tmp_path / 'finished'
     program = """
 import signal, sys, time

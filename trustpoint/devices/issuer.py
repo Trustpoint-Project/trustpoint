@@ -149,8 +149,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
         certificate_chain: list[x509.Certificate],
         common_name: str,
         issued_credential_type: (
-            IssuedCredentialModel.IssuedCredentialType
-            | RemoteIssuedCredentialModel.RemoteIssuedCredentialType
+            IssuedCredentialModel.IssuedCredentialType | RemoteIssuedCredentialModel.RemoteIssuedCredentialType
         ),
         certificate_profile: CertificateProfileModel,
         *,

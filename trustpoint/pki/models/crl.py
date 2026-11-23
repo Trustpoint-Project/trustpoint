@@ -154,12 +154,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             next_update = this_update + next_update_delta
 
         if set_active and ca is not None:
-            active = (
-                cls.objects.select_for_update()
-                .filter(ca=ca, is_active=True)
-                .order_by('-this_update')
-                .first()
-            )
+            active = cls.objects.select_for_update().filter(ca=ca, is_active=True).order_by('-this_update').first()
             if active is not None and (
                 this_update < active.this_update
                 or (crl_number is not None and active.crl_number is not None and crl_number < active.crl_number)

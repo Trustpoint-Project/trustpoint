@@ -147,10 +147,12 @@ def test_oversized_handoff_is_rejected(tmp_path):
 @pytest.fixture
 def bootstrap_storage(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=os.getuid(), pw_gid=os.getgid()))
+    storage = tmp_path / 'bootstrap'
+    storage.mkdir()
     deployment = {
-        'TRUSTPOINT_BOOTSTRAP_DB_PATH': str(tmp_path / 'bootstrap.sqlite3'),
-        'TRUSTPOINT_OPERATIONAL_ENV_FILE': str(tmp_path / 'operational.env'),
-        'TRUSTPOINT_OPERATIONAL_READY_FILE': str(tmp_path / 'operational.ready'),
+        'TRUSTPOINT_BOOTSTRAP_DB_PATH': str(storage / 'bootstrap.sqlite3'),
+        'TRUSTPOINT_OPERATIONAL_ENV_FILE': str(storage / 'operational.env'),
+        'TRUSTPOINT_OPERATIONAL_READY_FILE': str(storage / 'operational.ready'),
     }
     return deployment
 
@@ -161,7 +163,7 @@ def test_bootstrap_storage_rejects_links_and_special_files(tmp_path, bootstrap_s
     protected = tmp_path / 'protected-script'
     protected.write_text('protected')
     protected.chmod(0o644)
-    target = tmp_path / ('bootstrap.sqlite3' + suffix)
+    target = Path(bootstrap_storage['TRUSTPOINT_BOOTSTRAP_DB_PATH'] + suffix)
     if kind == 'symlink':
         target.symlink_to(protected)
     elif kind == 'hardlink':
@@ -187,8 +189,9 @@ def test_bootstrap_storage_rejects_symlinked_directory(tmp_path, bootstrap_stora
     assert actual.stat().st_mode & 0o777 == 0o700
 
 
-def test_bootstrap_storage_preserves_locked_database_and_recovery_files(tmp_path, bootstrap_storage):
-    database = tmp_path / 'bootstrap.sqlite3'
+def test_bootstrap_storage_preserves_locked_database_and_recovery_files(bootstrap_storage):
+    storage = Path(bootstrap_storage['TRUSTPOINT_BOOTSTRAP_DB_PATH']).parent
+    database = Path(bootstrap_storage['TRUSTPOINT_BOOTSTRAP_DB_PATH'])
     connection = sqlite3.connect(database)
     try:
         connection.execute('PRAGMA journal_mode=WAL')
@@ -196,14 +199,23 @@ def test_bootstrap_storage_preserves_locked_database_and_recovery_files(tmp_path
         connection.execute("INSERT INTO saved VALUES ('committed state')")
         connection.commit()
         connection.execute('BEGIN IMMEDIATE')
-        unrelated = tmp_path / 'other.sqlite3-journal'
+        unrelated = storage / 'other.sqlite3-journal'
         unrelated.write_bytes(b'preserve unrelated recovery state')
-        before = {path: (path.stat().st_ino, path.read_bytes()) for path in tmp_path.iterdir()}
+        before = {path: (path.stat().st_ino, path.read_bytes()) for path in storage.iterdir()}
         runtime.prepare_bootstrap_storage(bootstrap_storage)
-        assert {path: (path.stat().st_ino, path.read_bytes()) for path in tmp_path.iterdir()} == before
+        assert {path: (path.stat().st_ino, path.read_bytes()) for path in storage.iterdir()} == before
         assert connection.execute('SELECT value FROM saved').fetchone() == ('committed state',)
     finally:
         connection.close()
+
+
+def test_bootstrap_storage_rejects_shared_parents(tmp_path, bootstrap_storage):
+    bootstrap_storage['TRUSTPOINT_BOOTSTRAP_DB_PATH'] = str(tmp_path / 'bootstrap.sqlite3')
+    bootstrap_storage['TRUSTPOINT_OPERATIONAL_ENV_FILE'] = str(tmp_path / 'operational.env')
+    bootstrap_storage['TRUSTPOINT_OPERATIONAL_READY_FILE'] = str(tmp_path / 'operational.ready')
+    with pytest.raises(ValueError, match='dedicated "bootstrap" directory'):
+        runtime.prepare_bootstrap_storage(bootstrap_storage)
+    assert not (tmp_path / 'bootstrap.sqlite3').exists()
 
 
 def test_bootstrap_storage_creates_traversable_parents_and_private_leaf(tmp_path, bootstrap_storage):

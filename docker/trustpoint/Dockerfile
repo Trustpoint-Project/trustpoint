@@ -1,3 +1,30 @@
+# Build the nginx dynamic module in a throw-away stage so the runtime image
+# does not need a compiler, cmake, git, or nginx headers.
+FROM python:3.14-slim-trixie AS nginx-builder
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        ca-certificates \
+        libssl-dev \
+        nginx-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY docker/trustpoint/nginx/tls-binding/ /tmp/trustpoint-tls-binding/
+RUN cd /usr/share/nginx/src && \
+    ./configure --with-compat --with-http_ssl_module \
+        --add-dynamic-module=/tmp/trustpoint-tls-binding && \
+    make -f objs/Makefile modules && \
+    install -d -m 755 /out/modules /out/modules-enabled && \
+    install -m 644 objs/ngx_http_trustpoint_tls_binding_module.so /out/modules/ && \
+    printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_trustpoint_tls_binding_module.so;' \
+        > /out/modules-enabled/50-trustpoint-tls-binding.conf && \
+    printf '%s\n' 'load_module /out/modules/ngx_http_trustpoint_tls_binding_module.so;' \
+        'error_log stderr;' 'events {}' 'http {}' \
+        > /tmp/trustpoint-nginx-module-check.conf && \
+    nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
+    rm -rf /tmp/trustpoint-tls-binding /tmp/trustpoint-nginx-module-check.conf
+
 FROM python:3.14-slim-trixie
 COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
 
@@ -14,23 +41,14 @@ ENV PYTHONUNBUFFERED=1 \
 # Port 80 will be redirected to 443 using TLS through NGINX.
 EXPOSE 80 443
 
-# Update apt repositories and install required runtime dependencies.
-# This includes the SoftHSM module used by Trustpoint's local/dev HSM setup.
+# Runtime packages only. The nginx module is built in the stage above.
 RUN apt-get update && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         opensc \
         sudo \
-        apt-utils \
         nginx \
-        nginx-dev \
         gettext \
         locales \
-        git \
-        build-essential \
-        cmake \
-        libssl-dev \
-        libseccomp-dev \
         softhsm2 \
         libpkcs11-proxy0 \
         curl \
@@ -38,23 +56,11 @@ RUN apt-get update && \
         gnupg && \
     rm -rf /var/lib/apt/lists/*
 
-# Build against the source headers shipped with the installed Debian nginx.
-# --with-compat preserves the packaged binary's dynamic-module ABI. Keep the
-# load directive outside the site file so wizard site switches retain it.
-COPY docker/trustpoint/nginx/tls-binding/ /tmp/trustpoint-tls-binding/
-RUN cd /usr/share/nginx/src && \
-    ./configure --with-compat --with-http_ssl_module \
-        --add-dynamic-module=/tmp/trustpoint-tls-binding && \
-    make -f objs/Makefile modules && \
-    install -d -m 755 /usr/lib/nginx/modules /etc/nginx/modules-enabled && \
-    install -m 644 objs/ngx_http_trustpoint_tls_binding_module.so /usr/lib/nginx/modules/ && \
-    printf '%s\n' 'load_module /usr/lib/nginx/modules/ngx_http_trustpoint_tls_binding_module.so;' \
-        > /etc/nginx/modules-enabled/50-trustpoint-tls-binding.conf && \
-    printf '%s\n' 'include /etc/nginx/modules-enabled/*.conf;' \
-        'error_log stderr;' 'events {}' 'http {}' \
-        > /tmp/trustpoint-nginx-module-check.conf && \
-    nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
-    rm -rf /tmp/trustpoint-tls-binding /tmp/trustpoint-nginx-module-check.conf
+COPY --from=nginx-builder /out/modules/ngx_http_trustpoint_tls_binding_module.so /usr/lib/nginx/modules/
+COPY --from=nginx-builder /out/modules-enabled/50-trustpoint-tls-binding.conf /etc/nginx/modules-enabled/
+
+# Fail the build here if the runtime nginx cannot load the compiled module.
+RUN nginx -t
 
 # Create stable PKCS#11 module paths so provider-profile bootstrap and
 # local/dev configuration can rely on predictable values.
@@ -110,30 +116,37 @@ COPY --chown=www-data:www-data tests/data/idevid_hierarchies/rsa4/rsa4_chain.pem
 COPY --chown=www-data:www-data tests/data/idevid_hierarchies/mldsa65/mldsa65_chain.pem ./tests/data/idevid_hierarchies/mldsa65/
 RUN uv sync --no-dev --group docs --group docker --python-preference only-system
 USER root
+RUN rm -f /bin/uv /bin/uvx
 
 # Prepare Trustpoint runtime directories.
-# For the local/dev setup, Trustpoint uses the SoftHSM PKCS#11 module directly
-# against the mounted token directory.
+# The HSM root stays root-owned so a web-account compromise cannot turn the
+# fixed PKCS#11 install paths into symlinks. The app reads the 0640 group files.
 RUN chown root:root /var/www/html/trustpoint /var/www/html/trustpoint/docker && \
     chown -R root:root /var/www/html/trustpoint/docker/trustpoint && \
     mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
              /var/lib/trustpoint/bootstrap \
-             /var/lib/trustpoint/hsm/config && \
+             /var/lib/trustpoint/hsm/config \
+             /var/lib/trustpoint/hsm/lib && \
     chown -R www-data:www-data /var/lib/trustpoint/bootstrap && \
-    chown -R www-data:www-data /var/lib/trustpoint/hsm && \
+    chown root:root /var/lib/trustpoint/hsm && \
+    chown -R root:www-data /var/lib/trustpoint/hsm/config /var/lib/trustpoint/hsm/lib && \
     chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
     chmod -R 755 /var/www/html/trustpoint/trustpoint/ && \
     chmod 750 /var/lib/trustpoint/bootstrap && \
-    chmod 750 /var/lib/trustpoint/hsm /var/lib/trustpoint/hsm/config && \
+    chmod 755 /var/lib/trustpoint/hsm && \
+    chmod 750 /var/lib/trustpoint/hsm/config /var/lib/trustpoint/hsm/lib && \
     chmod -R 755 /var/www/html/trustpoint/docker/trustpoint/nginx/tls
 
 # Create and set up the /etc/trustpoint/ directory.
 RUN mkdir -p /etc/trustpoint/ && \
     cp -r /var/www/html/trustpoint/docker/trustpoint/* /etc/trustpoint/ && \
     chown -R root:root /etc/trustpoint/ && \
-    chmod -R 755 /etc/trustpoint/
+    chmod -R 755 /etc/trustpoint/ && \
+    rm -rf /var/www/html/trustpoint/docker/trustpoint/nginx/tls-binding && \
+    rm -f /etc/trustpoint/nginx/tls-binding/ngx_http_trustpoint_tls_binding_module.c \
+          /etc/trustpoint/nginx/tls-binding/config
 
 # Add sudoers file and configure user and restart sudo service.
 RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
@@ -154,7 +167,6 @@ RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh \
              /etc/trustpoint/wizard/switch_to_operational.sh \
              /etc/trustpoint/wizard/update_tls.sh \
              /etc/trustpoint/wizard/update_tls_nginx.sh \
-             /etc/trustpoint/wizard/wizard_restore.sh \
              ./docker/trustpoint/entrypoint.sh
 
 # Translation catalogs are image artifacts; runtime startup must not write code.

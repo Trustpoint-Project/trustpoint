@@ -146,4 +146,3 @@ class GenerateKeypairCmpRolloverForm(IssuingCaAddRequestCmpForm):
 
 
 rollover_registry.register(GenerateKeypairRolloverStrategy())
-

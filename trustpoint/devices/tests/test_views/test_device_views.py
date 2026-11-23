@@ -707,9 +707,7 @@ class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
         assert 'devices/credentials/certificate_lifecycle_management.html' in [t.name for t in response.templates]
         assert response.context['object'] == device
 
-    def test_opcua_gds_push_clm_post_requires_manage_devices(
-        self, device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_opcua_gds_push_clm_post_requires_manage_devices(self, device_instance_onboarding: dict[str, Any]) -> None:
         """A logged-in user without MANAGE_DEVICES cannot edit a GDS Push device."""
         device = device_instance_onboarding['device']
         device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH

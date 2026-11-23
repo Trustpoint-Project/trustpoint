@@ -485,9 +485,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
             msg = f'Unknown IP address type: {type(entry.value).__name__}.'
             raise TypeError(msg)
 
-        ip_address, _ = GeneralNameIpAddress.objects.get_or_create(
-            ip_type=ip_type, value=str(entry.value)
-        )
+        ip_address, _ = GeneralNameIpAddress.objects.get_or_create(ip_type=ip_type, value=str(entry.value))
         self.ip_addresses.add(ip_address)
         self.save()
 

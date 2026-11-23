@@ -78,9 +78,7 @@ def _key_pem(private_key: Any, password: str | None = None) -> bytes:
     encryption: serialization.KeySerializationEncryption = serialization.NoEncryption()
     if password:
         encryption = serialization.BestAvailableEncryption(password.encode())
-    return private_key.private_bytes(
-        serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, encryption
-    )
+    return private_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, encryption)
 
 
 class TestIssuingCaCertificateValidation:
@@ -116,9 +114,7 @@ class TestIssuingCaCertificateValidation:
         ('key_cert_sign', 'crl_sign', 'message'),
         [(False, True, 'keyCertSign'), (True, False, 'cRLSign')],
     )
-    def test_required_key_usages_are_enforced(
-        self, key_cert_sign: bool, crl_sign: bool, message: str
-    ) -> None:
+    def test_required_key_usages_are_enforced(self, key_cert_sign: bool, crl_sign: bool, message: str) -> None:
         """CA certificates must permit certificate and CRL signing."""
         root, root_key = _ca_pair('KU Root')
         key_usage = x509.KeyUsage(
@@ -163,9 +159,7 @@ class TestIssuingCaCertificateValidation:
 
         with pytest.raises(ValidationError, match='does not match'):
             IssuingCaImportMixin()._validate_credential_components(
-                CredentialSerializer(
-                    private_key=other_key, certificate=certificate, additional_certificates=[]
-                )
+                CredentialSerializer(private_key=other_key, certificate=certificate, additional_certificates=[])
             )
 
 
@@ -289,9 +283,7 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'separate-ca'},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(key)),
             },
         )
@@ -305,9 +297,7 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'enc-separate-ca', 'private_key_file_password': TEST_KEY_PASSWORD},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(key, TEST_KEY_PASSWORD)),
             },
         )
@@ -322,9 +312,7 @@ class TestIssuingCaSeparateFilesImport:
         key_form = IssuingCaAddFileImportSeparateFilesForm(
             data={},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', oversized),
             },
         )
@@ -384,9 +372,7 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'mismatch-ca'},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', certificate.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', certificate.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(other_key)),
             },
         )
@@ -404,12 +390,8 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'chain-ca'},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', issuing.public_bytes(serialization.Encoding.PEM)
-                ),
-                'ca_certificate_chain': SimpleUploadedFile(
-                    'chain.pem', root.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', issuing.public_bytes(serialization.Encoding.PEM)),
+                'ca_certificate_chain': SimpleUploadedFile('chain.pem', root.public_bytes(serialization.Encoding.PEM)),
                 'private_key_file': SimpleUploadedFile('key.pem', _key_pem(issuing_key)),
             },
         )
@@ -430,9 +412,7 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'import-tree-ca'},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', issuing.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', issuing.public_bytes(serialization.Encoding.PEM)),
                 'ca_certificate_chain': SimpleUploadedFile(
                     'chain.pem',
                     intermediate.public_bytes(serialization.Encoding.PEM)
@@ -458,9 +438,7 @@ class TestIssuingCaSeparateFilesImport:
         form = IssuingCaAddFileImportSeparateFilesForm(
             data={'unique_name': 'bad-chain-ca'},
             files={
-                'ca_certificate': SimpleUploadedFile(
-                    'ca.pem', issuing.public_bytes(serialization.Encoding.PEM)
-                ),
+                'ca_certificate': SimpleUploadedFile('ca.pem', issuing.public_bytes(serialization.Encoding.PEM)),
                 'ca_certificate_chain': SimpleUploadedFile(
                     'chain.pem', unrelated.public_bytes(serialization.Encoding.PEM)
                 ),
@@ -675,13 +653,9 @@ class TestIssuingCaTruststoreAssociationForm:
         chain_store = TruststoreModel.objects.create(
             unique_name='chain-store', intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
         )
-        TruststoreModel.objects.create(
-            unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
+        TruststoreModel.objects.create(unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS)
 
-        form = IssuingCaTruststoreAssociationForm(
-            instance=self._ca(CaModel.CaTypeChoice.REMOTE_EST_RA)
-        )
+        form = IssuingCaTruststoreAssociationForm(instance=self._ca(CaModel.CaTypeChoice.REMOTE_EST_RA))
 
         assert list(form.fields['trust_store'].queryset) == [chain_store]
         assert 'Step 1/2' in str(form.fields['trust_store'].help_text)
@@ -703,16 +677,19 @@ class TestIssuingCaTruststoreAssociationForm:
         assert 'Step 2/2' in str(form.fields['trust_store'].help_text)
 
     @pytest.mark.parametrize(
-        'ca_type', [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_ISSUING_CSR, CaModel.CaTypeChoice.REMOTE_CMP_RA]
+        'ca_type',
+        [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CSR,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA,
+        ],
     )
     def test_cmp_and_csr_require_issuing_ca_chain(self, ca_type: CaModel.CaTypeChoice) -> None:
         """CMP and external-CSR CAs only accept issuing CA chain truststores."""
         chain_store = TruststoreModel.objects.create(
             unique_name='chain-store', intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
         )
-        TruststoreModel.objects.create(
-            unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS
-        )
+        TruststoreModel.objects.create(unique_name='tls-store', intended_usage=TruststoreModel.IntendedUsage.TLS)
 
         form = IssuingCaTruststoreAssociationForm(instance=self._ca(ca_type))
 
@@ -774,16 +751,12 @@ class TestIssuingCaCrlCycleForm:
         ca.is_active = False
         ca.save()
 
-        form = IssuingCaCrlCycleForm(
-            data={'crl_cycle_interval_hours': 6, 'crl_validity_hours': 24}, instance=ca
-        )
+        form = IssuingCaCrlCycleForm(data={'crl_cycle_interval_hours': 6, 'crl_validity_hours': 24}, instance=ca)
 
         assert not form.is_valid()
         assert 'deactivated' in str(form.errors)
 
-    def test_validity_beyond_security_policy_is_rejected(
-        self, issuing_ca_instance: dict[str, Any]
-    ) -> None:
+    def test_validity_beyond_security_policy_is_rejected(self, issuing_ca_instance: dict[str, Any]) -> None:
         """CRL validity above the configured policy maximum is rejected."""
         from management.models import SecurityConfig
 

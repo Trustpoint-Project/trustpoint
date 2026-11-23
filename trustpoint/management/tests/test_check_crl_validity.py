@@ -25,9 +25,7 @@ def _crl() -> SimpleNamespace:
 @pytest.mark.django_db
 def test_existing_event_is_not_created_again() -> None:
     """The preloaded event set replaces a per-domain exists() query."""
-    with patch(
-        'management.management.commands.check_crl_validity.NotificationModel.objects.create'
-    ) as create:
+    with patch('management.management.commands.check_crl_validity.NotificationModel.objects.create') as create:
         Command()._create_notification(
             crl=_crl(),
             event='CRL_EXPIRED_7',

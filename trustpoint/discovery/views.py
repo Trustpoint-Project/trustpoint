@@ -70,9 +70,7 @@ class DeviceListView(UserPermissionRequiredMixin, DiscoveryContextMixin, View):
                 if connection.features.supports_json_field_contains:
                     queryset = queryset.filter(open_ports__contains=[port_num])
                 else:
-                    matching_ids = [
-                        device.pk for device in queryset if port_num in (device.open_ports or [])
-                    ]
+                    matching_ids = [device.pk for device in queryset if port_num in (device.open_ports or [])]
                     queryset = queryset.filter(pk__in=matching_ids)
                 filters_active = True
 

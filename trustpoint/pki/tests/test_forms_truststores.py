@@ -58,9 +58,7 @@ class TestTruststoreAddFormValidation:
 
     def test_duplicate_unique_name_is_rejected(self) -> None:
         """A name already used by another truststore fails field validation."""
-        TruststoreModel.objects.create(
-            unique_name='taken', intended_usage=TruststoreModel.IntendedUsage.GENERIC
-        )
+        TruststoreModel.objects.create(unique_name='taken', intended_usage=TruststoreModel.IntendedUsage.GENERIC)
         root, _ = CertificateGenerator.create_root_ca('Dup Root')
         form = TruststoreAddForm(
             data={'unique_name': 'taken', 'intended_usage': TruststoreModel.IntendedUsage.GENERIC.value},
@@ -183,9 +181,7 @@ class TestValidateAndCreateCaChain:
     def test_single_non_self_signed_certificate_is_incomplete(self) -> None:
         """A lone intermediate without its root is an incomplete chain."""
         _root, root_key = CertificateGenerator.create_root_ca('Incomplete Root')
-        intermediate, _ = CertificateGenerator.create_issuing_ca(
-            root_key, 'Incomplete Root', 'Incomplete Intermediate'
-        )
+        intermediate, _ = CertificateGenerator.create_issuing_ca(root_key, 'Incomplete Root', 'Incomplete Intermediate')
 
         with pytest.raises(ValidationError, match='Incomplete certificate chain'):
             validate_and_create_ca_chain([intermediate], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)
@@ -196,9 +192,7 @@ class TestValidateAndCreateCaChain:
         intermediate, intermediate_key = CertificateGenerator.create_issuing_ca(
             root_key, 'Missing Root', 'Missing Intermediate'
         )
-        leaf, _ = CertificateGenerator.create_issuing_ca(
-            intermediate_key, 'Missing Intermediate', 'Missing Leaf'
-        )
+        leaf, _ = CertificateGenerator.create_issuing_ca(intermediate_key, 'Missing Intermediate', 'Missing Leaf')
 
         with pytest.raises(ValidationError, match='do not form a single complete chain'):
             validate_and_create_ca_chain([leaf, intermediate], TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN)

@@ -1,7 +1,6 @@
 #!/bin/bash
 set -eE -o pipefail
 
-LOG_DIR="/var/log/trustpoint"
 : "${OPERATIONAL_ENV_FILE:?Validated handoff path is required}"
 OPERATIONAL_PORT="${TRUSTPOINT_OPERATIONAL_GUNICORN_PORT:-8001}"
 BOOTSTRAP_PORT="${TRUSTPOINT_BOOTSTRAP_GUNICORN_PORT:-8000}"
@@ -20,14 +19,26 @@ log() {
     printf '%s\n' "$message"
 }
 
+show_app_log() {
+    local log_file="/var/www/html/trustpoint/trustpoint/media/log/trustpoint.log"
+    if [ -f "$log_file" ]; then
+        log ERROR "Last application log lines:"
+        tail -n 80 "$log_file"
+    fi
+}
+
+# A double-clicked final step must not run migrations or bind the port twice.
+exec 9>/run/trustpoint-switch.lock
+if ! flock -n 9; then
+    log ERROR "Another operational switch is already running."
+    exit 11
+fi
+
 if [ ! -f "$OPERATIONAL_ENV_FILE" ]; then
     log ERROR "Operational environment file not found: $OPERATIONAL_ENV_FILE"
     exit 2
 fi
 
-mkdir -p "$LOG_DIR"
-chown root:root "$LOG_DIR"
-chmod 755 "$LOG_DIR"
 mkdir -p "$UV_CACHE_DIR" "$WWW_DATA_HOME"
 chown www-data:www-data "$UV_CACHE_DIR" "$WWW_DATA_HOME"
 
@@ -92,14 +103,16 @@ start_qcluster() {
     fi
 
     log INFO "Starting operational Django-Q2 qcluster"
-    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster > "$LOG_DIR/qcluster.log" 2>&1 &
+    # Redirect to /dev/null: the app's rotating log already has the messages, and
+    # the switch is called with capture_output, which would wait forever on a pipe.
+    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app qcluster >/dev/null 2>&1 &
     local qcluster_pid=$!
     echo "$qcluster_pid" > "$OPERATIONAL_QCLUSTER_PID_FILE"
 
     sleep 3
     if ! kill -0 "$qcluster_pid" 2>/dev/null; then
-        log ERROR "Operational qcluster failed to start. Check $LOG_DIR/qcluster.log"
-        cat "$LOG_DIR/qcluster.log"
+        log ERROR "Operational qcluster failed to start."
+        show_app_log
         exit 5
     fi
     log INFO "Operational qcluster started with PID $qcluster_pid"
@@ -112,14 +125,15 @@ start_operational_gunicorn() {
     fi
 
     log INFO "Starting operational Gunicorn on port $OPERATIONAL_PORT"
-    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app gunicorn > "$LOG_DIR/gunicorn-operational.log" 2>&1 &
+    # See start_qcluster: never hold the caller's captured stdout open.
+    /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app gunicorn >/dev/null 2>&1 &
     local gunicorn_pid=$!
     echo "$gunicorn_pid" > "$OPERATIONAL_GUNICORN_PID_FILE"
 
     sleep 2
     if ! kill -0 "$gunicorn_pid" 2>/dev/null; then
-        log ERROR "Operational Gunicorn failed to start. Check $LOG_DIR/gunicorn-operational.log"
-        cat "$LOG_DIR/gunicorn-operational.log"
+        log ERROR "Operational Gunicorn failed to start."
+        show_app_log
         exit 6
     fi
     log INFO "Operational Gunicorn started with PID $gunicorn_pid"
@@ -134,10 +148,7 @@ wait_for_operational_http() {
     until curl -fsS --max-time 2 "$health_url" >/dev/null 2>&1; do
         if [ "$attempt" -ge "$max_attempts" ]; then
             log ERROR "Operational Gunicorn did not answer HTTP after $max_attempts attempts."
-            if [ -f "$LOG_DIR/gunicorn-operational.log" ]; then
-                log ERROR "Last operational Gunicorn log lines:"
-                tail -n 80 "$LOG_DIR/gunicorn-operational.log"
-            fi
+            show_app_log
             exit 10
         fi
         attempt=$((attempt + 1))

@@ -407,9 +407,7 @@ workflow:
         cfg.worker_stale_after_seconds = 30
         cfg.save()
 
-        Workflow2Instance.objects.filter(pk=inst.pk).update(
-            created_at=timezone.now() - timedelta(minutes=2)
-        )
+        Workflow2Instance.objects.filter(pk=inst.pk).update(created_at=timezone.now() - timedelta(minutes=2))
 
         with patch.object(Workflow2InlineDrainMiddleware, 'DRAIN_INTERVAL_SECONDS', 0):
             for _ in range(4):

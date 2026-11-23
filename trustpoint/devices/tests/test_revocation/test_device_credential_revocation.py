@@ -17,9 +17,7 @@ def test_revoke_certificate_success(tls_client_credential_instance: dict[str, An
     issued_credential = tls_client_credential_instance['issued_credential']
     credential_id = issued_credential.pk
 
-    success, message = revoke_primary_certificate(
-        issued_credential_id=credential_id, reason='keyCompromise'
-    )
+    success, message = revoke_primary_certificate(issued_credential_id=credential_id, reason='keyCompromise')
 
     assert success is True, 'Revocation should be successful for a valid TLS client credential.'
     assert message == 'Certificate successfully revoked.', 'Successful revocation message should be returned.'
@@ -36,9 +34,7 @@ def test_revoke_certificate_already_revoked(tls_client_credential_instance: dict
 
     revoke_primary_certificate(issued_credential_id=issued_credential.pk, reason='keyCompromise')
 
-    success, message = revoke_primary_certificate(
-        issued_credential_id=issued_credential.pk, reason='keyCompromise'
-    )
+    success, message = revoke_primary_certificate(issued_credential_id=issued_credential.pk, reason='keyCompromise')
 
     assert success is False, 'Revocation should fail for an already revoked certificate.'
     assert message == 'The certificate is already revoked.', (
@@ -51,9 +47,7 @@ def test_revoke_certificate_invalid_id() -> None:
     """Test that revoking a certificate with an invalid `issued_credential_id` fails with the appropriate error."""
     invalid_credential_id = 999999  # Non-existent credential ID
 
-    success, message = revoke_primary_certificate(
-        issued_credential_id=invalid_credential_id, reason='keyCompromise'
-    )
+    success, message = revoke_primary_certificate(issued_credential_id=invalid_credential_id, reason='keyCompromise')
 
     assert success is False, 'Revocation should fail for a non-existent credential ID.'
     assert message == 'The credential to revoke does not exist.', (

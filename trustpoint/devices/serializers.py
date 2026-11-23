@@ -92,7 +92,9 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
     opc_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
     opc_trust_store = serializers.PrimaryKeyRelatedField(
         queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH),
-        required=False, allow_null=True, write_only=True,
+        required=False,
+        allow_null=True,
+        write_only=True,
     )
 
     pki_protocols = serializers.ListField(
@@ -104,7 +106,7 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
             'List of PKI protocol names or values. '
             'Accepts: "CMP" (1), "EST" (2), "OPC_GDS_PUSH" (4), "REST" (8). '
             'Can use names ["CMP", "EST"] or values [1, 2] or mix both.'
-        )
+        ),
     )
 
     credential_ttl_seconds = serializers.IntegerField(
@@ -147,12 +149,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
                     'OPC_GDS_PUSH (7), REST_USERNAME_PASSWORD (8), AGENT (9)'
                 )
             },
-            'est_password': {
-                'help_text': 'Password for EST. Auto-generated if omitted for EST protocols.'
-            },
-            'cmp_shared_secret': {
-                'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'
-            },
+            'est_password': {'help_text': 'Password for EST. Auto-generated if omitted for EST protocols.'},
+            'cmp_shared_secret': {'help_text': 'Shared secret for CMP. Auto-generated if omitted for CMP protocols.'},
         }
 
     def _parse_pki_protocol(self, value: str | int | OnboardingPkiProtocol) -> OnboardingPkiProtocol:
@@ -201,7 +199,8 @@ class OnboardingConfigSerializer(serializers.ModelSerializer[OnboardingConfigMod
         if instance.onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
             fields = ['cmp_shared_secret']
         elif instance.onboarding_protocol in (
-            OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.REST_USERNAME_PASSWORD,
+            OnboardingProtocol.EST_USERNAME_PASSWORD,
+            OnboardingProtocol.REST_USERNAME_PASSWORD,
         ):
             fields = ['est_password']
         try:
@@ -261,15 +260,26 @@ class NoOnboardingConfigSerializer(serializers.ModelSerializer[NoOnboardingConfi
 
         model = NoOnboardingConfigModel
         fields: ClassVar[list[str]] = [
-            'id', 'pki_protocols', 'trust_store', 'cmp_shared_secret', 'est_password', 'scep_challenge',
+            'id',
+            'pki_protocols',
+            'trust_store',
+            'cmp_shared_secret',
+            'est_password',
+            'scep_challenge',
         ]
         read_only_fields: ClassVar[list[str]] = ['id']
 
     def to_internal_value(self, data: Any) -> dict[str, Any]:
         """Reject expiry inputs even when this serializer is nested in a device request."""
-        if isinstance(data, dict) and {
-            'credential_ttl_seconds', 'credential_expires_at', 'scep_challenge_expires_at',
-        } & data.keys():
+        if (
+            isinstance(data, dict)
+            and {
+                'credential_ttl_seconds',
+                'credential_expires_at',
+                'scep_challenge_expires_at',
+            }
+            & data.keys()
+        ):
             msg = 'Per-device expiry overrides are not supported here.'
             raise serializers.ValidationError(msg)
         return cast('dict[str, Any]', super().to_internal_value(data))

@@ -120,9 +120,7 @@ class RolloverRequestMethodSelectView(RolloverMethodSelectView):
         return redirect('pki:issuing_cas-rollover-method-select', pk=pk)
 
 
-def _store_rollover_request_state(
-    request: HttpRequest, form: Any, rollover: CaRolloverModel, protocol: str
-) -> None:
+def _store_rollover_request_state(request: HttpRequest, form: Any, rollover: CaRolloverModel, protocol: str) -> None:
     """Seed the normal certificate-request wizard with the rollover's pending key."""
     credential = form.credential
     cleaned = form.cleaned_data
