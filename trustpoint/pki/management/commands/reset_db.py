@@ -175,6 +175,8 @@ class Command(BaseCommand):
 
         self.stdout.write(f"Resetting PostgreSQL database '{db_name}'...")
 
+        connections.close_all()
+
         try:
             # Connect to the default 'postgres' database to issue drop/create commands
             conn = psycopg.connect(

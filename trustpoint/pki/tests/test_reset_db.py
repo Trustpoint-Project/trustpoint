@@ -97,3 +97,34 @@ def test_reset_preserves_migrations_and_resets_only_configured_database(tmp_path
 def test_conflicting_reset_options_fail_before_any_database_or_file_deletion():
     with pytest.raises(CommandError, match='cannot be combined'):
         call_command('reset_db', force=True, initial_migrations=True, keep_all_migrations=True)
+
+
+def test_postgres_reset_closes_existing_connections_before_terminating():
+    """A connection opened by system checks must not survive the backend termination."""
+    from unittest.mock import MagicMock, patch
+
+    from pki.management.commands import reset_db
+
+    events = []
+    maintenance_conn = MagicMock()
+    maintenance_conn.cursor.return_value.execute.side_effect = (
+        lambda sql, *_args: events.append(sql.split()[0])
+    )
+
+    with (
+        patch.object(reset_db.connections, 'close_all', side_effect=lambda: events.append('close_all')),
+        patch.object(reset_db.psycopg, 'connect', return_value=maintenance_conn),
+        patch.object(reset_db, 'settings') as fake_settings,
+    ):
+        fake_settings.DATABASES = {
+            'default': {
+                'NAME': 'trustpoint_db',
+                'USER': 'admin',
+                'PASSWORD': 'testing321',
+                'HOST': '127.0.0.1',
+                'PORT': '5432',
+            }
+        }
+        reset_db.Command()._reset_postgresql()
+
+    assert events[0] == 'close_all'
