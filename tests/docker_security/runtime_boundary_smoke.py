@@ -238,7 +238,16 @@ assert switch(str(payload)).returncode != 0
 assert switch('--validated').returncode != 0
 assert (
     subprocess.run(
-        ['runuser', '-u', 'www-data', '--', '/usr/local/bin/python3', '-I', '/etc/trustpoint/runtime_config.py', 'control'],
+        [
+            'runuser',
+            '-u',
+            'www-data',
+            '--',
+            '/usr/local/bin/python3',
+            '-I',
+            '/etc/trustpoint/runtime_config.py',
+            'control',
+        ],
         capture_output=True,
     ).returncode
     != 0

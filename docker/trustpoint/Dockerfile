@@ -59,7 +59,12 @@ COPY --from=nginx-builder /out/modules/ngx_http_trustpoint_tls_binding_module.so
 COPY --from=nginx-builder /out/modules-enabled/50-trustpoint-tls-binding.conf /etc/nginx/modules-enabled/
 
 # Fail the build here if the runtime nginx cannot load the compiled module.
-RUN nginx -t
+# Avoid Debian's default port-80 listener in rootless builds using the host network.
+RUN printf '%s\n' 'include /etc/nginx/modules-enabled/*.conf;' \
+        'error_log stderr;' 'events {}' 'http {}' \
+        > /tmp/trustpoint-nginx-module-check.conf && \
+    nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
+    rm /tmp/trustpoint-nginx-module-check.conf
 
 # Create stable PKCS#11 module paths so provider-profile bootstrap and
 # local/dev configuration can rely on predictable values.
