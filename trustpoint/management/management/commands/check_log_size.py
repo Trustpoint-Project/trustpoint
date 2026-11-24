@@ -15,6 +15,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from management.models import NotificationModel, NotificationStatus
+from management.notifications import resolve_operational_issue
 
 
 class Command(BaseCommand):
@@ -42,6 +43,7 @@ class Command(BaseCommand):
         try:
             total_bytes = self._get_log_size(log_dir)
         except FileNotFoundError:
+            resolve_operational_issue('LOG_SIZE_EXCEEDED', strict=True)
             self.stdout.write(self.style.WARNING(f'Log directory does not exist: {log_dir}'))
             return
         except OSError as exc:
@@ -50,6 +52,7 @@ class Command(BaseCommand):
 
         total_mib = total_bytes / (1024 * 1024)
         if total_bytes <= threshold_mib * 1024 * 1024:
+            resolve_operational_issue('LOG_SIZE_EXCEEDED', strict=True)
             self.stdout.write(self.style.SUCCESS(f'Log data size: {total_mib:.2f} MiB (within threshold).'))
             return
 
@@ -68,9 +71,11 @@ class Command(BaseCommand):
         if created:
             new_status, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.NEW)
             notification.statuses.add(new_status)
-        self.stdout.write(
-            self.style.WARNING(f'Log data size: {total_mib:.2f} MiB exceeds {threshold_mib:g} MiB.')
-        )
+        elif NotificationStatus.StatusChoices.SOLVED in set(notification.statuses.values_list('status', flat=True)):
+            notification.statuses.remove(*notification.statuses.filter(status=NotificationStatus.StatusChoices.SOLVED))
+            new_status, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.NEW)
+            notification.statuses.add(new_status)
+        self.stdout.write(self.style.WARNING(f'Log data size: {total_mib:.2f} MiB exceeds {threshold_mib:g} MiB.'))
 
     @staticmethod
     def _get_log_size(log_dir: Path) -> int:

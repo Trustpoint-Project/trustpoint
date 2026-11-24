@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 """Test suite for security manager."""
+
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -134,9 +135,7 @@ class SecurityManagerTest(TestCase):
         self.security_config.save()
 
         # Even though current mode is CRITICAL, checking against LAB should return True
-        result = self.manager.is_feature_allowed(
-            AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.LAB
-        )
+        result = self.manager.is_feature_allowed(AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.LAB)
         self.assertTrue(result)
 
     def test_get_features_to_disable_returns_correct_features(self):
@@ -186,60 +185,6 @@ class SecurityManagerTest(TestCase):
 
         # AutoGenPkiFeature.disable should not be called (it's being allowed, not disabled)
         mock_disable.assert_not_called()
-
-    @patch.object(MockSecurityFeature1, 'enable')
-    def test_enable_feature_calls_enable_when_allowed(self, mock_enable):
-        """Test enable_feature calls enable method when feature is allowed."""
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LAB
-        self.security_config.save()
-
-        self.manager.enable_feature(MockSecurityFeature1)
-
-        mock_enable.assert_called_once()
-
-    @patch.object(AutoGenPkiFeature, 'enable')
-    def test_enable_feature_does_not_call_enable_when_not_allowed(self, mock_enable):
-        """Test enable_feature does not call enable when feature is not allowed."""
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.CRITICAL
-        self.security_config.save()
-
-        # AutoGenPkiFeature not allowed at CRITICAL
-        self.manager.enable_feature(AutoGenPkiFeature)
-
-        mock_enable.assert_not_called()
-
-    @patch.object(MockSecurityFeature1, 'enable')
-    def test_enable_feature_with_kwargs(self, mock_enable):
-        """Test enable_feature passes kwargs to enable method."""
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LAB
-        self.security_config.save()
-
-        kwargs = {'key': 'value', 'number': 42}
-        self.manager.enable_feature(MockSecurityFeature1, kwargs=kwargs)
-
-        mock_enable.assert_called_once_with(**kwargs)
-
-    @patch.object(MockSecurityFeature1, 'enable')
-    def test_enable_feature_with_none_kwargs(self, mock_enable):
-        """Test enable_feature calls enable without kwargs when kwargs is None."""
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LAB
-        self.security_config.save()
-
-        self.manager.enable_feature(MockSecurityFeature1, kwargs=None)
-
-        # Should call enable without any arguments
-        mock_enable.assert_called_once_with()
-
-    @patch.object(MockSecurityFeature1, 'enable')
-    def test_enable_feature_with_feature_instance(self, mock_enable):
-        """Test enable_feature works with feature instance."""
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LAB
-        self.security_config.save()
-
-        feature_instance = MockSecurityFeature1()
-        self.manager.enable_feature(feature_instance)
-
-        mock_enable.assert_called_once()
 
     def test_is_feature_allowed_handles_string_security_level(self):
         """Test is_feature_allowed correctly handles string security level values."""

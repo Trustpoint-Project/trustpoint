@@ -9,6 +9,7 @@ import base64
 from typing import TYPE_CHECKING, cast
 
 from django.utils.translation import gettext_lazy as _
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from rest_framework import exceptions
 from rest_framework.authentication import BaseAuthentication
 from rest_framework_simplejwt.authentication import JWTAuthentication
@@ -100,3 +101,25 @@ class ServiceAccountAuthentication(BaseAuthentication):
     def authenticate_header(self, request: HttpRequest) -> str:  # noqa: ARG002
         """Return the standard WWW-Authenticate challenge for service-account API auth."""
         return 'Basic realm="api"'
+
+
+class EntitledJWTAuthenticationScheme(OpenApiAuthenticationExtension):  # type: ignore[no-untyped-call]
+    """Describe JWT bearer authentication in the generated OpenAPI schema."""
+
+    target_class = 'users.api_auth.EntitledJWTAuthentication'
+    name = 'jwtAuth'
+
+    def get_security_definition(self, auto_schema: object) -> dict[str, str]:  # noqa: ARG002
+        """Return the JWT security scheme."""
+        return {'type': 'http', 'scheme': 'bearer', 'bearerFormat': 'JWT'}
+
+
+class ServiceAccountAuthenticationScheme(OpenApiAuthenticationExtension):  # type: ignore[no-untyped-call]
+    """Describe service-account Basic authentication in the generated OpenAPI schema."""
+
+    target_class = 'users.api_auth.ServiceAccountAuthentication'
+    name = 'serviceAccountBasicAuth'
+
+    def get_security_definition(self, auto_schema: object) -> dict[str, str]:  # noqa: ARG002
+        """Return the Basic security scheme."""
+        return {'type': 'http', 'scheme': 'basic'}

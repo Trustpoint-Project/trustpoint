@@ -42,6 +42,7 @@ def test_combined_logs_create_and_update_warning(tmp_path):
     assert list(notification.statuses.values_list('status', flat=True)) == ['ACK']
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize('size', [0, 1023, 1024])
 def test_no_warning_at_or_below_threshold(tmp_path, size):
     (tmp_path / 'trustpoint.log').write_bytes(b'a' * size)
@@ -49,6 +50,43 @@ def test_no_warning_at_or_below_threshold(tmp_path, size):
     with override_settings(LOG_DIR_PATH=tmp_path, LOG_SIZE_WARNING_THRESHOLD_MIB=1 / 1024):
         call_command('check_log_size', stdout=output)
     assert 'within threshold' in output.getvalue()
+
+
+@pytest.mark.django_db
+def test_warning_resolves_and_reopens_across_threshold(tmp_path):
+    notification = NotificationModel.objects.create(event='LOG_SIZE_EXCEEDED')
+    new_status, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.NEW)
+    notification.statuses.add(new_status)
+    (tmp_path / 'trustpoint.log').write_bytes(b'a' * 10)
+
+    with override_settings(LOG_DIR_PATH=tmp_path, LOG_SIZE_WARNING_THRESHOLD_MIB=1):
+        call_command('check_log_size', stdout=StringIO())
+
+    notification.refresh_from_db()
+    assert notification.statuses.filter(status=NotificationStatus.StatusChoices.SOLVED).exists()
+    assert not notification.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists()
+
+    (tmp_path / 'trustpoint.log').write_bytes(b'a' * (2 * 1024 * 1024))
+    with override_settings(LOG_DIR_PATH=tmp_path, LOG_SIZE_WARNING_THRESHOLD_MIB=1):
+        call_command('check_log_size', stdout=StringIO())
+
+    notification.refresh_from_db()
+    assert notification.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists()
+    assert not notification.statuses.filter(status=NotificationStatus.StatusChoices.SOLVED).exists()
+
+
+@pytest.mark.django_db
+def test_missing_log_directory_resolves_warning(tmp_path):
+    notification = NotificationModel.objects.create(event='LOG_SIZE_EXCEEDED')
+    new_status, _ = NotificationStatus.objects.get_or_create(status=NotificationStatus.StatusChoices.NEW)
+    notification.statuses.add(new_status)
+
+    with override_settings(LOG_DIR_PATH=tmp_path / 'missing'):
+        call_command('check_log_size', stdout=StringIO())
+
+    notification.refresh_from_db()
+    assert notification.statuses.filter(status=NotificationStatus.StatusChoices.SOLVED).exists()
+    assert not notification.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists()
 
 
 def test_only_regular_application_log_files_are_counted(tmp_path):

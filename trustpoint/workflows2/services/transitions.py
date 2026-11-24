@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from workflows2.context_processors import reset_waiting_counts_cache
 from workflows2.models import Workflow2Instance, Workflow2Run
 
 
@@ -239,3 +240,4 @@ def save_instance_status(instance: Workflow2Instance, *, extra_fields: list[str]
     if extra_fields:
         fields = [*extra_fields, *fields]
     instance.save(update_fields=fields)
+    reset_waiting_counts_cache()
