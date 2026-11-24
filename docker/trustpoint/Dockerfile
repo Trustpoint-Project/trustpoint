@@ -26,7 +26,7 @@ RUN cd /usr/share/nginx/src && \
     rm -rf /tmp/trustpoint-tls-binding /tmp/trustpoint-nginx-module-check.conf
 
 FROM python:3.14-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.10 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
