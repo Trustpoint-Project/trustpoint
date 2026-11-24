@@ -159,7 +159,7 @@ class HumanUserTokenObtainPairSerializer(TokenObtainSerializer):
                 value={
                     'access': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
                     'token_type': 'Bearer',
-                    'expires_in': 3600,
+                    'expires_in': 300,
                 },
                 response_only=True,
                 status_codes=['200'],
@@ -198,7 +198,7 @@ class ServiceAccountTokenObtainPairView(TokenObtainPairView):
         {
             "access": "...",
             "token_type": "Bearer",
-            "expires_in": 3600
+            "expires_in": 300
         }
     """
 

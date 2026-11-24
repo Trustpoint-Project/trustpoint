@@ -21,7 +21,8 @@ The notification cycle checks the combined size of `trustpoint.log` and its numb
 rotated backups. It creates a system warning when the total exceeds **10 MiB**.
 This leaves headroom above the normal retention of approximately 8 MiB (one 1 MiB
 active file plus seven backups). Repeated checks update the existing warning and
-preserve its status. No logs are deleted by this check.
+preserve its status. When the total falls back below the threshold, the warning
+is marked solved; it reopens if the total rises again. No logs are deleted by this check.
 
 Set `LOG_SIZE_WARNING_THRESHOLD_MIB` in Django settings to change the default, or
 override it for a manual check:

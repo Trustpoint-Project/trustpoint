@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from cryptography import x509
 from django.db.models import Q
 from django.utils import timezone
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
 from rest_framework.authentication import BaseAuthentication
@@ -36,6 +37,27 @@ if TYPE_CHECKING:
 
 JOB_LEASE_SECONDS = 1800
 MAX_ERROR_LENGTH = 2000
+
+
+class AgentCertificateAuthenticationScheme(OpenApiAuthenticationExtension):  # type: ignore[no-untyped-call]
+    """Describe the proxy-forwarded agent client certificate in the generated schema."""
+
+    target_class = 'agents.api_views.AgentCertificateAuthentication'
+    name = 'agentProxyCertificate'
+
+    def get_security_definition(self, auto_schema: object) -> dict[str, str]:  # noqa: ARG002
+        """Return the forwarded client-certificate security scheme."""
+        return {
+            'type': 'apiKey',
+            'in': 'header',
+            'name': 'SSL-Client-Cert',
+            'description': (
+                'mTLS client certificate added by the trusted TLS proxy after validating the client. '
+                'Clients must not send this header directly.'
+            ),
+        }
+
+
 _SECRET_PLACEHOLDER = re.compile(r'\{\{\s*secret:([A-Za-z0-9_.-]+)\s*\}\}')
 _PLACEHOLDER = re.compile(r'\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}')
 

@@ -80,7 +80,13 @@ def _build_mock_response(*, status_code: int, headers: dict[str, str], json_body
 
 class RequestsWebhookAdapterTests(SimpleTestCase):
     def test_request_returns_200_and_parses_json(self) -> None:
-        with patch('requests.request') as request_mock:
+        with (
+            patch(
+                'util.validation.socket.getaddrinfo',
+                return_value=[(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', ('93.184.216.34', 0))],
+            ),
+            patch('requests.request') as request_mock,
+        ):
             request_mock.return_value = _build_mock_response(
                 status_code=200,
                 headers={'X-Adapter-Test': '1'},
@@ -90,7 +96,7 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
 
             resp = adapter.request(
                 method='POST',
-                url='https://example.test/hook',
+                url='https://example.com/hook',
                 headers={'X-Test': '1'},
                 body={'hello': 'world'},
                 timeout_seconds=5,
@@ -110,7 +116,7 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
     def test_request_rejects_loopback_target(self) -> None:
         adapter = RequestsWebhookAdapter(verify_tls=True)
 
-        with self.assertRaisesMessage(ValueError, 'prohibited address'):
+        with self.assertRaisesMessage(ValueError, 'localhost or loopback'):
             adapter.request(
                 method='GET',
                 url='http://127.0.0.1/hook',
@@ -119,8 +125,20 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
                 timeout_seconds=5,
             )
 
+    def test_request_rejects_dangerous_port(self) -> None:
+        adapter = RequestsWebhookAdapter(verify_tls=True)
+
+        with self.assertRaisesMessage(ValueError, 'Port 22 is not allowed'):
+            adapter.request(
+                method='GET',
+                url='https://example.test:22/hook',
+                headers={},
+                body=None,
+                timeout_seconds=5,
+            )
+
     def test_request_returns_non_200_and_preserves_status_code(self) -> None:
-        with patch('requests.request') as request_mock:
+        with patch('workflows2.engine.adapters.validate_webhook_url'), patch('requests.request') as request_mock:
             request_mock.return_value = _build_mock_response(
                 status_code=418,
                 headers={'X-Adapter-Test': '1'},
@@ -141,7 +159,7 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
             request_mock.assert_called_once()
 
     def test_request_falls_back_to_text_when_response_is_not_json(self) -> None:
-        with patch('requests.request') as request_mock:
+        with patch('workflows2.engine.adapters.validate_webhook_url'), patch('requests.request') as request_mock:
             request_mock.return_value = _build_mock_response(
                 status_code=200,
                 headers={'X-Adapter-Test': '1'},
