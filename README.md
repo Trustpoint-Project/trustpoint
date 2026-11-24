@@ -85,10 +85,21 @@ sudo python3 docker/init_secret.py --type all
 docker compose up -d --build
 ```
 
-Podman 5 runs the same Compose files: replace `docker compose` with
-`sudo podman compose`. Before starting, enable its API socket with
-`sudo systemctl enable --now podman.socket`.
-See the [deployment guide](https://trustpoint.readthedocs.io/en/latest/features/management/docker_deployment.html).
+For rootless Podman 5 on Linux, set `TP_HTTP_PORT=8080` and `TP_HTTPS_PORT=8443` in
+`.env`. Replace the initializer and startup commands above with:
+
+```bash
+podman unshare python3 docker/init_secret.py --type all
+systemctl --user enable --now podman.socket
+podman compose up -d --build
+```
+
+Run these commands on the Linux host. `podman unshare` is unavailable in the
+macOS/Windows remote client used by Podman Machine.
+
+Open `https://<your-server>:8443/`. The shipped application services keep
+`NoNewPrivileges` enabled. See the [deployment guide](https://trustpoint.readthedocs.io/en/latest/features/management/docker_deployment.html)
+for user mappings, SELinux, and startup after reboot.
 
 The one-time initializer creates an installation-specific Django signing key and
 an independent software database key-encryption key (KEK). Preserve

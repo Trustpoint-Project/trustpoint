@@ -65,7 +65,7 @@ def test_tls_entry_points_preserve_previous_files_on_failure(tmp_path, failure, 
     assert all((staging / name).read_text() == 'candidate' for name in names)
 
 
-@pytest.mark.parametrize('mode', ['bootstrap', 'operational', 'handoff', 'shutdown'])
+@pytest.mark.parametrize('mode', ['bootstrap', 'operational', 'handoff', 'shutdown', 'control'])
 def test_web_supervisor_detects_service_exit_and_stops_children(tmp_path, mode):
     source = (ROOT / 'docker/trustpoint/entrypoint.sh').read_text()
     source = source[source.index('service_alive()') : source.index('# ---------------- WORKER ROLE')]
@@ -85,6 +85,8 @@ nginx gunicorn &
 GUNICORN_PID=$!
 echo "$GUNICORN_PID" > "$TEST_DIR/gunicorn.pid"
 """
+    if mode == 'control':
+        setup += 'nginx control &\nCONTROL_PID=$!\necho "$CONTROL_PID" > "$TEST_DIR/control.pid"\n'
     if mode == 'handoff':
         setup += """
 until [ -f "$TEST_DIR/gunicorn.ready" ]; do sleep 0.01; done
@@ -113,6 +115,8 @@ touch "$TEST_DIR/operational.ready"
         services = ['operational-gunicorn', 'operational-qcluster'] if mode == 'handoff' else ['gunicorn']
         if mode in {'operational', 'shutdown'}:
             services.append('qcluster')
+        if mode == 'control':
+            services.append('control')
         services.append('-g')  # The supervisor starts nginx with -g as its first argument.
         deadline = time.monotonic() + 5
         # Bash can publish READY before its background children finish starting.
@@ -125,6 +129,7 @@ touch "$TEST_DIR/operational.ready"
         else:
             filename = {
                 'bootstrap': 'gunicorn.pid',
+                'control': 'control.pid',
                 'operational': 'qcluster.pid',
                 'handoff': 'operational-qcluster.pid',
             }[mode]
@@ -169,7 +174,7 @@ print('READY', flush=True)
 while True:
     time.sleep(1)
 """
-    # This service and the cleanup shell are siblings, as after a sudo handoff.
+    # This service and the cleanup shell are siblings, as after a control-process handoff.
     service = subprocess.Popen(
         [sys.executable, '-c', program, str(finished), str(ignore_termination)],
         stdout=subprocess.PIPE,
@@ -294,3 +299,36 @@ time.sleep(30)
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
+
+
+@pytest.mark.parametrize(
+    'port,expected',
+    [('443', 'https://$host$request_uri'), ('8443', 'https://$host:8443$request_uri'), ('invalid', None)],
+)
+def test_nginx_redirect_uses_published_https_port(tmp_path, port, expected):
+    source = (ROOT / 'docker/trustpoint/wizard/configure_nginx.sh').read_text()
+    template = tmp_path / 'template'
+    template.write_text('return 301 https://$host$request_uri;\n')
+    site = tmp_path / 'site'
+    enabled = tmp_path / 'enabled'
+    enabled.mkdir()
+    binaries = tmp_path / 'bin'
+    binaries.mkdir()
+    nginx = binaries / 'nginx'
+    nginx.write_text('#!/bin/sh\nexit 0\n')
+    nginx.chmod(0o755)
+    source = source.replace(
+        '/var/www/html/trustpoint/docker/trustpoint/nginx/trustpoint-nginx-https.conf', str(template)
+    )
+    source = source.replace('/etc/nginx/sites-available/trustpoint', str(site))
+    source = source.replace('/etc/nginx/sites-enabled', str(enabled))
+    result = subprocess.run(
+        ['bash', '-c', source],
+        env={**os.environ, 'TP_HTTPS_PORT': port, 'PATH': f'{binaries}:{os.environ["PATH"]}'},
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode == (0 if expected else 2), result.stdout + result.stderr
+    if expected:
+        assert site.read_text() == f'return 301 {expected};\n'

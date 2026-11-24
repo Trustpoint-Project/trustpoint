@@ -26,9 +26,10 @@ name, ``.env``, Compose file selection, overrides, and enabled profiles. Changin
 the project name can select new, empty named volumes.
 
 Examples below use ``docker compose`` for the main deployment. For Podman, use
-``sudo podman compose`` with the same options. Also replace ``docker image tag``
-with ``sudo podman image tag`` and ``docker cp`` with ``sudo podman cp`` so image
-tagging and backups use the same rootful Podman storage as the deployment.
+``podman compose`` as the original deployment user with the same options. Also
+replace ``docker image tag`` with ``podman image tag`` and ``docker cp`` with
+``podman cp`` so image tagging and backups use the same rootless Podman storage.
+For an existing rootful Podman deployment, prefix all Podman commands with ``sudo``.
 If your installation uses another configuration, include the same options before
 every command:
 

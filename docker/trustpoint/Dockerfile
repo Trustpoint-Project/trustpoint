@@ -45,7 +45,6 @@ EXPOSE 80 443
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         opensc \
-        sudo \
         nginx \
         gettext \
         locales \
@@ -147,13 +146,6 @@ RUN mkdir -p /etc/trustpoint/ && \
     rm -rf /var/www/html/trustpoint/docker/trustpoint/nginx/tls-binding && \
     rm -f /etc/trustpoint/nginx/tls-binding/ngx_http_trustpoint_tls_binding_module.c \
           /etc/trustpoint/nginx/tls-binding/config
-
-# Add sudoers file and configure user and restart sudo service.
-RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
-    chown root:root /etc/sudoers && \
-    chmod 440 /etc/sudoers && \
-    visudo -cf /etc/sudoers && \
-    service sudo restart
 
 # The deployment supplies /run/secrets/django_secret_key as a read-only Compose secret.
 # No signing key is generated or stored in this image.

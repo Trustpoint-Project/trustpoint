@@ -16,23 +16,53 @@ database password, TLS DNS/IP names, and exposed ports in ``.env``.
 Podman
 ------
 
-The images are OCI images and the Compose files work with Podman 5 or newer; no
-separate Podman image is published. Replace ``docker compose`` with
-``podman compose`` and run it rootful:
+The images are OCI images; no separate Podman image is published. For a fresh
+rootless installation, use a regular Linux user with subordinate UID/GID ranges
+configured in ``/etc/subuid`` and ``/etc/subgid``. Use the default Podman user
+namespace mapping, rather than ``keep-id`` or ``auto``.
+
+Run the commands below directly on the Linux host. The macOS/Windows Podman
+client is remote and cannot run ``podman unshare``; adding ``sudo`` does not
+enable it. Podman Machine requires setup inside its Linux VM, including the
+checkout and secret storage, and is not covered by this deployment procedure.
+
+Copy ``.env.example`` to ``.env`` and set the database credentials and the actual
+server IP addresses/DNS names in ``TP_TLS_*``. Set ``TP_HTTP_PORT=8080`` and
+``TP_HTTPS_PORT=8443`` to publish unprivileged host ports. Then run:
 
 .. code-block:: bash
 
-   sudo python3 docker/init_secret.py --type all
-   sudo systemctl enable --now podman.socket
-   sudo podman compose up -d --build --wait --wait-timeout 300
+   podman unshare python3 docker/init_secret.py --type all
+   systemctl --user enable --now podman.socket
+   podman compose up -d --build --wait --wait-timeout 300
 
-The Docker Compose provider needs the Podman API socket enabled and running.
+The initializer runs inside Podman's user namespace so the files are owned by
+container root, readable by container group 33, and mode ``0440``. Do not use
+``sudo`` for these rootless commands or make the keys world-readable. Existing
+rootful deployments need their original keys and state migrated with the correct
+user namespace ownership; do not generate replacement keys.
 
-Use a rootful Podman connection on Linux. The secret initializer creates
-root-owned files readable by container group 33; a rootless user namespace maps
-that group differently, so the application cannot read the keys. On
-SELinux-enforcing hosts, label the secret directory before the first start:
-``sudo chcon -Rt container_file_t secrets/``.
+On SELinux-enforcing hosts, label the secret directory before starting:
+``chcon -Rt container_file_t secrets/``. Label custom secret source paths too.
+The Docker Compose provider needs the user Podman API socket enabled and running.
+For services to remain available after logout/reboot, an administrator must
+enable lingering for the deployment user and enable its user
+``podman-restart.service``. Keep the same user for startup, backups, and upgrades.
+
+The application, database, worker, and SoftHSM Compose services enable
+``no-new-privileges:true``. A root-owned control process inside the container
+handles fixed TLS, PKCS#11 installation, and operational-switch requests over a
+private Unix socket. Django runs as ``www-data`` and never calls ``sudo``.
+Container root is mapped to the unprivileged host user in rootless Podman.
+
+Open ``https://<your-server>:8443/``. IP access is supported when the address is
+listed in ``TP_TLS_IPV4_ADDRESSES`` or ``TP_TLS_IPV6_ADDRESSES``. Use the same
+hostname/IP throughout setup and HTTPS so the browser retains its session and
+CSRF cookies. After changing ``.env``, recreate the application containers.
+
+For rootful Podman, use ``sudo python3 docker/init_secret.py --type all``,
+``sudo systemctl enable --now podman.socket``, and ``sudo podman compose`` instead.
+The default host ports 80/443 can then be used.
 
 ``podman compose`` must use the Docker Compose v2.32.4+ provider because the
 optional PKCS#11 overrides rely on the ``!override`` tag. The Python
@@ -45,6 +75,12 @@ Podman Machine is not a supported production host; use a Linux server.
 
 Fresh Installation
 ---------------------
+
+The remaining examples use Docker and rootful host ownership. For rootless
+Podman, use ``podman compose``; replace ``sudo python3 docker/init_secret.py``
+with ``podman unshare python3 docker/init_secret.py``. Likewise, use
+``podman unshare chown`` and ``podman unshare chmod`` for the SoftHSM credential
+files. Keep the same deployment user and the unprivileged ports configured above.
 
 From a release checkout:
 
@@ -124,7 +160,8 @@ The main and worker Compose files also mount the software KEK read-only at
 required even for local software-backend development. See
 :doc:`../security/db_encryption` for the Trustpoint 1.0 envelope format and recovery.
 On macOS, Docker Desktop may map host numeric IDs differently; verify guest
-``www-data`` read access. Linux production ownership stays root:33/0440. Do not
+``www-data`` read access. Rootful Linux ownership stays root:33/0440; rootless
+Podman uses those IDs inside its user namespace. Do not
 make the key world-readable to work around Desktop file sharing.
 
 Local, non-container development uses a separate generated Django signing key in

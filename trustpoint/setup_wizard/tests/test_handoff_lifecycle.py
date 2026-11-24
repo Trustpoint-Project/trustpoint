@@ -204,7 +204,7 @@ def test_successful_switch_promotes_pending_env_then_marks_ready(monkeypatch, sw
     result = handoff.run_operational_runtime_switch(pending if explicit else None)
     assert result.switched is True
     assert result.detail == 'started'
-    assert runner.call_args.args[0] == [handoff.SUDO_EXECUTABLE, str(switch_script), '--pending']
+    assert runner.call_args.args[0] == [str(switch_script), '--pending']
     assert not pending.exists()
     assert handoff.operational_env_file_path().read_text() == '{"DATABASE_HOST": "postgres"}\n'
     ready = handoff.operational_ready_file_path()

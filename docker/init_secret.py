@@ -100,7 +100,7 @@ def initialize_secret(
 ) -> bool:
     """Publish a validated private secret atomically without overwriting any file."""
     if os.geteuid() != 0:
-        msg = 'Run with sudo so the secret can be root-owned and readable by the container group.'
+        msg = 'Run with sudo (rootful) or podman unshare (rootless) to set the container secret ownership.'
         raise PermissionError(msg)
     if group_id < 0:
         msg = 'Container group ID must be nonnegative.'

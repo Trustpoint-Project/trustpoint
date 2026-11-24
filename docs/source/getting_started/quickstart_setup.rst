@@ -6,9 +6,15 @@ Quickstart Setup
 Deploy Trustpoint with Docker Compose or Podman on a Linux server. You need
 Docker Engine and Docker Compose v2.32.4 or newer, or Podman 5 or newer with
 the Docker Compose provider, plus Git, Python 3, and administrator access. Podman
-deployments use ``sudo podman compose`` in place of ``docker compose``. Before
-starting, enable the API socket with ``sudo systemctl enable --now podman.socket``; see
-:doc:`../features/management/docker_deployment`.
+deployments on Linux use ``podman compose`` and initialize secrets with
+``podman unshare python3 docker/init_secret.py --type all`` instead of ``sudo``.
+Enable the user socket with ``systemctl --user enable --now podman.socket`` and
+set ``TP_HTTP_PORT=8080`` and ``TP_HTTPS_PORT=8443`` in ``.env`` before starting.
+See :doc:`../features/management/docker_deployment` for the rootless instructions;
+the commands below show Docker deployment.
+
+Run the Podman commands on the Linux host; ``podman unshare`` is unavailable
+in the macOS/Windows remote client.
 
 .. code-block:: bash
 
