@@ -67,7 +67,7 @@ or silently repaired. Compose mounts the file read-only in web and worker.
 
 Production never generates a key and fails if the mounted file is missing,
 empty, or unreadable. A separate local-development key is cached under the ignored
-`var/development/` directory only when running non-Docker development settings.
+`var/development/` directory only when running non-container development settings.
 
 Keep the host key across upgrades. Import an existing installation's exact key
 with `sudo python3 docker/init_secret.py --import-from /path/to/saved-key` before

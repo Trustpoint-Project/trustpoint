@@ -1,16 +1,47 @@
-Docker Compose Deployment
-============================
+Docker And Podman Compose Deployment
+====================================
 
-Docker Compose is the supported Docker deployment mechanism. The application web
+The Compose deployment supports Docker Compose and Podman. The application web
 setup wizard remains available for configuring Trustpoint after deployment.
 
 Prerequisites
 ----------------
 
-Use a Linux server with Docker Engine, Docker Compose v2.32.4 or newer, Git,
-Python 3, and administrator access. The examples run Docker as an authorized
-Docker user; prefix Docker commands with ``sudo`` if required on your server.
-Set the database password, TLS DNS/IP names, and exposed ports in ``.env``.
+Use a Linux server with Docker Engine and Docker Compose v2.32.4 or newer, or
+Podman 5 or newer with the Docker Compose provider, Git, Python 3, and
+administrator access. The examples run Docker as an authorized Docker user;
+prefix Docker commands with ``sudo`` if required on your server. Set the
+database password, TLS DNS/IP names, and exposed ports in ``.env``.
+
+Podman
+------
+
+The images are OCI images and the Compose files work with Podman 5 or newer; no
+separate Podman image is published. Replace ``docker compose`` with
+``podman compose`` and run it rootful:
+
+.. code-block:: bash
+
+   sudo python3 docker/init_secret.py --type all
+   sudo systemctl enable --now podman.socket
+   sudo podman compose up -d --build --wait --wait-timeout 300
+
+The Docker Compose provider needs the Podman API socket enabled and running.
+
+Use a rootful Podman connection on Linux. The secret initializer creates
+root-owned files readable by container group 33; a rootless user namespace maps
+that group differently, so the application cannot read the keys. On
+SELinux-enforcing hosts, label the secret directory before the first start:
+``sudo chcon -Rt container_file_t secrets/``.
+
+``podman compose`` must use the Docker Compose v2.32.4+ provider because the
+optional PKCS#11 overrides rely on the ``!override`` tag. The Python
+``podman-compose`` provider does not fully support it; confirm the provider with
+``podman compose version``. Podman looks for a ``docker-compose`` executable in
+``PATH``; install the standalone binary there or set
+``PODMAN_COMPOSE_PROVIDER`` if only Docker's CLI plugin is installed.
+
+Podman Machine is not a supported production host; use a Linux server.
 
 Fresh Installation
 ---------------------
@@ -96,14 +127,14 @@ On macOS, Docker Desktop may map host numeric IDs differently; verify guest
 ``www-data`` read access. Linux production ownership stays root:33/0440. Do not
 make the key world-readable to work around Desktop file sharing.
 
-Local, non-Docker development uses a separate generated Django signing key in
+Local, non-container development uses a separate generated Django signing key in
 ignored ``var/development/`` storage. With no explicit
 ``TRUSTPOINT_SOFTWARE_KEK_FILE``, native development-server commands or local
 commands with ``DEBUG=True`` permit fresh software-backend initialization, which
 creates ``var/development/software_kek`` atomically with mode ``0600``. It is
 reused across local commands and server restarts. If it goes missing after
 initialization, restore the original file; no replacement is generated. These
-development defaults are unavailable in Docker and production deployments.
+development defaults are unavailable in containers and production deployments.
 
 Start, Stop, And Inspect
 ---------------------------

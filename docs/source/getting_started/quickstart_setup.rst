@@ -3,8 +3,12 @@
 Quickstart Setup
 ================
 
-Deploy Trustpoint with Docker Compose on a Linux server. You need Docker Engine,
-Docker Compose v2.32.4 or newer, Git, Python 3, and administrator access.
+Deploy Trustpoint with Docker Compose or Podman on a Linux server. You need
+Docker Engine and Docker Compose v2.32.4 or newer, or Podman 5 or newer with
+the Docker Compose provider, plus Git, Python 3, and administrator access. Podman
+deployments use ``sudo podman compose`` in place of ``docker compose``. Before
+starting, enable the API socket with ``sudo systemctl enable --now podman.socket``; see
+:doc:`../features/management/docker_deployment`.
 
 .. code-block:: bash
 

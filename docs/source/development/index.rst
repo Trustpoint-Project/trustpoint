@@ -32,9 +32,9 @@ choice in test results.
 Local database and application setup
 ====================================
 
-Normal non-Docker development defaults to SQLite at ``trustpoint/db.sqlite3``.
+Normal non-container development defaults to SQLite at ``trustpoint/db.sqlite3``.
 PostgreSQL is selected explicitly; there is no automatic fallback from an
-unavailable PostgreSQL server to SQLite. Production Docker deployments use
+unavailable PostgreSQL server to SQLite. Production container deployments use
 PostgreSQL.
 
 For a fresh local SQLite database:
