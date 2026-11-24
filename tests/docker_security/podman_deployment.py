@@ -69,10 +69,11 @@ def submit_form(client: OpenerDirector, origin: str, path: str, fields: dict[str
         response = error
     with response:
         body = response.read().decode()
-        if response.status != HTTPStatus.FOUND or urlsplit(response.headers.get('Location', '')).path != next_path:
+        location = response.headers.get('Location', '')
+        if response.status != HTTPStatus.FOUND or urlsplit(location).path != next_path:
             Path('reports/podman').mkdir(parents=True, exist_ok=True)
             Path('reports/podman/failed-form.html').write_text(body)
-            message = f'{path}: expected redirect to {next_path}, received {response.status}'
+            message = f'{path}: expected redirect to {next_path}, received {response.status} with Location {location!r}'
             raise AssertionError(message)
     print(f'PASS: {path} submitted with browser cookies and CSRF headers.')
 
@@ -169,10 +170,10 @@ def main() -> None:
         status = call([*COMPOSE, 'exec', '-T', service, 'cat', '/proc/1/status'])
         assert 'NoNewPrivs:\t1' in status, service
     before = operational_state()
-    login(origin, ADMIN_USER, password, '/')
+    login(origin, ADMIN_USER, password, '/home/')
     call([*COMPOSE, 'restart'])
     call([*COMPOSE, 'up', '-d', '--no-build', '--wait', '--wait-timeout', '300'])
-    login(origin, ADMIN_USER, password, '/')
+    login(origin, ADMIN_USER, password, '/home/')
     assert operational_state() == before, 'Restart changed persisted keys or encrypted data.'
     database_logs = call([*COMPOSE, 'logs', '--no-color', 'postgres'])
     assert not re.search(r'role "[^"]+" does not exist', database_logs), database_logs

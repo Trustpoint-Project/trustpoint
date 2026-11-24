@@ -23,20 +23,22 @@ def test_failed_form_is_rejected_and_saved(tmp_path, monkeypatch, status, locati
     result.headers = {'Location': location}
     client = SimpleNamespace(open=Mock(side_effect=[page, result]))
 
-    with pytest.raises(AssertionError, match='expected redirect'):
+    with pytest.raises(AssertionError, match='expected redirect') as error:
         deployment.submit_form(client, 'https://192.0.2.1:8443', '/admin/', {'password': 'synthetic'}, '/database/')
 
     assert (tmp_path / 'reports/podman/failed-form.html').read_text() == 'Form error details'
+    assert f'Location {location!r}' in str(error.value)
 
 
-def test_successful_form_keeps_csrf_headers_and_requires_expected_redirect(tmp_path, monkeypatch):
+@pytest.mark.parametrize('next_path', ['/database/', '/home/'])
+def test_successful_form_keeps_csrf_headers_and_requires_expected_redirect(tmp_path, monkeypatch, next_path):
     monkeypatch.chdir(tmp_path)
     page = io.BytesIO(b'<input name="csrfmiddlewaretoken" value="masked-token">')
     page.status = 200
-    redirect = HTTPError('/admin/', 302, 'Found', {'Location': '/database/'}, io.BytesIO(b''))
+    redirect = HTTPError('/admin/', 302, 'Found', {'Location': next_path}, io.BytesIO(b''))
     client = SimpleNamespace(open=Mock(side_effect=[page, redirect]))
 
-    deployment.submit_form(client, 'https://192.0.2.1:8443', '/admin/', {'username': 'ci'}, '/database/')
+    deployment.submit_form(client, 'https://192.0.2.1:8443', '/admin/', {'username': 'ci'}, next_path)
 
     request = client.open.call_args_list[1].args[0]
     assert parse_qs(request.data.decode()) == {'username': ['ci'], 'csrfmiddlewaretoken': ['masked-token']}
