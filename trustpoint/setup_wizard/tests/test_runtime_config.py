@@ -281,6 +281,7 @@ def test_control_rejects_arbitrary_commands_and_arguments(arguments):
 @pytest.mark.parametrize('uid', [0, 33, 65534])
 def test_control_authenticates_peer_and_keeps_environment_opaque(monkeypatch, uid):
     monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.setattr(runtime.socket, 'SO_PEERCRED', 17, raising=False)
     connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, uid, 33))
     environment = {'LD_PRELOAD': '/tmp/attack.so', 'DATABASE_PASSWORD': 'synthetic', 'PATH': '/tmp/bin'}
     data = json.dumps({'arguments': ['switch', '--final'], 'environment': environment}).encode() + b'\n'
@@ -289,6 +290,14 @@ def test_control_authenticates_peer_and_keeps_environment_opaque(monkeypatch, ui
     else:
         with pytest.raises(ValueError, match='identity'):
             runtime.read_control_request(connection, io.BytesIO(data))
+
+
+def test_control_fails_closed_without_peer_credentials(monkeypatch):
+    monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.delattr(runtime.socket, 'SO_PEERCRED', raising=False)
+    connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, 33, 33))
+    with pytest.raises(ValueError, match='credentials'):
+        runtime.read_control_request(connection, io.BytesIO(b'{}\n'))
 
 
 @pytest.mark.parametrize(
@@ -305,6 +314,7 @@ def test_control_authenticates_peer_and_keeps_environment_opaque(monkeypatch, ui
 )
 def test_control_rejects_malformed_or_oversized_requests(monkeypatch, data):
     monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.setattr(runtime.socket, 'SO_PEERCRED', 17, raising=False)
     connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, 33, 33))
     with pytest.raises((ValueError, TypeError)):
         runtime.read_control_request(connection, io.BytesIO(data))

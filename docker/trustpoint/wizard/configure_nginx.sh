@@ -24,8 +24,9 @@ if ! [[ "$https_port" =~ ^[0-9]{1,5}$ ]] || (( 10#$https_port < 1 || 10#$https_p
     exit 2
 fi
 if (( 10#$https_port != 443 )); then
-    sed -i "s#https://\$host\$request_uri#https://\$host:${https_port}\$request_uri#" \
+    sed -i.bak "s#https://\$host\$request_uri#https://\$host:${https_port}\$request_uri#" \
         /etc/nginx/sites-available/trustpoint
+    rm -f /etc/nginx/sites-available/trustpoint.bak
 fi
 
 log INFO "Enabling Nginx vhost..."

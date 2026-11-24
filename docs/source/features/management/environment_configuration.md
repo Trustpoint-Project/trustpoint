@@ -19,13 +19,13 @@ Unless stated otherwise, all variables are optional.
 The container entrypoint records privileged deployment paths and ports in a
 root-owned file at `/run/trustpoint/deployment.json` before starting the web
 application. Configure these through the deployment environment. The web
-application cannot override these settings through sudo or wizard state.
+application cannot override these settings through the control socket or wizard state.
 
 Wizard handoff files retain their `operational.env` / `operational.pending.env`
 names but must contain JSON data. Do not shell-source them. Shell assignments,
 malformed JSON, and unsupported settings are rejected.
 
-Runtime switching exposes only the `--pending` and `--final` sudo actions. Both
+Runtime switching exposes only the `--pending` and `--final` control-socket actions. Both
 select the corresponding deployment-configured file; arbitrary file arguments
 are rejected. Wizard values and application environment variables are applied
 only after dropping privileges to `www-data`.

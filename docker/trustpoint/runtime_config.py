@@ -24,9 +24,10 @@ import sys
 import tempfile
 from contextlib import suppress
 from pathlib import Path
-from typing import TYPE_CHECKING, BinaryIO
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import io
     from collections.abc import Sequence
 
 APP_DIR = Path('/var/www/html/trustpoint')
@@ -485,9 +486,13 @@ def request_control(arguments: list[str]) -> None:
     raise SystemExit(result['returncode'])
 
 
-def read_control_request(connection: socket.socket, stream: BinaryIO) -> tuple[list[str], dict[str, str]]:
+def read_control_request(connection: socket.socket, stream: io.BufferedIOBase) -> tuple[list[str], dict[str, str]]:
     """Authenticate the caller and validate the bounded control message."""
-    credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize('3i'))
+    peer_credential_option = getattr(socket, 'SO_PEERCRED', None)  # Linux-only; fail closed elsewhere.
+    if peer_credential_option is None:
+        msg = 'Control peer credentials are unavailable.'
+        raise ValueError(msg)
+    credentials = connection.getsockopt(socket.SOL_SOCKET, peer_credential_option, struct.calcsize('3i'))
     _, uid, _ = struct.unpack('3i', credentials)
     if uid != pwd.getpwnam('www-data').pw_uid:
         msg = 'Invalid control identity.'
