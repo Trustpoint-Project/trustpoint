@@ -196,6 +196,14 @@ The job verifies rootless execution and initializes private secrets inside the
 Podman user namespace. Its API uses a local Unix socket for the noninteractive
 runner session; no rootful Podman or application ``sudo`` is used.
 
+Ubuntu 26.04 runner images can ship a ``pasta`` AppArmor profile that blocks
+Podman's network cleanup signal (`runner-images#15182
+<https://github.com/actions/runner-images/issues/15182>`_). The workflow applies
+the upstream SIGTERM receive rule for Podman when missing and reloads that
+profile. It then tests rootless network cleanup before building. AppArmor and
+container ``NoNewPrivileges`` remain enabled, and the restart test still fails
+on cleanup errors. Kernel network/AppArmor diagnostics are retained with the logs.
+
 The HTTP check completes the interactive software-backend wizard through the
 runner's IP address on port 8443, including login, administrator creation, and
 CSRF-protected form submissions. It checks ``NoNewPrivileges`` in both

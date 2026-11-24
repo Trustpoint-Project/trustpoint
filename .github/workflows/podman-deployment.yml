@@ -40,6 +40,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      # shortcut: Ubuntu's pasta profile omits SIGTERM from Podman; remove when runner-images#15182 is deployed.
+      - name: Fix runner AppArmor permission for Podman network cleanup
+        shell: bash
+        run: |
+          profile=/etc/apparmor.d/usr.bin.pasta
+          if [ -f "$profile" ] && ! grep -Eq '^[[:space:]]*signal \(receive\) set=\(term\) peer=podman,' "$profile"; then
+            sudo sed -i '$ i\  signal (receive) set=(term) peer=podman,' "$profile"
+            sudo apparmor_parser -r "$profile"
+          fi
+          podman unshare --rootless-netns true
+
       - name: Start rootless Podman API
         shell: bash
         run: |
@@ -101,6 +112,8 @@ jobs:
           mkdir -p reports/podman
           cp "$RUNNER_TEMP/podman-api.log" reports/podman/ 2>/dev/null || true
           podman info > reports/podman/info.log 2>&1 || true
+          sudo journalctl --dmesg --boot --no-pager --grep='apparmor.*DENIED|pasta' --lines=100 \
+            2>&1 | tee reports/podman/kernel-network.log > /dev/null || true
           if [ -f .env ]; then
             podman compose ps --all > reports/podman/services.log 2>&1 || true
             podman compose logs --no-color --tail 200 > reports/podman/containers.log 2>&1 || true
