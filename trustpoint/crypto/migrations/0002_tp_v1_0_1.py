@@ -12,7 +12,6 @@ def enable_software_key_export(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('crypto', '0001_initial'),
     ]

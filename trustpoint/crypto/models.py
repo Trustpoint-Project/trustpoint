@@ -272,10 +272,14 @@ class CryptoProviderSoftwareConfigModel(models.Model):
         """Validate the software backend config shape."""
         if self.profile.backend_kind != BackendKind.SOFTWARE:
             raise ValidationError({'profile': 'Software config requires a software backend profile.'})
-        if self.encryption_source in {
-            SoftwareKeyEncryptionSource.ENV,
-            SoftwareKeyEncryptionSource.FILE,
-        } and not self.encryption_source_ref.strip():
+        if (
+            self.encryption_source
+            in {
+                SoftwareKeyEncryptionSource.ENV,
+                SoftwareKeyEncryptionSource.FILE,
+            }
+            and not self.encryption_source_ref.strip()
+        ):
             raise ValidationError(
                 {'encryption_source_ref': 'encryption_source_ref is required for env and file encryption sources.'}
             )
