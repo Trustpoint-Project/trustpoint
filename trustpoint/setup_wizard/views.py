@@ -2692,6 +2692,13 @@ RESTORE_BACKUP_STEP_LABELS = {
     'backup-import': 'Backup Import',
     'summary': 'Inspect & Apply',
 }
+RESTORE_TARGET_DB_FIELDS = (
+    'operational_db_host',
+    'operational_db_port',
+    'operational_db_name',
+    'operational_db_user',
+    'operational_db_password',
+)
 
 
 class RestoreBackupDatabaseView(ConnectExistingDatabaseView):
@@ -2703,6 +2710,16 @@ class RestoreBackupDatabaseView(ConnectExistingDatabaseView):
     step_labels = RESTORE_BACKUP_STEP_LABELS
     success_url = reverse_lazy('setup_wizard:restore_backup_crypto_storage')
     back_url = reverse_lazy('setup_wizard:index')
+
+    def form_valid(self, form: FreshInstallDatabaseModelForm) -> HttpResponse:
+        """Drop a prior restore marker when the target database configuration changes."""
+        if form.instance.restore_backup_restored_at is not None and any(
+            field in form.changed_data for field in RESTORE_TARGET_DB_FIELDS
+        ):
+            form.instance.restore_backup_restored_at = None
+            form.instance.restore_backup_restore_error = ''
+            form.instance.save(update_fields=['restore_backup_restored_at', 'restore_backup_restore_error'])
+        return super().form_valid(form)
 
 
 class RestoreBackupCryptoStorageView(ConnectExistingCryptoStorageView):

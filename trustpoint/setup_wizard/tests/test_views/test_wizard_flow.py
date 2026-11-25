@@ -12,6 +12,7 @@ from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 
 from setup_wizard import views
 from setup_wizard.models import SetupWizardConfigModel
@@ -148,6 +149,38 @@ def test_database_submission_saves_and_continues(wizard_request, database_data, 
     assert config.operational_db_port == 5433
     assert config.operational_db_password == 'test-only-password'
     assert config.fresh_install_database_submitted is True
+
+
+def test_restore_database_change_clears_restored_marker(wizard_request, database_data):
+    """Changing the restore target after a restore re-arms the empty-target guard."""
+    config = SetupWizardConfigModel.get_singleton()
+    config.operational_db_host = 'old-host'
+    config.restore_backup_restored_at = timezone.now()
+    config.save()
+
+    response = views.RestoreBackupDatabaseView.as_view()(wizard_request('post', data=database_data))
+
+    assert response.status_code == 302
+    config.refresh_from_db()
+    assert config.restore_backup_restored_at is None
+
+
+def test_restore_database_unchanged_keeps_restored_marker(wizard_request, database_data):
+    """Re-submitting the same restore target keeps the retry marker."""
+    config = SetupWizardConfigModel.get_singleton()
+    config.operational_db_host = database_data['operational_db_host']
+    config.operational_db_port = int(database_data['operational_db_port'])
+    config.operational_db_name = database_data['operational_db_name']
+    config.operational_db_user = database_data['operational_db_user']
+    config.operational_db_password = database_data['operational_db_password']
+    config.restore_backup_restored_at = timezone.now()
+    config.save()
+
+    response = views.RestoreBackupDatabaseView.as_view()(wizard_request('post', data=database_data))
+
+    assert response.status_code == 302
+    config.refresh_from_db()
+    assert config.restore_backup_restored_at is not None
 
 
 @pytest.mark.parametrize('view_class', [views.FreshInstallDatabaseView, views.ConnectExistingDatabaseView])

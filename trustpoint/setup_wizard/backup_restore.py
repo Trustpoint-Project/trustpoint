@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import gzip
+import logging
 import os
 import shutil
 import subprocess
@@ -18,8 +19,14 @@ from typing import TYPE_CHECKING, Any
 import psycopg
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
+from packaging.version import InvalidVersion, Version
 
-from management.backup_artifacts import BackupManifestError, backup_manifest_path, verify_backup_manifest
+from management.backup_artifacts import (
+    BackupManifestError,
+    backup_manifest_path,
+    load_backup_manifest,
+    verify_backup_manifest,
+)
 from setup_wizard.operational_attach import OperationalDatabaseConfig, OperationalTargetInspector
 
 if TYPE_CHECKING:
@@ -27,6 +34,8 @@ if TYPE_CHECKING:
 
 MAX_RESTORE_OUTPUT_LENGTH = 4000
 GPG_EXECUTABLE = '/usr/bin/gpg'
+
+logger = logging.getLogger(__name__)
 
 
 def restore_backup_staging_root() -> Path:
@@ -299,26 +308,86 @@ def _extract_restore_bundle_if_needed(archive_path: Path) -> Path | None:
         raise DjangoValidationError(msg) from exc
 
 
-def _ensure_restore_target_is_empty(config_model: SetupWizardConfigModel) -> None:
-    """Refuse to overwrite a database that already contains a Trustpoint installation."""
-    if config_model.restore_backup_restored_at is not None:
-        # This wizard already restored into the target; an explicit re-upload may replace it.
-        return
-    target = OperationalDatabaseConfig(
+def _operational_target(config_model: SetupWizardConfigModel) -> OperationalDatabaseConfig:
+    """Build the operational target from the staged wizard configuration."""
+    return OperationalDatabaseConfig(
         host=config_model.operational_db_host,
         port=config_model.operational_db_port,
         name=config_model.operational_db_name,
         user=config_model.operational_db_user,
         password=config_model.operational_db_password,
     )
+
+
+def _ensure_restore_target_is_empty(config_model: SetupWizardConfigModel) -> None:
+    """Refuse to overwrite a database that already contains schema objects."""
+    if config_model.restore_backup_restored_at is not None:
+        # This wizard already restored into the target; an explicit re-upload may replace it.
+        return
+    target = _operational_target(config_model)
     try:
-        snapshot = OperationalTargetInspector().inspect_database(target)
+        has_objects = OperationalTargetInspector().database_has_objects(target)
     except psycopg.Error as exception:
         msg = f'Could not inspect the restore target database: {exception}'
         raise DjangoValidationError(msg) from exception
-    if snapshot.app_version is not None or snapshot.setup_completed:
-        msg = 'The target database already contains a Trustpoint installation. Choose an empty database for a restore.'
+    if has_objects:
+        msg = 'The target database is not empty. Choose an empty database for a restore.'
         raise DjangoValidationError(msg)
+
+
+def _stamp_restored_app_version(*, database: OperationalDatabaseConfig, version: str) -> None:
+    """Record the manifest version when a restored database has no version row."""
+    try:
+        parsed_version = Version(version)
+    except InvalidVersion:
+        return
+    try:
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute("SELECT to_regclass('management_appversion')")
+            if cursor.fetchone()[0] is None:
+                return
+            cursor.execute('SELECT 1 FROM management_appversion LIMIT 1')
+            if cursor.fetchone() is not None:
+                return
+            cursor.execute(
+                """
+                INSERT INTO management_appversion (id, version, container_id, last_updated)
+                VALUES (1, %s, %s, NOW())
+                """,
+                [str(parsed_version), 'restored'],
+            )
+    except psycopg.Error as exception:
+        logger.warning('Restored database application version could not be recorded: %s', exception)
+
+
+def _manifest_version_for_restore(extracted_path: Path | None) -> str | None:
+    """Return the manifest version for an extracted backup bundle."""
+    if extracted_path is None:
+        return None
+    return load_backup_manifest(extracted_path).trustpoint_version
+
+
+def _record_restored_app_version(
+    config_model: SetupWizardConfigModel,
+    version: str | None,
+) -> None:
+    """Stamp the manifest version after a successful restore when the database lacks one."""
+    if version is None:
+        return
+    _stamp_restored_app_version(
+        database=_operational_target(config_model),
+        version=version,
+    )
 
 
 def restore_operational_database_from_backup(
@@ -338,14 +407,15 @@ def restore_operational_database_from_backup(
     decrypted_path: Path | None = None
     extracted_path: Path | None = None
     materialized_restore_path: Path | None = None
+    restore_manifest_version: str | None = None
     try:
         decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
         extracted_path = _extract_restore_bundle_if_needed(decrypted_path or archive_path)
+        restore_manifest_version = _manifest_version_for_restore(extracted_path)
         restore_source_path = extracted_path or decrypted_path or archive_path
         materialized_restore_path = _materialize_restore_archive(restore_source_path)
 
-        env = os.environ.copy()
-        env['PGPASSWORD'] = config_model.operational_db_password
+        env = {**os.environ, 'PGPASSWORD': config_model.operational_db_password}
         common_args = [
             '--host',
             config_model.operational_db_host,
@@ -405,6 +475,7 @@ def restore_operational_database_from_backup(
                 decrypted_path.unlink()
 
     if completed_process.returncode == 0:
+        _record_restored_app_version(config_model, restore_manifest_version)
         return
 
     output = _format_restore_process_output(completed_process)

@@ -101,6 +101,75 @@ def test_newer_database_blocks_apply() -> None:
     )
 
 
+def test_restore_without_version_but_with_completion_marker_can_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.RESTORE_BACKUP,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=True,
+            setup_marker_present=True,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert report.can_apply
+    assert any(
+        check.code == 'version.unknown_restore' and check.severity == CompatibilitySeverity.WARNING
+        for check in report.checks
+    )
+
+
+def test_restore_without_version_or_completion_marker_blocks_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.RESTORE_BACKUP,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=False,
+            setup_marker_present=False,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert not report.can_apply
+    assert any(
+        check.code == 'version.missing' and check.severity == CompatibilitySeverity.ERROR
+        for check in report.checks
+    )
+
+
+def test_connect_existing_without_version_blocks_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.CONNECT_EXISTING,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=True,
+            setup_marker_present=True,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert not report.can_apply
+    assert any(
+        check.code == 'version.missing' and check.severity == CompatibilitySeverity.ERROR
+        for check in report.checks
+    )
+
+
 def test_backend_kind_mismatch_blocks_apply() -> None:
     validator = OperationalAttachmentValidator(current_version='1.0.0')
 
