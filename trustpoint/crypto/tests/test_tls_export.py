@@ -43,6 +43,25 @@ def export_profile(monkeypatch: pytest.MonkeyPatch) -> CryptoProviderProfileMode
     return profile
 
 
+def test_software_config_allows_tls_key_export_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A default software config can deploy a TLS key, matching the issuance policy."""
+    monkeypatch.setenv('TRUSTPOINT_TEST_TLS_KEY_SECRET', 'test-only-encryption-material')
+    profile = CryptoProviderProfileModel.objects.create(
+        name='tls-default-export', backend_kind=BackendKind.SOFTWARE, active=True,
+    )
+    CryptoProviderSoftwareConfigModel.objects.create(
+        profile=profile,
+        encryption_source=SoftwareKeyEncryptionSource.ENV,
+        encryption_source_ref='TRUSTPOINT_TEST_TLS_KEY_SECRET',
+    )
+    backend = TrustpointCryptoBackend()
+    key = backend.generate_managed_key(
+        alias='tls/default', key_spec=RsaKeySpec(key_size=2048),
+        policy=KeyPolicy(extractable=True, signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH),
+    )
+    assert backend.export_private_key_pkcs8(key).startswith(b'-----BEGIN PRIVATE KEY-----')
+
+
 def test_export_private_key_pkcs8_matches_generated_key(export_profile: CryptoProviderProfileModel) -> None:
     """Export decrypts the persisted key rather than generating a replacement."""
     backend = TrustpointCryptoBackend()

@@ -133,7 +133,7 @@ def _ensure_software_profile_config(profile: CryptoProviderProfileModel) -> None
     defaults = {
         'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
         'encryption_source_ref': '',
-        'allow_exportable_private_keys': False,
+        'allow_exportable_private_keys': True,
     }
     config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(
         profile=profile,

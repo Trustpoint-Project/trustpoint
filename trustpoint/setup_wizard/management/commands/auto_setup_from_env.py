@@ -109,7 +109,7 @@ class Command(BaseCommand):
                     defaults={
                         'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
                         'encryption_source_ref': '',
-                        'allow_exportable_private_keys': False,
+                        'allow_exportable_private_keys': True,
                     },
                 )
                 software_config.save()

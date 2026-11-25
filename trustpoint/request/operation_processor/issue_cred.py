@@ -32,6 +32,8 @@ class CredentialIssueProcessor(AbstractOperationProcessor, LoggerMixin):
         if not context.domain:
             exc_msg = 'Credential issuance requires a domain to be set in context.'
             raise ValueError(exc_msg)
+        # TODO (FHK): Manual device issuance uses a plaintext key instead of the managed crypto backend,  # noqa: FIX002
+        # so it bypasses allow_exportable_private_keys and cannot use PKCS#11. Unify with TLS later.
         # generate a private key
         if not context.private_key and isinstance(context.cert_requested, x509.CertificateBuilder):
             private_key = KeyGenerator.generate_private_key(domain=context.domain)
