@@ -1,0 +1,96 @@
+vendor: WAGO
+
+schema_notes:
+  - "A management field is true only when that interface can be used for certificate management, not merely because the interface exists."
+  - "Native PKI protocol support is kept separate from certificate deployment via the Linux filesystem."
+
+devices:
+  - product_family: PFC100/PFC200
+    model: "750-8xxx"
+    device_type: PLC / Linux-based controller
+    firmware:
+      - versions:
+          - "covered by WAGO Cyber Security Manual v1.2.1"
+        certificate_protocols:
+          est: false
+          cmp: false
+          scep: true
+          acme: false
+        industrial_certificate_management:
+          opcua_gds_push: false
+          opcua_gds_pull: false
+        management:
+          web_ui: true
+          ssh: true
+          sftp: true
+          scp: true
+          rest_api: false
+          vendor_api: false
+          vendor_tool:
+            supported: false
+            name: null
+          agent_possible: unknown
+        trustpoint:
+          recommended_integration: scep
+          alternative_integrations:
+            - ssh_scp_automation
+            - sftp_automation
+            - web_ui
+          supported: candidate
+          tested: false
+          profile: null
+          limitations:
+            - "SCEP is natively supported through the controller's ipsec scepclient. Trustpoint would require SCEP support to use this path directly."
+            - "For the HTTPS server certificate, certificates are transferred to /etc/lighttpd/ and the web server must be restarted or the device rebooted."
+        evidence:
+          verification_status: vendor_documented
+          sources:
+            - "https://assets.heizung-billiger.de/documents/wago_c1afc6a64a7a2bf3.pdf"
+            - "https://techdocs.wago.com/Software/Device_Manager/en-US/3413209995.html"
+          notes:
+            - "WAGO documents native SCEP enrollment on PFC100/PFC200 using the ipsec scepclient, including automatic and manual request processing."
+            - "WAGO documents Linux access via SSH."
+            - "The Cyber Security manual documents transfer of certificates to the controller via FTPS/SCP and placement in /etc/lighttpd/."
+            - "The WBM includes a Certificate Upload function for certificates and private keys used by OpenVPN/IPsec."
+            - "SFTP is a documented file-transfer service on the controller; because certificate management is filesystem based and SSH/root access is available, SFTP can be used as an equivalent file-transfer path, although the certificate-installation procedure itself names FTPS/SCP."
+
+  - product_family: PROFINET IO Advanced Fieldbus Coupler
+    model: "750-375"
+    device_type: PROFINET IO fieldbus coupler
+    firmware:
+      - versions:
+          - unknown
+        certificate_protocols:
+          est: false
+          cmp: false
+          scep: false
+          acme: false
+        industrial_certificate_management:
+          opcua_gds_push: false
+          opcua_gds_pull: false
+        management:
+          web_ui: false
+          ssh: false
+          sftp: false
+          scp: false
+          rest_api: false
+          vendor_api: false
+          vendor_tool:
+            supported: false
+            name: null
+          agent_possible: false
+        trustpoint:
+          recommended_integration: none
+          alternative_integrations: []
+          supported: false
+          tested: false
+          profile: null
+          limitations:
+            - "The documented WBM provides status/configuration functions but no certificate-management function."
+        evidence:
+          verification_status: vendor_documented
+          sources:
+            - "https://www.wago.com/de/io-systeme/feldbuskoppler-profinet-io/p/750-375"
+            - "https://asutp.org/WAGO/PROFINET/Manual_750-375.pdf"
+          notes:
+            - "The available device manual documents HTTP-based WBM pages but no PKI enrollment or certificate-management mechanism."

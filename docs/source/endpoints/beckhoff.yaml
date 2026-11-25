@@ -1,0 +1,350 @@
+vendor: Beckhoff Automation
+vendor_id: beckhoff
+schema_notes:
+- A management field is true only when that interface can be used for certificate
+  management, not merely because the interface exists.
+- OPC UA GDS capability is provided by the TwinCAT OPC UA Server software and therefore
+  requires that component to be installed/licensed on the Beckhoff target.
+- EST, CMP, SCEP and ACME are marked false for native TwinCAT OPC UA Server certificate
+  management because Beckhoff documents GDS Push/Pull as the standardized enrollment
+  mechanisms for this component.
+- For open platforms where arbitrary user software can be deployed, PKI protocols
+  may be marked implementable even when they are not provided natively by Beckhoff.
+sources:
+- id: beckhoff-gds-overview
+  type: vendor_documentation
+  title: TwinCAT OPC UA Server - GDS Overview
+  url: https://infosys.beckhoff.com/content/1033/ts6100_tc2_opcua_server/15617762187.html
+  notes: Beckhoff states that the TwinCAT OPC UA Server supports both GDS Push and
+    GDS Pull models.
+- id: beckhoff-gds-push
+  type: vendor_documentation
+  title: TwinCAT OPC UA Server - GDS Push
+  url: https://infosys.beckhoff.com/content/1033/ts6100_tc2_opcua_server/15617765131.html
+  notes: The standardized Push interface is enabled by default and may be used by
+    any compatible OPC UA client/GDS workflow with administrator rights.
+- id: beckhoff-gds-pull
+  type: vendor_documentation
+  title: TwinCAT OPC UA Server - GDS Pull
+  url: https://infosys.beckhoff.com/content/1033/ts6100_tc2_opcua_server/15617766283.html
+  notes: The TwinCAT OPC UA Server can register itself with a GDS, obtain and update
+    its application certificate and CRL, and can be configured with the TwinCAT OPC
+    UA Configurator.
+devices:
+- product_family: Industrial PC
+  model: C6025
+  device_type: Industrial PC / TwinCAT runtime platform
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - TwinCAT OPC UA Server supported installation
+    prerequisites:
+    - TwinCAT OPC UA Server installed and licensed
+    certificate_protocols:
+      est:
+        native: false
+        implementable: true
+      cmp:
+        native: false
+        implementable: true
+      scep:
+        native: false
+        implementable: true
+      acme:
+        native: false
+        implementable: true
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: true
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TwinCAT OPC UA Configurator
+      agent_possible: true
+    trustpoint:
+      recommended_integration: opcua_gds_push
+      alternative_integrations:
+      - opcua_gds_pull
+      - trustpoint_agent
+      supported: candidate
+      tested: false
+      profile: null
+      limitations:
+      - GDS functionality depends on the TwinCAT OPC UA Server software, not only
+        on the C6025 hardware.
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - beckhoff-gds-overview
+      - beckhoff-gds-push
+      - beckhoff-gds-pull
+      notes: GDS support is attributed
+        to TwinCAT OPC UA Server running on the platform.
+- product_family: Industrial PC
+  model: C6930
+  device_type: Industrial PC / TwinCAT runtime platform
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - TwinCAT OPC UA Server supported installation
+    prerequisites:
+    - TwinCAT OPC UA Server installed and licensed
+    certificate_protocols:
+      est:
+        native: false
+        implementable: true
+      cmp:
+        native: false
+        implementable: true
+      scep:
+        native: false
+        implementable: true
+      acme:
+        native: false
+        implementable: true
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: true
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TwinCAT OPC UA Configurator
+      agent_possible: true
+    trustpoint:
+      recommended_integration: opcua_gds_push
+      alternative_integrations:
+      - opcua_gds_pull
+      - trustpoint_agent
+      supported: candidate
+      tested: false
+      profile: null
+      limitations:
+      - GDS functionality depends on the TwinCAT OPC UA Server software, not only
+        on the C6930 hardware.
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - beckhoff-gds-overview
+      - beckhoff-gds-push
+      - beckhoff-gds-pull
+      notes: GDS support is attributed to TwinCAT OPC UA Server running on the platform.
+- product_family: CX series Embedded PC
+  model: CX2030
+  device_type: Embedded PC / PLC
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - TwinCAT OPC UA Server supported installation
+    prerequisites:
+    - TwinCAT OPC UA Server installed and licensed
+    certificate_protocols:
+      est:
+        native: false
+        implementable: unknown
+      cmp:
+        native: false
+        implementable: unknown
+      scep:
+        native: false
+        implementable: unknown
+      acme:
+        native: false
+        implementable: unknown
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: true
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TwinCAT OPC UA Configurator
+      agent_possible: unknown
+    trustpoint:
+      recommended_integration: opcua_gds_push
+      alternative_integrations:
+      - opcua_gds_pull
+      supported: candidate
+      tested: false
+      profile: null
+      limitations:
+      - GDS functionality depends on the TwinCAT OPC UA Server software and the installed
+        operating-system/TwinCAT configuration.
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - beckhoff-gds-overview
+      - beckhoff-gds-push
+      - beckhoff-gds-pull
+- product_family: CX series Embedded PC
+  model: CX5340
+  device_type: Embedded PC / PLC
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - TwinCAT OPC UA Server supported installation
+    prerequisites:
+    - TwinCAT OPC UA Server installed and licensed
+    certificate_protocols:
+      est:
+        native: false
+        implementable: unknown
+      cmp:
+        native: false
+        implementable: unknown
+      scep:
+        native: false
+        implementable: unknown
+      acme:
+        native: false
+        implementable: unknown
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: true
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TwinCAT OPC UA Configurator
+      agent_possible: unknown
+    trustpoint:
+      recommended_integration: opcua_gds_push
+      alternative_integrations:
+      - opcua_gds_pull
+      supported: candidate
+      tested: false
+      profile: null
+      limitations:
+      - GDS functionality depends on the TwinCAT OPC UA Server software and the installed
+        operating-system/TwinCAT configuration.
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - beckhoff-gds-overview
+      - beckhoff-gds-push
+      - beckhoff-gds-pull
+- product_family: CX series Embedded PC
+  model: CX9240
+  device_type: Embedded PC / PLC
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - TwinCAT OPC UA Server supported installation
+    prerequisites:
+    - TwinCAT OPC UA Server installed and licensed
+    certificate_protocols:
+      est:
+        native: false
+        implementable: unknown
+      cmp:
+        native: false
+        implementable: unknown
+      scep:
+        native: false
+        implementable: unknown
+      acme:
+        native: false
+        implementable: unknown
+    industrial_certificate_management:
+      opcua_gds_push: true
+      opcua_gds_pull: true
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: true
+        name: TwinCAT OPC UA Configurator
+      agent_possible: unknown
+    trustpoint:
+      recommended_integration: opcua_gds_push
+      alternative_integrations:
+      - opcua_gds_pull
+      supported: candidate
+      tested: false
+      profile: null
+      limitations:
+      - GDS functionality depends on the TwinCAT OPC UA Server software and the installed
+        operating-system/TwinCAT configuration.
+    evidence:
+      verification_status: vendor_documented
+      source_ids:
+      - beckhoff-gds-overview
+      - beckhoff-gds-push
+      - beckhoff-gds-pull
+- product_family: Bus Coupler
+  model: BK5150
+  device_type: CANopen bus coupler
+  inventory_firmware_versions:
+  - unknown
+  firmware:
+  - versions:
+    - unknown
+    certificate_protocols:
+      est:
+        native: false
+        implementable: false
+      cmp:
+        native: false
+        implementable: false
+      scep:
+        native: false
+        implementable: false
+      acme:
+        native: false
+        implementable: false
+    industrial_certificate_management:
+      opcua_gds_push: false
+      opcua_gds_pull: false
+    management:
+      web_ui: false
+      ssh: false
+      sftp: false
+      scp: false
+      rest_api: false
+      vendor_api: false
+      vendor_tool:
+        supported: false
+        name: null
+      agent_possible: false
+    trustpoint:
+      recommended_integration: none
+      alternative_integrations: []
+      supported: false
+      tested: false
+      profile: null
+      limitations:
+      - No certificate-management mechanism is represented for this fieldbus coupler.
+    evidence:
+      verification_status: inventory_only
+      source_ids: []
+

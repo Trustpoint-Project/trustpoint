@@ -1,0 +1,224 @@
+vendor:
+  name: KUNBUS GmbH
+  brand: Revolution Pi
+  website: https://revolutionpi.com/de/produkte/revolution-pi-serie
+
+scope:
+  note: >-
+    This file covers current Revolution Pi base-module families documented by KUNBUS.
+  devices:
+    - RevPi Connect 5
+    - RevPi Connect 4
+    - RevPi Connect S/SE
+    - RevPi Core S/SE
+    - RevPi Flat/Flat S
+
+platform:
+  operating_system:
+    type: Linux
+    distribution_basis: Raspberry Pi OS / Debian
+    verified_images:
+      - RevPi Bookworm
+      - RevPi Trixie
+  extensible: true
+  package_management:
+    apt: true
+  docker_possible: true
+  notes:
+    - >-
+      KUNBUS describes Revolution Pi as an open Linux platform and documents installation
+      of additional Debian packages with apt.
+    - >-
+      Docker can be installed and used on Revolution Pi, making containerized certificate
+      management components possible.
+
+certificate_protocols:
+  est:
+    native: false
+    implementable: true
+    implementation_options:
+      - >-
+        Implement the EST HTTPS workflow in user space, for example using curl for HTTPS
+        requests and OpenSSL for key/CSR handling.
+      - Trustpoint Agent
+    notes:
+      - No native KUNBUS EST client is documented.
+
+  cmp:
+    native: false
+    implementable: true
+    implementation_options:
+      - OpenSSL 3.x openssl cmp client
+      - Trustpoint Agent or custom client
+    notes:
+      - No native KUNBUS CMP client is documented.
+
+  scep:
+    native: false
+    implementable: true
+    implementation_options:
+      - Debian scep client package
+      - Custom SCEP client
+    notes:
+      - No native KUNBUS SCEP client is documented.
+
+  acme:
+    native: false
+    implementable: true
+    implementation_options:
+      - Certbot
+      - Other ACME clients available for Debian/Linux
+    notes:
+      - No native KUNBUS ACME client is documented.
+
+industrial_certificate_management:
+  opcua_gds_push: 
+    native: false
+    implementable: true
+    implementation_options:
+  opcua_gds_pull: 
+    native: false
+    implementable: true
+    implementation_options:
+  notes:
+    - >-
+      KUNBUS documents certificate and private-key file paths for its OPC UA Server,
+      but the reviewed documentation does not document OPC UA GDS Push or Pull support.
+
+management:
+  web_ui:
+    supported: true
+    scope: limited
+    details: >-
+      Revolution Pi OS includes revpi-cert-wizard for creating TLS certificates.
+      This is not equivalent to a general-purpose PKI enrollment interface.
+
+  ssh:
+    supported: true
+    certificate_management: true
+    details: >-
+      SSH provides shell access to the Linux system, allowing certificate files,
+      private keys, trust stores, services, and enrollment clients to be administered.
+
+  sftp:
+    supported: true
+    certificate_management: true
+    details: >-
+      KUNBUS explicitly documents SFTP access on TCP port 22. Certificate and key files
+      can therefore be transferred where the target application supports file-based certificates.
+
+  scp: false
+  rest_api: false
+  vendor_api: false
+
+  vendor_tool:
+    supported: true
+    name: revpi-cert-wizard
+    scope: local_tls_certificate_creation
+
+  agent_possible: true
+
+trustpoint:
+  recommended_integration: trustpoint_agent
+  alternative_integrations:
+    - ssh
+    - sftp
+    - est_userspace_client
+    - cmp_userspace_client
+    - scep_userspace_client
+    - acme_userspace_client
+  supported: candidate
+  tested: false
+  profile: null
+  limitations:
+    - >-
+      EST, CMP, SCEP and ACME are not documented as native KUNBUS device features;
+      support relies on installable Linux user-space software or a Trustpoint Agent.
+    - >-
+      Application-specific certificate deployment still depends on where the respective
+      service stores certificates and whether a reload or restart is required.
+
+devices:
+  - product_family: RevPi Connect
+    model: RevPi Connect 5
+    device_type: Industrial PC / IIoT gateway
+    firmware:
+      versions:
+        - RevPi Bookworm
+        - RevPi Trixie
+    inherits_platform_capabilities: true
+
+  - product_family: RevPi Connect
+    model: RevPi Connect 4
+    device_type: Industrial PC / IIoT gateway
+    firmware:
+      versions:
+        - RevPi Bookworm
+        - RevPi Trixie
+    inherits_platform_capabilities: true
+
+  - product_family: RevPi Connect
+    model: RevPi Connect S/SE
+    device_type: Industrial PC / IIoT gateway
+    firmware:
+      versions:
+        - RevPi Bookworm
+        - RevPi Trixie
+    inherits_platform_capabilities: true
+
+  - product_family: RevPi Core
+    model: RevPi Core S/SE
+    device_type: Industrial PC / controller
+    firmware:
+      versions:
+        - RevPi Bookworm
+        - RevPi Trixie
+    inherits_platform_capabilities: true
+
+  - product_family: RevPi Flat
+    model: RevPi Flat/Flat S
+    device_type: Industrial PC / controller
+    firmware:
+      versions:
+        - RevPi Bookworm
+        - RevPi Trixie
+    inherits_platform_capabilities: true
+
+evidence:
+  verification_status: vendor_documented_plus_platform_inference
+  last_verified: '2026-10-12'
+  sources:
+    - url: https://revolutionpi.com/de/produkte/revolution-pi-serie
+      supports:
+        - Open Linux platform
+        - Raspberry Pi OS basis
+        - Current Revolution Pi product families
+    - url: https://revolutionpi.com/en/docs/revpi-images
+      supports:
+        - Debian/Raspberry Pi OS based Revolution Pi OS
+        - Bookworm and Trixie compatibility
+        - revpi-cert-wizard
+    - url: https://revolutionpi.com/en/docs/updates
+      supports:
+        - Installation of arbitrary packages using apt
+    - url: https://revolutionpi.com/en/knowledge/login-via-terminal
+      supports:
+        - SSH access
+    - url: https://revolutionpi.com/en/knowledge/login-via-ftp
+      supports:
+        - SFTP access on port 22
+    - url: https://revolutionpi.com/en/tutorial/docker
+      supports:
+        - Docker installation and use
+    - url: https://revolutionpi.com/en/docs/revpi-opc-ua-server
+      supports:
+        - File-path-based OPC UA server certificate and key configuration
+    - url: https://docs.openssl.org/3.0/man1/openssl-cmp/
+      supports:
+        - CMP client functionality in OpenSSL 3.x
+    - url: https://packages.debian.org/bookworm/scep
+      supports:
+        - Installable SCEP client on Debian Bookworm
+    - url: https://packages.debian.org/bookworm/certbot
+      supports:
+        - Installable ACME client on Debian Bookworm
