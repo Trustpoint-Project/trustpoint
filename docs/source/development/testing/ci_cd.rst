@@ -202,7 +202,8 @@ Podman's network cleanup signal (`runner-images#15182
 the upstream SIGTERM receive rule for Podman when missing and reloads that
 profile. It then tests rootless network cleanup before building. AppArmor and
 container ``NoNewPrivileges`` remain enabled, and the restart test still fails
-on cleanup errors. Kernel network/AppArmor diagnostics are retained with the logs.
+on cleanup errors. ``sudo`` is used only for the disposable AppArmor workaround
+and reading kernel logs. Kernel network/AppArmor diagnostics are retained with the logs.
 
 The HTTP check completes the interactive software-backend wizard through the
 runner's IP address on port 8443, including login, administrator creation, and
