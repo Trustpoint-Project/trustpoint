@@ -13,6 +13,7 @@ from typing import Any, ClassVar, cast
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from devices.secrets import (
@@ -31,6 +32,7 @@ from pki.models.truststore import TruststoreModel
 from .models import DeviceModel, OpcUaGdsPushConfig
 
 
+@extend_schema_field({'oneOf': [{'type': 'integer'}, {'type': 'string'}]})
 class PkiProtocolField(serializers.Field[int | str, int | str, int | str, Any]):
     """Custom field to accept PKI protocol as string name or integer value."""
 

@@ -73,16 +73,3 @@ class SecurityManager(LoggerMixin):
     def get_security_config_model(self) -> SecurityConfig:
         """Returns the model holding the security settings."""
         return SecurityConfig.objects.first()
-
-    def enable_feature(self, feature: type[SecurityFeature] | SecurityFeature, kwargs: dict | None = None) -> None:
-        """Enables a feature if it is allowed at the current security level.
-
-        Args:
-            feature: Either a SecurityFeature class or instance
-            kwargs: Keyword arguments to pass to the enable method
-        """
-        if self.is_feature_allowed(feature):
-            if kwargs is None:
-                feature.enable()
-            else:
-                feature.enable(**kwargs)

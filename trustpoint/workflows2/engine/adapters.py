@@ -5,21 +5,20 @@
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import os
-import socket
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
-from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
 from management.models import NotificationMessageModel, NotificationModel, NotificationStatus
+from util.validation import ValidationError as WebhookUrlError
+from util.validation import validate_webhook_url
 
 MAX_WEBHOOK_RESPONSE_BYTES = 1_000_000
 WEBHOOK_READ_CHUNK_BYTES = 65_536
@@ -258,34 +257,6 @@ class RequestsWebhookAdapter:
 
         return True
 
-    @staticmethod
-    def _reject_unsafe_target(url: str) -> None:
-        """Reject loopback, link-local and other non-routable webhook destinations.
-
-        Private RFC 1918 targets stay allowed for OT deployments.
-        shortcut: DNS rebinding between this check and requests' lookup is not pinned;
-        pin the resolved IP if webhooks become multi-tenant.
-        """
-        parsed = urlsplit(url)
-        if parsed.scheme not in {'http', 'https'} or not parsed.hostname:
-            error_msg = 'Webhook URL must be an HTTP(S) URL with a host.'
-            raise ValueError(error_msg)
-        try:
-            port = parsed.port or (443 if parsed.scheme == 'https' else 80)
-        except ValueError as exc:
-            error_msg = 'Webhook URL has an invalid port.'
-            raise ValueError(error_msg) from exc
-        try:
-            addresses = {str(item[4][0]) for item in socket.getaddrinfo(parsed.hostname, port, type=socket.SOCK_STREAM)}
-        except socket.gaierror:
-            # Let requests report the same DNS failure to the caller.
-            return
-        for address in addresses:
-            ip = ipaddress.ip_address(address.split('%', 1)[0])
-            if ip.is_loopback or ip.is_link_local or ip.is_unspecified or ip.is_multicast or ip.is_reserved:
-                error_msg = 'Webhook target resolves to a prohibited address.'
-                raise ValueError(error_msg)
-
     def request(
         self,
         *,
@@ -301,7 +272,10 @@ class RequestsWebhookAdapter:
             error_msg = f'Unsupported method: {method}'
             raise ValueError(error_msg)
 
-        self._reject_unsafe_target(url)
+        try:
+            validate_webhook_url(url)
+        except WebhookUrlError as exc:
+            raise ValueError(str(exc)) from exc
         verify = self._resolve_verify()
         request_kwargs: dict[str, Any] = {
             'headers': headers or {},

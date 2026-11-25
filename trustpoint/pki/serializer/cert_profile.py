@@ -9,6 +9,8 @@ of Certificate profile model instances to and from JSON.
 
 from typing import ClassVar
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from pki.models.cert_profile import CertificateProfileModel
@@ -34,6 +36,7 @@ class CertProfileDetailSerializer(serializers.ModelSerializer[CertificateProfile
 
     profile_json = serializers.SerializerMethodField()
 
+    @extend_schema_field(OpenApiTypes.OBJECT)
     def get_profile_json(self, obj: CertificateProfileModel) -> object:
         """Return profile_json as a parsed JSON object."""
         return obj.profile

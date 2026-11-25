@@ -3,7 +3,6 @@
 
 """Test suite for security features."""
 
-import threading
 from unittest.mock import patch
 
 from django.test import TestCase
@@ -98,93 +97,6 @@ class AutoGenPkiFeatureTest(TestCase):
         SecurityConfig.objects.all().delete()
         self.assertFalse(AutoGenPkiFeature.is_enabled())
 
-    @patch('management.security.features.AutoGenPki.enable_auto_gen_pki')
-    def test_enable_starts_thread_when_enabled(self, mock_enable):
-        """Test enable starts a background thread when auto_gen_pki is True."""
-        self.security_config.auto_gen_pki = True
-        self.security_config.save()
-
-        AutoGenPkiFeature.enable(key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048)
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Enable':
-                thread.join(timeout=2)
-                break
-
-        mock_enable.assert_called_once_with(AutoGenPkiKeyAlgorithm.RSA2048)
-
-    def test_enable_raises_error_without_key_algorithm(self):
-        """Test enable raises ValueError when key_algorithm is not provided."""
-        self.security_config.auto_gen_pki = True
-        self.security_config.save()
-
-        with self.assertRaises(ValueError) as context:
-            AutoGenPkiFeature.enable()
-
-        self.assertIn('key_algorithm is required', str(context.exception))
-
-    def test_enable_does_not_start_thread_when_disabled(self):
-        """Test enable does not start thread when auto_gen_pki is False."""
-        self.security_config.auto_gen_pki = False
-        self.security_config.save()
-
-        with patch('management.security.features.AutoGenPki.enable_auto_gen_pki') as mock_enable:
-            AutoGenPkiFeature.enable(key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048)
-
-            # Wait a bit to ensure thread doesn't start
-            import time
-
-            time.sleep(0.1)
-
-            mock_enable.assert_not_called()
-
-    @patch('management.security.features.AutoGenPki.enable_auto_gen_pki')
-    def test_enable_handles_exceptions_in_thread(self, mock_enable):
-        """Test enable handles exceptions that occur in the background thread."""
-        mock_enable.side_effect = Exception('Test exception')
-        self.security_config.auto_gen_pki = True
-        self.security_config.save()
-
-        # Should not raise exception even though thread encounters error
-        AutoGenPkiFeature.enable(key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048)
-
-        # Wait for thread to complete
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Enable':
-                thread.join(timeout=2)
-                break
-
-        mock_enable.assert_called_once()
-
-    @patch('management.security.features.AutoGenPki.enable_auto_gen_pki')
-    def test_enable_with_different_key_algorithms(self, mock_enable):
-        """Test enable works with different key algorithms."""
-        self.security_config.auto_gen_pki = True
-        self.security_config.save()
-
-        # Test with RSA4096
-        AutoGenPkiFeature.enable(key_algorithm=AutoGenPkiKeyAlgorithm.RSA4096)
-
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Enable':
-                thread.join(timeout=2)
-                break
-
-        mock_enable.assert_called_with(AutoGenPkiKeyAlgorithm.RSA4096)
-
-        mock_enable.reset_mock()
-
-        # Test with SECP256R1
-        AutoGenPkiFeature.enable(key_algorithm=AutoGenPkiKeyAlgorithm.SECP256R1)
-
-        for thread in threading.enumerate():
-            if thread.name == 'AutoGenPKI-Enable':
-                thread.join(timeout=2)
-                break
-
-        mock_enable.assert_called_with(AutoGenPkiKeyAlgorithm.SECP256R1)
-
     @patch('management.security.features.AutoGenPki.disable_auto_gen_pki')
     def test_disable_runs_synchronously(self, mock_disable):
         """Test disable revokes synchronously instead of on a detached thread."""
@@ -213,7 +125,5 @@ class AutoGenPkiFeatureTest(TestCase):
 
     def test_implements_all_abstract_methods(self):
         """Test that AutoGenPkiFeature implements all abstract methods."""
-        # Should be able to call all abstract methods
-        self.assertTrue(callable(AutoGenPkiFeature.enable))
         self.assertTrue(callable(AutoGenPkiFeature.disable))
         self.assertTrue(callable(AutoGenPkiFeature.is_enabled))

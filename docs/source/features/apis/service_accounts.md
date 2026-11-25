@@ -49,9 +49,12 @@ The response is a JWT token payload similar to:
 {
   "access": "<jwt-access-token>",
   "token_type": "Bearer",
-  "expires_in": 3600
+  "expires_in": 300
 }
 ```
+
+`expires_in` is the access-token lifetime in seconds. The default is 300 seconds
+(5 minutes); request a new token with the same client credentials when it expires.
 
 ## Use the token
 

@@ -119,7 +119,7 @@ class AutoGenPki(LoggerMixin):
         *,
         key_alg: AutoGenPkiKeyAlgorithm | None = None,
     ) -> CaModel | None:
-        """Enables the auto-generated PKI."""
+        """Enable the legacy 1.0.0 auto-generated PKI; production CA creation uses ``create_self_signed_ca``."""
         key_type = key_type or key_alg
         if key_type is None:
             msg = 'An AutoGenPKI key type is required.'
@@ -138,16 +138,14 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.error(
                     'An active auto-generated PKI already exists: %s - '
                     'auto-generated PKI was possibly not correctly disabled',
-                    existing_issuing_ca.unique_name
+                    existing_issuing_ca.unique_name,
                 )
                 return None
 
             root_ca_name = f'AutoGenPKI_Root_CA_{key_identifier}'
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
-                root_ca = CaModel.objects.get(
-                    unique_name=root_ca_name, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
-                )
+                root_ca = CaModel.objects.get(unique_name=root_ca_name, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT)
                 root_cert = cast('CredentialModel', root_ca.credential).get_certificate()
                 root_1_key = cast('CredentialModel', root_ca.credential).get_private_key()
                 cls.logger.info('Reusing existing Root CA: %s', root_ca_name)

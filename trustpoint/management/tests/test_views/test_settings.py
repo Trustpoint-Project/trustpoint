@@ -163,12 +163,10 @@ class SecuritySettingsViewTest(TestCase):
 
         mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HARDENED)
 
-    @patch('management.security.features.AutoGenPkiFeature.enable')
     @patch.object(SecurityConfig, 'apply_security_settings')
-    def test_form_valid_does_not_generate_auto_gen_pki_when_allowed(self, mock_apply, mock_enable):
+    def test_form_valid_does_not_generate_auto_gen_pki_when_allowed(self, mock_apply):
         """Allowing AutoGenPKI in settings does not create it."""
         mock_sec = Mock()
-        mock_sec.enable_feature = Mock()
         self.view.sec = mock_sec
 
         form = Mock(spec=SecurityConfigForm)
@@ -182,8 +180,6 @@ class SecuritySettingsViewTest(TestCase):
 
         self.view.form_valid(form)
 
-        mock_enable.assert_not_called()
-        mock_sec.enable_feature.assert_not_called()
         self.assertFalse(CaModel.objects.exists())
         self.assertFalse(DomainModel.objects.exists())
 

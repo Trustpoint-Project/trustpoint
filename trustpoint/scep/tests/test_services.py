@@ -51,6 +51,35 @@ def test_ca_near_expiry_keeps_server_key_and_allows_enrollment(client: Client, r
     assert services.ensure_server_credential(rsa_env.domain).pk == credential.pk
 
 
+def test_intermediate_ca_chain_does_not_rotate_server_credential(rsa_env: ScepEnv) -> None:
+    """A multi-level CA chain must not make the server credential look unusable and rotate it."""
+    unique = f'intermediate-{uuid.uuid4().hex}'
+    root_cert, root_key = CertificateGenerator.create_root_ca(
+        cn='SCEP Root',
+        private_key=generate_managed_signing_private_key(alias=f'{unique}-root', key_spec=RsaKeySpec(key_size=2048)),
+    )
+    issuing_key = generate_managed_signing_private_key(alias=f'{unique}-issuing', key_spec=RsaKeySpec(key_size=2048))
+    issuing_cert, issuing_key = CertificateGenerator.create_issuing_ca(
+        issuer_private_key=root_key,
+        issuer_cn='SCEP Root',
+        subject_cn='SCEP Intermediate',
+        private_key=issuing_key,
+    )
+    ca = CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=issuing_cert,
+        chain=[root_cert],
+        private_key=issuing_key,
+        unique_name=unique,
+    )
+    rsa_env.domain.issuing_ca = ca
+    rsa_env.domain.save(update_fields=['issuing_ca'])
+
+    first = services.ensure_server_credential(rsa_env.domain)
+    second = services.ensure_server_credential(rsa_env.domain)
+    assert first.pk == second.pk
+    assert set(first.get_certificate_chain()) == {issuing_cert, root_cert}
+
+
 @pytest.mark.parametrize(('same_key', 'cn'), [(False, 'SCEP Test Root'), (False, 'New CA'), (True, 'SCEP Test Root')])
 def test_ca_replacement_refreshes_server_certificate_and_chain(rsa_env: ScepEnv, same_key: bool, cn: str) -> None:
     old = services.ensure_server_credential(rsa_env.domain)
