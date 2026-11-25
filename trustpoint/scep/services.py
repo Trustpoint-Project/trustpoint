@@ -156,7 +156,10 @@ def server_credential_is_usable(config: ScepServerConfigModel) -> bool:
         cert.verify_directly_issued_by(issuer_cert)
     except (InvalidSignature, ValueError, TypeError):
         return False
-    if credential.get_certificate_chain() != [issuer_cert, *issuing_credential.get_certificate_chain()]:
+    # Chain order differs between credential creation paths, so compare the certificates as a set.
+    chain = credential.get_certificate_chain()
+    expected_chain = [issuer_cert, *issuing_credential.get_certificate_chain()]
+    if len(chain) != len(expected_chain) or set(chain) != set(expected_chain):
         return False
     # A CA nearing expiry cannot extend a server certificate already capped at its expiry.
     return not (
