@@ -1468,6 +1468,7 @@ class TestGdsPushServiceAdditionalCoverage:
         """Report a connected server that exposes no TrustList nodes."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
+        client.get_node = Mock(side_effect=RuntimeError('no capabilities'))
 
         with (
             patch.object(service, '_build_trustlist_for_server', return_value=Mock()),
@@ -1586,6 +1587,21 @@ class TestGdsPushServiceAdditionalCoverage:
         assert merged.IssuerCrls == [other_b, new_a]
         assert merged.SpecifiedLists == int(ua.TrustListMasks.All)
 
+    def test_merge_trustlists_removes_cert_duplicated_as_issuer(self, mock_opc_device):
+        """A certificate already trusted must not also be kept in the issuer list."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        current = ua.TrustListDataType()
+        current.TrustedCertificates = [b'root']
+        current.IssuerCertificates = [b'root', b'intermediate']
+        new = ua.TrustListDataType()
+        new.TrustedCertificates = [b'root']
+        new.IssuerCertificates = [b'intermediate']
+
+        merged = service._merge_trustlists(current, new)
+
+        assert merged.TrustedCertificates == [b'root']
+        assert merged.IssuerCertificates == [b'intermediate']
+
     def test_trustlist_limits_allow_shared_entries_within_bounds(self, mock_opc_device):
         """Count unique DER objects and accept a trust list within the configured limits."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -1623,11 +1639,94 @@ class TestGdsPushServiceAdditionalCoverage:
         with pytest.raises(GdsPushError, match='element limit'):
             service._validate_trustlist_limits(trustlist)
 
+    def test_trustlist_limits_reject_max_total_size(self, mock_opc_device):
+        """Reject a serialized trust list above the server's MaxTrustListSize."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service._capabilities = {'MaxTrustListSize': 4}
+
+        with pytest.raises(GdsPushError, match='MaxTrustListSize'):
+            service._validate_trustlist_limits(ua.TrustListDataType(), serialized_size=5)
+
+    @pytest.mark.asyncio
+    async def test_read_server_capabilities(self, mock_opc_device):
+        """Read the ServerConfiguration properties used by the push workflow."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        values = {
+            'MaxTrustListSize': 65535,
+            'SupportedPrivateKeyFormats': ['PEM'],
+            'SupportsTransactions': True,
+            'InApplicationSetup': False,
+            'HasSecureElement': True,
+            'ServerCapabilities': ['GDS'],
+        }
+
+        async def get_child(name: str) -> Mock:
+            if name not in values:
+                raise RuntimeError(f'{name} unavailable')
+            node = Mock()
+            node.read_value = AsyncMock(return_value=values[name])
+            return node
+
+        server_config.get_child = AsyncMock(side_effect=get_child)
+
+        capabilities = await service._read_server_capabilities(client)
+
+        assert capabilities == values
+        assert service._capabilities == values
+
+    @pytest.mark.asyncio
+    async def test_build_trustlist_uses_root_as_trust_anchor(self, mock_opc_device):
+        """Put the root in the trusted lists and do not duplicate it as an issuer."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Test CA')])
+        now = datetime.datetime.now(datetime.UTC)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now)
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
+        crl = (
+            x509.CertificateRevocationListBuilder()
+            .issuer_name(subject)
+            .last_update(now)
+            .next_update(now + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
+        crl_pem = crl.public_bytes(serialization.Encoding.PEM).decode()
+
+        cert_model = Mock()
+        serializer = Mock()
+        serializer.as_crypto = Mock(return_value=cert)
+        cert_model.get_certificate_serializer.return_value = serializer
+        ca = Mock(unique_name='Test CA', ca_certificate_model=cert_model, crl_pem=crl_pem)
+
+        with patch.object(service, '_build_ca_chain', new=AsyncMock(return_value=[ca])):
+            trustlist = await service._build_trustlist_for_server()
+
+        cert_der = cert.public_bytes(serialization.Encoding.DER)
+        crl_der = crl.public_bytes(serialization.Encoding.DER)
+        assert trustlist.TrustedCertificates == [cert_der]
+        assert trustlist.TrustedCrls == [crl_der]
+        assert trustlist.IssuerCertificates == []
+        assert trustlist.IssuerCrls == []
+
     @pytest.mark.asyncio
     async def test_update_server_certificate_reports_partial_success_as_failure(self, mock_opc_device):
         """Do not report success when only some discovered application groups were updated."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
+        client.get_node = Mock(side_effect=RuntimeError('no capabilities'))
         groups = [
             {'name': 'ApplicationGroupA', 'node_id': ua.NodeId(1, 1), 'certificate_type_id': ua.NodeId(12560)},
             {'name': 'ApplicationGroupB', 'node_id': ua.NodeId(1, 2), 'certificate_type_id': ua.NodeId(12560)},
@@ -1955,6 +2054,7 @@ class TestGdsPushServiceAdditionalCoverage:
         """Persist the first successful certificate and issuer chain returned by the server."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
+        client.get_node = Mock(side_effect=RuntimeError('no capabilities'))
         groups = [{'name': 'ApplicationGroup', 'node_id': ua.NodeId(1, 2)}]
 
         with (

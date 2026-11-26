@@ -130,6 +130,7 @@ class GdsPushService(LoggerMixin):
             GdsPushError: If device configuration is invalid.
         """
         self.device = device
+        self._capabilities: dict[str, Any] = {}
         self._validate_device_config()
 
         self.server_url = f'opc.tcp://{device.ip_address}:{device.opc_ua_gds_push_config.opc_server_port}'
@@ -257,9 +258,10 @@ class GdsPushService(LoggerMixin):
         """Build OPC UA TrustList to push to server.
 
         The TrustList tells the OPC UA server which CAs to trust for client
-        certificate validation. It includes:
-        - All CA certificates in the chain (issuing CA to root)
-        - Valid CRLs from all CAs in the chain (mandatory)
+        certificate validation. The root is the trust anchor
+        (TrustedCertificates/TrustedCrls); issuing and intermediate CAs are
+        chain material (IssuerCertificates/IssuerCrls). All CA CRLs are
+        mandatory.
 
         Returns:
             TrustListDataType ready to push to server.
@@ -269,20 +271,17 @@ class GdsPushService(LoggerMixin):
                          or any CRL is expired.
         """
         ca_chain = await self._build_ca_chain()
+        if not ca_chain:
+            msg = 'CA chain is empty; cannot build the OPC UA TrustList.'
+            raise GdsPushError(msg)
 
-        trusted_certs = []
-        trusted_crls = []
-        issuer_certs = []
-        issuer_crls = []
-
+        # get_ca_chain_from_truststore returns issuing CA -> root.
+        chain_material: list[tuple[bytes, bytes]] = []
         for ca in ca_chain:
             ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
 
             ca_cert_crypto = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
             ca_cert_der = ca_cert_crypto.public_bytes(encoding=serialization.Encoding.DER)
-
-            trusted_certs.append(ca_cert_der)
-            issuer_certs.append(ca_cert_der)
 
             crl_pem = await sync_to_async(lambda ca=ca: ca.crl_pem)()
             if not crl_pem:
@@ -305,16 +304,17 @@ class GdsPushService(LoggerMixin):
                 raise GdsPushError(msg)
 
             crl_der = crl_crypto.public_bytes(encoding=serialization.Encoding.DER)
+            chain_material.append((ca_cert_der, crl_der))
 
-            trusted_crls.append(crl_der)
-            issuer_crls.append(crl_der)
+        root_cert, root_crl = chain_material[-1]
+        issuers = chain_material[:-1]
 
         trustlist = ua.TrustListDataType()
         trustlist.SpecifiedLists = ua.TrustListMasks.All
-        trustlist.TrustedCertificates = trusted_certs
-        trustlist.TrustedCrls = trusted_crls
-        trustlist.IssuerCertificates = issuer_certs
-        trustlist.IssuerCrls = issuer_crls
+        trustlist.TrustedCertificates = [root_cert]
+        trustlist.TrustedCrls = [root_crl]
+        trustlist.IssuerCertificates = [cert for cert, _crl in issuers]
+        trustlist.IssuerCrls = [crl for _cert, crl in issuers]
 
         return trustlist
 
@@ -862,6 +862,7 @@ class GdsPushService(LoggerMixin):
 
             try:
                 async with client:
+                    await self._read_server_capabilities(client)
                     trustlist_nodes = await self._discover_trustlist_nodes(client)
                     if not trustlist_nodes:
                         return False, 'No TrustList nodes found on server'
@@ -1064,19 +1065,25 @@ class GdsPushService(LoggerMixin):
             current.TrustedCertificates or [], new.TrustedCertificates or []
         )
         merged.TrustedCrls = self._merge_crls(current.TrustedCrls or [], new.TrustedCrls or [])
-        merged.IssuerCertificates = self._merge_byte_lists(
-            current.IssuerCertificates or [], new.IssuerCertificates or []
-        )
+
+        trusted = set(merged.TrustedCertificates)
+        merged.IssuerCertificates = [
+            cert
+            for cert in self._merge_byte_lists(current.IssuerCertificates or [], new.IssuerCertificates or [])
+            if cert not in trusted
+        ]
         merged.IssuerCrls = self._merge_crls(current.IssuerCrls or [], new.IssuerCrls or [])
         return merged
 
-    def _validate_trustlist_limits(self, trustlist: ua.TrustListDataType) -> None:
-        """Reject a trust list that exceeds the configured per-device capacity limits."""
+    def _validate_trustlist_limits(self, trustlist: ua.TrustListDataType, serialized_size: int = 0) -> None:
+        """Reject a trust list that exceeds configured or server-advertised limits."""
         device = getattr(self, 'device', None)
         config = getattr(device, 'opc_ua_gds_push_config', None) if device is not None else None
         max_entries = getattr(config, 'opc_gds_push_max_trustlist_entries', 0) or 0
         max_element_size = getattr(config, 'opc_gds_push_max_trustlist_element_size', 0) or 0
-        if not max_entries and not max_element_size:
+        capabilities = getattr(self, '_capabilities', {}) or {}
+        max_total_size = capabilities.get('MaxTrustListSize', 0) or 0
+        if not max_entries and not max_element_size and not max_total_size:
             return
 
         # Count unique DER objects: a certificate shared between lists consumes one slot.
@@ -1101,6 +1108,13 @@ class GdsPushService(LoggerMixin):
                     f'of {max_element_size} bytes.'
                 )
                 self._raise_gds_push_error(msg)
+
+        if max_total_size and serialized_size > max_total_size:
+            msg = (
+                f'TrustList is {serialized_size} bytes, exceeding the server MaxTrustListSize '
+                f'of {max_total_size} bytes.'
+            )
+            self._raise_gds_push_error(msg)
 
     async def _read_trustlist(self, trustlist_node: Node) -> ua.TrustListDataType | None:
         """Read the server's current TrustList, returning None when it cannot be read."""
@@ -1129,6 +1143,37 @@ class GdsPushService(LoggerMixin):
                 with contextlib.suppress(Exception):
                     close_method = await trustlist_node.get_child('Close')
                     await trustlist_node.call_method(close_method.nodeid, file_handle)
+
+    async def _read_server_capabilities(self, client: Client) -> dict[str, Any]:
+        """Read the ServerConfiguration capabilities relevant to push management."""
+        capabilities: dict[str, Any] = {}
+        try:
+            server_node = client.get_node('ns=0;i=2253')
+            server_config = await server_node.get_child('ServerConfiguration')
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug('Could not browse ServerConfiguration: %s', e)
+            self._capabilities = capabilities
+            return capabilities
+
+        for name in (
+            'MaxTrustListSize',
+            'SupportedPrivateKeyFormats',
+            'SupportsTransactions',
+            'InApplicationSetup',
+            'HasSecureElement',
+            'ServerCapabilities',
+        ):
+            try:
+                value = await (await server_config.get_child(name)).read_value()
+            except Exception as e:  # noqa: BLE001
+                self.logger.debug('ServerConfiguration.%s unavailable: %s', name, e)
+                continue
+            capabilities[name] = value
+
+        self._capabilities = capabilities
+        if capabilities:
+            self.logger.info('Server capabilities: %s', capabilities)
+        return capabilities
 
     async def _read_rejected_certificates(self, client: Client) -> list[bytes]:
         """Read the server's rejected-certificate list, if available."""
@@ -1164,8 +1209,8 @@ class GdsPushService(LoggerMixin):
                 if current_trustlist is not None
                 else trustlist_data
             )
-            self._validate_trustlist_limits(effective_trustlist)
             serialized_trustlist = struct_to_binary(effective_trustlist)
+            self._validate_trustlist_limits(effective_trustlist, serialized_size=len(serialized_trustlist))
 
             # Step 1: Open
             mode = ua.Variant(int(ua.OpenFileMode.Write | ua.OpenFileMode.EraseExisting), ua.VariantType.Byte)
@@ -1233,6 +1278,7 @@ class GdsPushService(LoggerMixin):
 
             try:
                 async with client:
+                    await self._read_server_capabilities(client)
                     cert_groups = await self._discover_certificate_groups(client)
                     if not cert_groups:
                         return False, 'No certificate groups found on server', None
