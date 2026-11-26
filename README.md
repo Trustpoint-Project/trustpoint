@@ -71,10 +71,10 @@ Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard 
 ### Start Trustpoint
 
 > [!IMPORTANT]
-> Trustpoint 1.0.0 is the first stable version. Start with a fresh database and
-> installation-specific secrets. Preserve the database, keys, and runtime state
-> for subsequent updates and recovery.
-> See the [1.0 release notes](CHANGELOG.md) and
+> Trustpoint 1.0.1 is the current stable release and updates 1.0.0 in place.
+> Start with a fresh database and installation-specific secrets, or back up the
+> database, keys, and runtime state before upgrading.
+> See the [release notes](CHANGELOG.md) and
 > [upgrade guide](https://trustpoint.readthedocs.io/en/latest/features/management/upgrading.html).
 
 ```bash
@@ -279,11 +279,11 @@ See the **[Trustpoint documentation](https://trustpoint.readthedocs.io/en/latest
 | [Docker Hub](https://hub.docker.com/r/trustpointproject/trustpoint) | Published Trustpoint container images |
 | [Releases](https://github.com/Trustpoint-Project/trustpoint/releases) | Release notes and project milestones |
 
-## Trustpoint 1.0.0
+## Trustpoint 1.0.1
 
-Trustpoint 1.0.0 is the first stable release. The [release notes](CHANGELOG.md)
-describe its capabilities, installation, key-recovery requirements, and known
-limitations. See the
+Trustpoint 1.0.1 is the current stable release and updates 1.0.0 in place. The
+[release notes](CHANGELOG.md) describe its capabilities, upgrade notes,
+key-recovery requirements, and known limitations. See the
 [capability and limitations guide](https://trustpoint.readthedocs.io/en/latest/features/capabilities.html)
 for available operations and backend-specific deployment requirements.
 

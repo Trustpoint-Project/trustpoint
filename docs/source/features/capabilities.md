@@ -1,6 +1,6 @@
 # Capabilities and limitations
 
-This page describes Trustpoint 1.0.0, the first stable release. Availability depends
+This page describes Trustpoint 1.0.1, the current stable release. Availability depends
 on the active security preset, certificate profiles, backend capabilities, and
 device/domain configuration. See the [release notes](../release_notes.md) for
 installation, compatibility, recovery requirements, and known limitations.
