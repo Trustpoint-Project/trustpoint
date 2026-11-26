@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import os
 import tempfile
 from typing import TYPE_CHECKING, Any, NoReturn
 
@@ -55,6 +56,37 @@ class CertificateTypes:
     ECC_NIST_P384_APPLICATION_CERTIFICATE = ua.NodeId.from_string('ns=0;i=23539')
     ECC_BRAINPOOL_P256R1_APPLICATION_CERTIFICATE = ua.NodeId.from_string('ns=0;i=23540')
     ECC_BRAINPOOL_P384R1_APPLICATION_CERTIFICATE = ua.NodeId.from_string('ns=0;i=23541')
+
+    # CertificateType subtypes that may be assigned to an application (Section 7.8.4).
+    APPLICATION_TYPE_IDS = frozenset(
+        {
+            12557,  # ApplicationCertificateType
+            12559,  # RsaMinApplicationCertificateType
+            12560,  # RsaSha256ApplicationCertificateType
+            23537,  # EccApplicationCertificateType
+            23538,  # EccNistP256ApplicationCertificateType
+            23539,  # EccNistP384ApplicationCertificateType
+            23540,  # EccBrainpoolP256r1ApplicationCertificateType
+            23541,  # EccBrainpoolP384r1ApplicationCertificateType
+            23542,  # EccCurve25519ApplicationCertificateType
+            23543,  # EccCurve448ApplicationCertificateType
+        }
+    )
+    # CertificateGroupType.Purpose values that are not application certificates.
+    NON_APPLICATION_PURPOSE_IDS = frozenset({12558, 19323, 19324, 19325, 19326})
+    # Prefer SHA-256 RSA, then RSA minimum, then the named ECC curves.
+    PREFERRED_APPLICATION_TYPE_IDS = (
+        12560,
+        12559,
+        23538,
+        23539,
+        23540,
+        23541,
+        23542,
+        23543,
+        23537,
+        12557,
+    )
 
 
 class GdsPushService(LoggerMixin):
@@ -873,9 +905,15 @@ class GdsPushService(LoggerMixin):
                 )
                 raise
 
-            if success_count > 0:
+            if success_count == len(trustlist_nodes):
                 msg = f'Successfully updated {success_count}/{len(trustlist_nodes)} trustlist(s): {", ".join(messages)}'
                 return True, msg
+
+            msg = (
+                f'Failed to update {len(trustlist_nodes) - success_count}/{len(trustlist_nodes)} '
+                f'trustlist(s): {", ".join(messages)}'
+            )
+            return False, msg
 
         except Exception as e:
             self.logger.exception('Failed to update trustlist')
@@ -883,45 +921,91 @@ class GdsPushService(LoggerMixin):
         else:
             return False, 'Failed to update any trustlist'
 
-    async def _discover_trustlist_nodes(self, client: Client) -> list[dict[str, Any]]:
-        """Discover TrustList nodes on server.
+    @staticmethod
+    def _node_id_int(node_id: Any) -> int | None:
+        """Return the numeric identifier of a namespace-0 NodeId, or None for anything else."""
+        if isinstance(node_id, ua.NodeId) and node_id.NamespaceIndex == 0 and isinstance(node_id.Identifier, int):
+            return node_id.Identifier
+        return None
 
-        Args:
-            client: Connected OPC UA client.
+    def _is_application_group(
+        self,
+        group_name: str,
+        purpose: ua.NodeId | None,
+        certificate_types: list[ua.NodeId],
+    ) -> bool:
+        """Decide from Purpose/CertificateTypes whether a group holds application certificates."""
+        purpose_id = self._node_id_int(purpose)
+        if purpose_id in CertificateTypes.APPLICATION_TYPE_IDS:
+            return True
+        if purpose_id in CertificateTypes.NON_APPLICATION_PURPOSE_IDS:
+            return False
 
-        Returns:
-            List of dictionaries with group and trustlist node information.
-        """
-        trustlist_nodes = []
+        type_ids = {type_id for node_id in certificate_types if (type_id := self._node_id_int(node_id)) is not None}
+        if type_ids:
+            return bool(type_ids & CertificateTypes.APPLICATION_TYPE_IDS)
+
+        # Some servers expose neither property value. Keep targeting custom groups, but never
+        # the well-known HTTPS/TLS/UserToken groups.
+        name = group_name.lower()
+        return not any(marker in name for marker in ('https', 'tls', 'usertoken'))
+
+    def _select_application_certificate_type(
+        self,
+        certificate_types: list[ua.NodeId],
+    ) -> ua.NodeId | None:
+        """Pick a permitted application CertificateType, or None when the group has none."""
+        available = {type_id for node_id in certificate_types if (type_id := self._node_id_int(node_id)) is not None}
+        if not available:
+            return CertificateTypes.APPLICATION_CERTIFICATE
+        for preferred_type_id in CertificateTypes.PREFERRED_APPLICATION_TYPE_IDS:
+            if preferred_type_id in available:
+                return ua.NodeId.from_string(f'ns=0;i={preferred_type_id}')
+        return None
+
+    async def _read_group_properties(self, group_node: Node) -> tuple[ua.NodeId | None, list[ua.NodeId]]:
+        """Read the optional Purpose and the mandatory CertificateTypes properties."""
+        purpose: ua.NodeId | None = None
+        certificate_types: list[ua.NodeId] = []
 
         try:
-            server_node = client.get_node('ns=0;i=2253')
-            server_config = await server_node.get_child('ServerConfiguration')
-            cert_groups_node = await server_config.get_child('CertificateGroups')
+            value = await (await group_node.get_child('Purpose')).read_value()
+        except Exception:  # noqa: BLE001
+            self.logger.debug('Certificate group has no readable Purpose')
+        else:
+            if isinstance(value, ua.NodeId):
+                purpose = value
 
-            groups = await cert_groups_node.get_children()
-            self.logger.info('Found %d certificate group(s)', len(groups))
+        try:
+            value = await (await group_node.get_child('CertificateTypes')).read_value()
+        except Exception:  # noqa: BLE001
+            self.logger.debug('Certificate group has no readable CertificateTypes')
+        else:
+            if isinstance(value, (list, tuple)):
+                certificate_types = [node_id for node_id in value if isinstance(node_id, ua.NodeId)]
+            elif isinstance(value, ua.NodeId):
+                certificate_types = [value]
 
-            for group_node in groups:
-                try:
-                    name = await group_node.read_browse_name()
-                    group_name = name.Name
-                    trustlist_node = await group_node.get_child('TrustList')
+        return purpose, certificate_types
 
-                    trustlist_nodes.append(
-                        {
-                            'group_name': group_name,
-                            'group_node': group_node,
-                            'trustlist_node': trustlist_node,
-                        }
-                    )
+    async def _discover_trustlist_nodes(self, client: Client) -> list[dict[str, Any]]:
+        """Discover TrustLists of application certificate groups on the server."""
+        trustlist_nodes = []
 
-                except Exception as e:  # noqa: BLE001
-                    self.logger.warning('Failed to get TrustList for group: %s', e)
-                    continue
+        for group in await self._discover_certificate_groups(client):
+            try:
+                trustlist_node = await group['group_node'].get_child('TrustList')
+            except Exception as e:  # noqa: BLE001
+                self.logger.warning('Failed to get TrustList for group %s: %s', group['name'], e)
+                continue
 
-        except Exception:
-            self.logger.exception('Failed to discover trustlist nodes')
+            trustlist_nodes.append(
+                {
+                    'group_name': group['name'],
+                    'group_node': group['group_node'],
+                    'trustlist_node': trustlist_node,
+                }
+            )
 
         return trustlist_nodes
 
@@ -1014,12 +1098,10 @@ class GdsPushService(LoggerMixin):
                     for group in cert_groups:
                         group_name = group['name']
 
-                        if 'UserToken' in group_name:
-                            continue
-
                         success, cert_bytes, chain_bytes = await self._update_single_certificate(
                             client=client,
                             certificate_group_id=group['node_id'],
+                            certificate_type_id=group.get('certificate_type_id'),
                         )
 
                         if success:
@@ -1037,12 +1119,16 @@ class GdsPushService(LoggerMixin):
                     self.logger.exception('Certificate mismatch detected - server truststore may need updating')
                 raise
 
-            if success_count > 0:
+            if success_count == len(cert_groups):
                 if issued_cert and issuer_chain:
                     await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
 
                 msg = f'Successfully updated {success_count}/{len(cert_groups)} certificate(s): {", ".join(messages)}'
                 return True, msg, issued_cert
+
+            if success_count:
+                msg = f'Updated only {success_count}/{len(cert_groups)} certificate(s): {", ".join(messages)}'
+                return False, msg, None
 
         except Exception as e:
             self.logger.exception('Failed to update server certificate')
@@ -1051,13 +1137,11 @@ class GdsPushService(LoggerMixin):
             return False, 'Failed to update any certificate', None
 
     async def _discover_certificate_groups(self, client: Client) -> list[dict[str, Any]]:
-        """Discover certificate groups on server.
+        """Discover application certificate groups and the permitted certificate type.
 
-        Args:
-            client: Connected OPC UA client.
-
-        Returns:
-            List of dictionaries with group information.
+        Only groups whose Purpose/CertificateTypes identify application certificates are
+        returned (Section 7.7.2). HTTPS and UserToken groups are excluded so their trust
+        lists and certificate slots are not overwritten.
         """
         groups = []
 
@@ -1072,10 +1156,23 @@ class GdsPushService(LoggerMixin):
                 try:
                     name = await group_node.read_browse_name()
                     group_name = name.Name
+                    purpose, certificate_types = await self._read_group_properties(group_node)
+
+                    if not self._is_application_group(group_name, purpose, certificate_types):
+                        self.logger.info('Skipping non-application certificate group: %s', group_name)
+                        continue
+
+                    certificate_type_id = self._select_application_certificate_type(certificate_types)
+                    if certificate_type_id is None:
+                        self.logger.warning('Certificate group %s permits no application certificate type', group_name)
+                        continue
+
                     groups.append(
                         {
                             'name': group_name,
                             'node_id': group_node.nodeid,
+                            'group_node': group_node,
+                            'certificate_type_id': certificate_type_id,
                         }
                     )
 
@@ -1120,7 +1217,7 @@ class GdsPushService(LoggerMixin):
                 certificate_type_id,
                 None,  # subjectName
                 True,  # regeneratePrivateKey  # noqa: FBT003
-                None,  # nonce
+                os.urandom(32),  # nonce (Section 7.10.10 requires >= 32 bytes)
             )
             self.logger.info('CSR generated by server (%d bytes)', len(csr))
 

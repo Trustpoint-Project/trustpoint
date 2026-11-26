@@ -767,6 +767,57 @@ class TestGdsPushService:
         assert groups[0]['name'] == 'DefaultApplicationGroup'
 
     @pytest.mark.asyncio
+    async def test_discover_certificate_groups_filters_by_purpose_and_selects_type(self, mock_opc_device):
+        """Target only application groups and use a certificate type they permit."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        def make_group(name, node_id, purpose, certificate_types):
+            purpose_node = Mock()
+            purpose_node.read_value = AsyncMock(return_value=purpose)
+            types_node = Mock()
+            types_node.read_value = AsyncMock(return_value=certificate_types)
+            browse_name = Mock(Name=name)
+            group = Mock()
+            group.nodeid = ua.NodeId(node_id)
+            group.read_browse_name = AsyncMock(return_value=browse_name)
+
+            async def get_child(child):
+                return {'Purpose': purpose_node, 'CertificateTypes': types_node}[child]
+
+            group.get_child = AsyncMock(side_effect=get_child)
+            return group
+
+        groups_node = Mock()
+        groups_node.get_children = AsyncMock(
+            return_value=[
+                make_group('DefaultApplicationGroup', 12555, ua.NodeId(12557), [ua.NodeId(12560)]),
+                make_group('DefaultHttpsGroup', 12556, ua.NodeId(12558), []),
+                make_group('DefaultUserTokenGroup', 12557, ua.NodeId(19323), []),
+                make_group('VendorApplication', 20000, None, [ua.NodeId(12560)]),
+                make_group('BrokenApplication', 20001, ua.NodeId(12557), [ua.NodeId(12558)]),
+                make_group('LegacyApplication', 20002, None, []),
+                make_group('LegacyHttpsGroup', 20003, None, []),
+            ]
+        )
+        server_config = Mock()
+        server_config.get_child = AsyncMock(return_value=groups_node)
+        server_node = Mock()
+        server_node.get_child = AsyncMock(return_value=server_config)
+        client = Mock()
+        client.get_node.return_value = server_node
+
+        groups = await service._discover_certificate_groups(client)
+
+        assert [group['name'] for group in groups] == [
+            'DefaultApplicationGroup',
+            'VendorApplication',
+            'LegacyApplication',
+        ]
+        assert groups[0]['certificate_type_id'] == ua.NodeId(12560)
+        assert groups[1]['certificate_type_id'] == ua.NodeId(12560)
+        assert groups[2]['certificate_type_id'] == ua.NodeId(12557)
+
+    @pytest.mark.asyncio
     async def test_update_single_certificate_success(self, mock_opc_device, mock_domain_credential):
         """Test successful single certificate update."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -807,6 +858,9 @@ class TestGdsPushService:
             assert success is True
             assert cert_data == signed_cert
             assert chain_data == issuer_chain
+            nonce = mock_server_config.call_method.await_args_list[0].args[5]
+            assert isinstance(nonce, bytes)
+            assert len(nonce) >= 32
 
     # ========================================================================
     # Secure Client Creation Tests
@@ -1370,25 +1424,36 @@ class TestGdsPushServiceAdditionalCoverage:
         config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
 
     @pytest.mark.asyncio
-    async def test_update_server_certificate_skips_user_token_and_reports_failures(self, mock_opc_device):
-        """Skip UserToken groups and preserve failed application-group results."""
+    async def test_update_server_certificate_reports_partial_success_as_failure(self, mock_opc_device):
+        """Do not report success when only some discovered application groups were updated."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
         groups = [
-            {'name': 'UserTokenGroup', 'node_id': ua.NodeId(1, 1)},
-            {'name': 'ApplicationGroup', 'node_id': ua.NodeId(1, 2)},
+            {'name': 'ApplicationGroupA', 'node_id': ua.NodeId(1, 1), 'certificate_type_id': ua.NodeId(12560)},
+            {'name': 'ApplicationGroupB', 'node_id': ua.NodeId(1, 2), 'certificate_type_id': ua.NodeId(12560)},
         ]
 
         with (
             patch.object(service, '_create_secure_client', return_value=client),
             patch.object(service, '_discover_certificate_groups', return_value=groups),
-            patch.object(service, '_update_single_certificate', return_value=(False, None, None)) as update,
+            patch.object(
+                service,
+                '_update_single_certificate',
+                side_effect=[(True, b'new-cert', [b'issuer']), (False, None, None)],
+            ) as update,
+            patch.object(service, '_update_truststore_with_new_certificate') as update_truststore,
         ):
             success, message, cert_data = await service.update_server_certificate()
 
         assert (success, cert_data) == (False, None)
-        assert 'Failed to update any certificate' in message
-        update.assert_awaited_once_with(client=client, certificate_group_id=groups[1]['node_id'])
+        assert 'Updated only 1/2 certificate(s)' in message
+        assert update.await_count == 2
+        update.assert_awaited_with(
+            client=client,
+            certificate_group_id=groups[1]['node_id'],
+            certificate_type_id=groups[1]['certificate_type_id'],
+        )
+        update_truststore.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_update_single_certificate_returns_false_on_server_error(self, mock_opc_device):
@@ -1453,8 +1518,8 @@ class TestGdsPushServiceAdditionalCoverage:
         ):
             success, message = await service.update_trustlist()
 
-        assert success is True
-        assert message == 'Successfully updated 1/2 trustlist(s): ✓ Application, ✗ Https'
+        assert success is False
+        assert message == 'Failed to update 1/2 trustlist(s): ✓ Application, ✗ Https'
         assert update.await_args_list[0].args[0] is nodes[0]['trustlist_node']
         assert update.await_args_list[1].args[0] is nodes[1]['trustlist_node']
 

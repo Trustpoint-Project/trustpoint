@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 5**, **P1 = 9**, **P2 = 17**, **P3 = 7**, **already implemented = 6**.
+Findings by priority: **P0 = 5 (all done)**, **P1 = 9**, **P2 = 17**, **P3 = 7**, **already implemented = 6** — 11 of 44 items are done.
 
 The main gaps are:
 
@@ -104,20 +104,20 @@ The main gaps are:
 |---|---|---|---|---|---|---|
 | WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Partial | Periodic task does trust list first (`devices/tasks.py:61–77`); the standalone "update server certificate" task does not (`devices/tasks.py:109–127`). | Make "update certificate" always run or offer the required trust-list step first, or combine both in one workflow entry point. | [ ] |
 | WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Missing | Fixed interval only (`opc_gds_push_renewal_interval`); no expiry, CRL or policy check. Every cycle replaces the certificate. | Add a decision step: compare server certificate expiry, configured renewal threshold and pending CRL changes. Skip when nothing is due. | [ ] |
-| WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Non-conformant | Certificate update skips names containing `UserToken` (`gds_push_service.py:1017`); trust-list update targets every group (`:905`). `Purpose` and `CertificateTypes` are never read. | Read `Purpose` and `CertificateTypes`; select only application-purpose groups and a permitted certificate type (see METH-02). Do not overwrite HTTPS/UserToken trust lists by default. | [ ] |
+| WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Implemented | `_discover_certificate_groups` reads `Purpose`/`CertificateTypes`, skips HTTPS/UserToken/unknown non-application groups, and selects a permitted type. Name fallback only when both properties are unavailable. | Done; covered by discovery tests. | [x] |
 | WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). No reconnect or verification after the server forces channel renegotiation. | Collect `ApplyChangesRequired` across the workflow and apply once per transaction scope. Reconnect and verify the new certificate/trust list afterwards. | [ ] |
 | WF-05 | P3 | Use `CreateSelfSignedCertificate` when no usable certificate exists (§7.7.4) | Missing | Method never called. | Optional. Implement only if servers without an existing certificate must be supported. | [ ] |
 | WF-06 | P2 | CertificateManager generates the private key when the server cannot (§7.7.4) | Missing | Always `RegeneratePrivateKey=True`; no fallback path. | Read `SupportedPrivateKeyFormats`; on `Bad_NotSupported`, generate key + CSR locally, sign, and upload key via `UpdateCertificate`. | [ ] |
 | WF-07 | P3 | Create Endpoint / Update Configuration workflows (§7.7.5/§7.7.6) | Missing | No `ConfigurationFile`, `UpdateTargets`, `ConfirmUpdate` usage. | Optional; separate feature. Not required for certificate replacement. | [ ] |
 | WF-08 | P2 | CertificateManager needs a `DiscoveryUrl`; NAT/hostnames supported (§7.7.2) | Missing | URL is built as `opc.tcp://{ip_address}:{port}` (`gds_push_service.py:101`). | Add an optional discovery URL / endpoint URL field, with hostname support and fallback to IP:port. | [ ] |
-| WF-09 | P0 | Workflow consistency | Partial / bug | `update_trustlist` returns success if at least one group succeeded (`:876`); `update_server_certificate` does the same (`:1040`). The periodic task then logs success and continues. | Return a structured per-group result; define whether partial success is allowed. Do not mark the cycle successful or onboarding complete on partial failure. | [ ] |
+| WF-09 | P0 | Workflow consistency | Implemented | `update_trustlist` and `update_server_certificate` now require every targeted group to succeed; partial updates return `False` with a per-group message and do not replace the local truststore. | Done; partial-success tests added. | [x] |
 
 ### 3.3 §7.10 — method-level conformance
 
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
-| METH-01 | P0 | `CreateSigningRequest`: Nonce shall be at least 32 bytes when `RegeneratePrivateKey=TRUE` (§7.10.10) | **Non-conformant** | Passes `None` (`gds_push_service.py:1117–1124`). | Generate at least 32 cryptographically random bytes and pass them. Add a stricter test server that rejects a missing/short nonce. | [ ] |
-| METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Missing | Always `ApplicationCertificateType` (i=12557) (`:1108`), even when the group permits only `RsaSha256ApplicationCertificateType`, ECC types or HTTPS types. | Read `CertificateGroupType.CertificateTypes`; select a permitted application type (prefer the server's current type or strongest supported). Fail clearly if none is usable. | [ ] |
+| METH-01 | P0 | `CreateSigningRequest`: Nonce shall be at least 32 bytes when `RegeneratePrivateKey=TRUE` (§7.10.10) | Implemented | Passes `os.urandom(32)`; unit test asserts the nonce. | Done. Still recommended: make the test server reject a missing/short nonce (OPS-02). | [x] |
+| METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Implemented | `_select_application_certificate_type` reads `CertificateTypes` and prefers RsaSha256, then RsaMin, then named ECC types; groups with no application type are skipped. | Done; covered by discovery tests. | [x] |
 | METH-03 | — | `UpdateCertificate` arguments: group, type, DER cert, issuer list, key format/key (§7.10.5) | Implemented | Correct for the server-generated-key case (`:1135–1143`). `IssuerCertificates` is redundant for application certificates per the standard and is ignored by the server. | Keep; extend for METH-04. | [x] |
 | METH-04 | P2 | Upload an externally generated private key (PKCS#8/PKCS#12) (§7.7.4, §7.10.5) | Missing | `PrivateKeyFormat=''`, `PrivateKey=b''` always. | Add CM-side key generation and key upload, gated by `SupportedPrivateKeyFormats`. | [ ] |
 | METH-05 | — | TrustList write sequence: `Open(Write\|EraseExisting)`, `Write`, `CloseAndUpdate`, `ApplyChanges` (§7.7.3, §7.8.2.2) | Implemented | Correct modes and order (`:944–979`). | Keep. | [x] |
@@ -135,7 +135,7 @@ The main gaps are:
 | TL-01 | — | `SpecifiedLists` mask and four lists (§7.8.2.8) | Implemented | `All` with all four lists populated (`:278–283`). | Keep. | [x] |
 | TL-02 | P1 | List semantics: trusted anchors vs issuers (§7.8.2.8) | Partial | The full CA chain is written to both `TrustedCertificates` and `IssuerCertificates`, and CRLs to both. Works on many servers; makes every intermediate a trust anchor and may be rejected by strict servers. | Write roots as trusted certificates, intermediates as issuer certificates, with matching CRL lists. Verify against at least one strict server. | [ ] |
 | TL-03 | — | Provide all issuers/CRLs needed for the new certificate (§7.7.2) | Implemented | Domain CA chain + CRLs. | Keep; include the server's new issuer after selection. | [x] |
-| TL-04 | P0 | Do not destroy unrelated trust entries | Partial / risk | `Open(Write\|EraseExisting)` replaces the entire trust list by design; Trustpoint never reads the current list and targets all groups. Unrelated admin/HTTPS/user-token anchors are removed. | Restrict to the relevant application group(s). Document that the trust list is authoritative for those groups. Optionally read and display the current list before replacing it. | [ ] |
+| TL-04 | P0 | Do not destroy unrelated trust entries | Implemented | Trust-list discovery now targets only application-purpose groups, so HTTPS/UserToken trust lists are no longer overwritten with the application CA chain. Full replacement within a targeted group remains the protocol-defined `Open(Write\|EraseExisting)` behaviour. | Done; document that the trust list is authoritative for the targeted application groups. Optional: read and display the current list before replacing it. | [x] |
 | TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Missing | No size pre-check; oversize lists fail at the server. | Compare the serialized size against `MaxTrustListSize` (0 = unlimited) and fail with a clear message before writing. | [ ] |
 
@@ -165,12 +165,12 @@ The main gaps are:
 
 ### Milestone 1 — Conformance and correctness (must do)
 
-- [ ] **METH-01** Pass a ≥ 32-byte nonce to `CreateSigningRequest`.
-- [ ] **WF-03 / METH-02** Select certificate groups by `Purpose`/`CertificateTypes`; select a permitted certificate type instead of the hard-coded base type.
-- [ ] **WF-03 / TL-04** Restrict trust-list updates to the relevant application group(s); stop writing the application trust list into HTTPS/UserToken groups.
+- [x] **METH-01** Pass a ≥ 32-byte nonce to `CreateSigningRequest`.
+- [x] **WF-03 / METH-02** Select certificate groups by `Purpose`/`CertificateTypes`; select a permitted certificate type instead of the hard-coded base type.
+- [x] **WF-03 / TL-04** Restrict trust-list updates to the relevant application group(s); stop writing the application trust list into HTTPS/UserToken groups.
 - [ ] **WF-01** Ensure every certificate update is preceded by the required trust-list update (or combine them in one workflow).
-- [ ] **WF-09** Return structured per-group results; do not report partial success as success.
-- [ ] **OPS-01 / OPS-02** Extend the test server and unit tests to catch these regressions.
+- [x] **WF-09** Return structured per-group results; do not report partial success as success.
+- [ ] **OPS-01 / OPS-02** Extend the test server and unit tests to catch these regressions. (Unit tests added; test server nonce/type enforcement still open.)
 
 **Exit criteria:** the workflow succeeds against a strict test server that enforces a nonce, permits only `RsaSha256ApplicationCertificateType`, and exposes separate HTTPS/UserToken groups; a partial group failure is reported as failure.
 
@@ -229,7 +229,7 @@ Before closing the core conformance work, verify each item against a strict serv
 - [ ] New certificate is usable after `ApplyChanges` (reconnect check).
 - [ ] Discovery shows the server certificate and it can be imported into the truststore.
 
-## 7. File and line map (baseline 2026-11-26)
+## 7. File and line map (current code, 2026-11-26)
 
 | Topic | Location |
 |---|---|
@@ -237,16 +237,16 @@ Before closing the core conformance work, verify each item against a strict serv
 | Scheduled renewal, trust list then certificate | `trustpoint/devices/tasks.py:23` |
 | Standalone trust-list push | `trustpoint/devices/tasks.py:92` |
 | Standalone certificate push | `trustpoint/devices/tasks.py:109` |
-| Trust-list construction (CA chain + CRLs) | `trustpoint/request/gds_push/gds_push_service.py:222` |
-| Secure client, hard-coded policy | `trustpoint/request/gds_push/gds_push_service.py:529` |
-| Server certificate pinning | `trustpoint/request/gds_push/gds_push_service.py:483` |
-| Endpoint discovery | `trustpoint/request/gds_push/gds_push_service.py:680` |
-| Certificate group discovery | `trustpoint/request/gds_push/gds_push_service.py:1053` |
-| Trust-list group discovery (all groups) | `trustpoint/request/gds_push/gds_push_service.py:886` |
-| Trust-list write sequence | `trustpoint/request/gds_push/gds_push_service.py:928` |
-| Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1091` |
-| CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1161` |
-| Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1268` |
+| Trust-list construction (CA chain + CRLs) | `trustpoint/request/gds_push/gds_push_service.py:254` |
+| Secure client, hard-coded policy | `trustpoint/request/gds_push/gds_push_service.py:561` |
+| Server certificate pinning | `trustpoint/request/gds_push/gds_push_service.py:515` |
+| Endpoint discovery | `trustpoint/request/gds_push/gds_push_service.py:712` |
+| Certificate group discovery | `trustpoint/request/gds_push/gds_push_service.py:1139` |
+| Trust-list group discovery (application groups only) | `trustpoint/request/gds_push/gds_push_service.py:991` |
+| Trust-list write sequence | `trustpoint/request/gds_push/gds_push_service.py:1010` |
+| Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1188` |
+| CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1258` |
+| Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1365` |
 | Discovery view (dead certificate flag) | `trustpoint/devices/views/credential_issuance.py:587–589` |
 | Client certificate profile | `trustpoint/pki/default_certificate_profiles/opc_ua_domain_credential.json` |
 | Server certificate profile | `trustpoint/pki/default_certificate_profiles/opc_ua.json` |
