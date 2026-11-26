@@ -101,6 +101,73 @@ def test_newer_database_blocks_apply() -> None:
     )
 
 
+def test_restore_without_version_but_with_completion_marker_can_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.RESTORE_BACKUP,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=True,
+            setup_marker_present=True,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert report.can_apply
+    assert any(
+        check.code == 'version.unknown_restore' and check.severity == CompatibilitySeverity.WARNING
+        for check in report.checks
+    )
+
+
+def test_restore_without_version_or_completion_marker_blocks_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.RESTORE_BACKUP,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=False,
+            setup_marker_present=False,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert not report.can_apply
+    assert any(
+        check.code == 'version.missing' and check.severity == CompatibilitySeverity.ERROR for check in report.checks
+    )
+
+
+def test_connect_existing_without_version_blocks_apply() -> None:
+    validator = OperationalAttachmentValidator(current_version='1.2.0')
+
+    report = validator.build_report(
+        mode=OperationalAttachMode.CONNECT_EXISTING,
+        target=_target(),
+        snapshot=OperationalStateSnapshot(
+            app_version=None,
+            setup_completed=True,
+            setup_marker_present=True,
+            crypto_backend_kind='software',
+            app_secret_backend_kind='software',
+            app_secret_material_present=True,
+        ),
+    )
+
+    assert not report.can_apply
+    assert any(
+        check.code == 'version.missing' and check.severity == CompatibilitySeverity.ERROR for check in report.checks
+    )
+
+
 def test_backend_kind_mismatch_blocks_apply() -> None:
     validator = OperationalAttachmentValidator(current_version='1.0.0')
 
@@ -140,8 +207,7 @@ def test_matching_binding_counts_with_missing_binding_blocks_apply() -> None:
 
     assert not report.can_apply
     assert any(
-        check.code == 'managed_keys.bindings_missing'
-        and check.severity == CompatibilitySeverity.ERROR
+        check.code == 'managed_keys.bindings_missing' and check.severity == CompatibilitySeverity.ERROR
         for check in report.checks
     )
 
@@ -166,8 +232,7 @@ def test_orphan_backend_binding_blocks_apply() -> None:
 
     assert not report.can_apply
     assert any(
-        check.code == 'managed_keys.orphan_bindings'
-        and check.severity == CompatibilitySeverity.ERROR
+        check.code == 'managed_keys.orphan_bindings' and check.severity == CompatibilitySeverity.ERROR
         for check in report.checks
     )
 
@@ -190,8 +255,7 @@ def test_multiple_active_crypto_profiles_blocks_apply() -> None:
 
     assert not report.can_apply
     assert any(
-        check.code == 'crypto.active_profile_count'
-        and check.severity == CompatibilitySeverity.ERROR
+        check.code == 'crypto.active_profile_count' and check.severity == CompatibilitySeverity.ERROR
         for check in report.checks
     )
 
@@ -213,8 +277,7 @@ def test_completed_target_without_app_secret_material_blocks_apply() -> None:
 
     assert not report.can_apply
     assert any(
-        check.code == 'appsecret.material_missing'
-        and check.severity == CompatibilitySeverity.ERROR
+        check.code == 'appsecret.material_missing' and check.severity == CompatibilitySeverity.ERROR
         for check in report.checks
     )
 
@@ -280,17 +343,21 @@ def test_pkcs11_app_secret_decryptability_uses_staged_backend() -> None:
         app_secret_material_present=True,
     )
 
-    with patch(
-        'setup_wizard.views.OperationalTargetInspector.inspect_app_secret_material',
-        return_value=OperationalAppSecretMaterial(
-            backend_kind='pkcs11',
-            wrapped_dek=b'wrapped-dek',
-            kek_label='trustpoint-app-secret-kek',
+    with (
+        patch(
+            'setup_wizard.views.OperationalTargetInspector.inspect_app_secret_material',
+            return_value=OperationalAppSecretMaterial(
+                backend_kind='pkcs11',
+                wrapped_dek=b'wrapped-dek',
+                kek_label='trustpoint-app-secret-kek',
+            ),
         ),
-    ), patch(
-        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
-        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
-    ), patch('setup_wizard.views.Pkcs11AppSecretService') as service_class:
+        patch(
+            'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+            return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+        ),
+        patch('setup_wizard.views.Pkcs11AppSecretService') as service_class,
+    ):
         service_class.return_value.recover_existing_dek.return_value = b'a' * 32
         checks = app_secret_decryptability_checks(
             config_model=config_model,
@@ -316,17 +383,21 @@ def test_pkcs11_app_secret_decryptability_blocks_when_recovery_fails() -> None:
         app_secret_material_present=True,
     )
 
-    with patch(
-        'setup_wizard.views.OperationalTargetInspector.inspect_app_secret_material',
-        return_value=OperationalAppSecretMaterial(
-            backend_kind='pkcs11',
-            wrapped_dek=b'wrapped-dek',
-            kek_label='trustpoint-app-secret-kek',
+    with (
+        patch(
+            'setup_wizard.views.OperationalTargetInspector.inspect_app_secret_material',
+            return_value=OperationalAppSecretMaterial(
+                backend_kind='pkcs11',
+                wrapped_dek=b'wrapped-dek',
+                kek_label='trustpoint-app-secret-kek',
+            ),
         ),
-    ), patch(
-        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
-        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
-    ), patch('setup_wizard.views.Pkcs11AppSecretService') as service_class:
+        patch(
+            'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+            return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+        ),
+        patch('setup_wizard.views.Pkcs11AppSecretService') as service_class,
+    ):
         service_class.return_value.recover_existing_dek.side_effect = AppSecretConfigurationError('missing kek')
         checks = app_secret_decryptability_checks(
             config_model=config_model,
@@ -369,13 +440,17 @@ def test_managed_key_reconciliation_accepts_matching_backend_key() -> None:
         fresh_install_pkcs11_token_serial='serial',
     )
 
-    with patch(
-        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
-        return_value=(_pkcs11_key_material(),),
-    ), patch(
-        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
-        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
-    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+    with (
+        patch(
+            'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+            return_value=(_pkcs11_key_material(),),
+        ),
+        patch(
+            'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+            return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+        ),
+        patch('setup_wizard.views.Pkcs11Backend') as backend_class,
+    ):
         backend_class.return_value.verify_managed_key.return_value.status = ManagedKeyVerificationStatus.PRESENT
         checks = managed_key_backend_reconciliation_checks(
             config_model=config_model,
@@ -396,13 +471,17 @@ def test_managed_key_reconciliation_blocks_missing_backend_key() -> None:
         fresh_install_pkcs11_token_serial='serial',
     )
 
-    with patch(
-        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
-        return_value=(_pkcs11_key_material(),),
-    ), patch(
-        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
-        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
-    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+    with (
+        patch(
+            'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+            return_value=(_pkcs11_key_material(),),
+        ),
+        patch(
+            'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+            return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+        ),
+        patch('setup_wizard.views.Pkcs11Backend') as backend_class,
+    ):
         backend_class.return_value.verify_managed_key.return_value.status = ManagedKeyVerificationStatus.MISSING
         checks = managed_key_backend_reconciliation_checks(
             config_model=config_model,
@@ -440,13 +519,17 @@ def test_managed_key_reconciliation_blocks_when_token_serial_is_missing() -> Non
         fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
     )
 
-    with patch(
-        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
-        return_value=(_pkcs11_key_material(),),
-    ), patch(
-        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
-        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
-    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+    with (
+        patch(
+            'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+            return_value=(_pkcs11_key_material(),),
+        ),
+        patch(
+            'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+            return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+        ),
+        patch('setup_wizard.views.Pkcs11Backend') as backend_class,
+    ):
         checks = managed_key_backend_reconciliation_checks(
             config_model=config_model,
             target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),

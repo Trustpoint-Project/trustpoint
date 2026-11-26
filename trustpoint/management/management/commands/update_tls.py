@@ -70,10 +70,10 @@ class Command(LoggerMixin, BaseCommand):
                 cert_path=NGINX_CERT_PATH,
                 chain_path=NGINX_CERT_CHAIN_PATH,
             )
-            command = ['sudo', str(script_path)]
+            command = [str(script_path)]
             result = subprocess.run(command, check=False, capture_output=True, text=True)  # noqa: S603
             if result.returncode != 0:
-                self.logger.error('TLS update script failed: %s', result.stderr)
+                self.logger.error('TLS update script failed: %s', result.stdout or result.stderr)
                 message = 'Nginx TLS credential update failed.'
                 raise CommandError(message)  # noqa: TRY301
         except Exception:

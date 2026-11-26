@@ -25,7 +25,7 @@ Key Features of Trustpoint
 - Standardized interfaces (:term:`CMP` | :term:`EST`, :term:`REST`)
 - User-friendly web-based application
 - Low hardware requirements
-- Availability as a Docker container
+- Availability as a Docker or Podman container
 - Built on Python :term:`Django` framework
 
 ---------------

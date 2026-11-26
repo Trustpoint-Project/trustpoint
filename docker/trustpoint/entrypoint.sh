@@ -100,6 +100,9 @@ start_nginx_foreground() {
   NGINX_PID=$!
   while true; do
     local required_pids=("$NGINX_PID")
+    if [ -n "${CONTROL_PID:-}" ]; then
+      required_pids+=("$CONTROL_PID")
+    fi
     if [ -f /run/trustpoint-operational.ready ]; then
       if [ -z "$handoff_started" ]; then
         handoff_started=$SECONDS
@@ -128,7 +131,7 @@ start_nginx_foreground() {
 
 stop_web_services() {
   local pid_file
-  local pids=("${NGINX_PID:-}" "${GUNICORN_PID:-}" "${QCLUSTER_PID:-}")
+  local pids=("${NGINX_PID:-}" "${GUNICORN_PID:-}" "${QCLUSTER_PID:-}" "${CONTROL_PID:-}")
   for pid_file in /run/trustpoint-operational-{gunicorn,qcluster}.pid; do
     if [ -s "$pid_file" ]; then
       pids+=("$(cat "$pid_file")")
@@ -184,9 +187,29 @@ rm -f /run/trustpoint-operational.ready /run/trustpoint-operational-{gunicorn,qc
 trap stop_web_services EXIT
 trap 'exit 0' SIGTERM SIGINT
 
+# The control process retains container root; application processes never elevate.
+rm -f /run/trustpoint/control.ready
+/usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py control &
+CONTROL_PID=$!
+for attempt in {1..50}; do
+  if [ -f /run/trustpoint/control.ready ]; then
+    break
+  fi
+  if ! service_alive "$CONTROL_PID"; then
+    echo "ERROR: Trustpoint control process failed to start."
+    exit 1
+  fi
+  sleep 0.1
+done
+if [ ! -f /run/trustpoint/control.ready ]; then
+  echo "ERROR: Trustpoint control socket did not become available."
+  exit 1
+fi
+
 if [ "$PHASE" = "bootstrap" ]; then
   echo "=== Starting Trustpoint BOOTSTRAP web role ==="
   /usr/local/bin/python3 -I /etc/trustpoint/runtime_config.py app bootstrap
+  configure_web_edge
   
   # Check if auto-setup was requested and trigger operational switch immediately
   AUTO_SETUP_MARKER="/var/lib/trustpoint/bootstrap/auto-setup.marker"
@@ -206,7 +229,6 @@ if [ "$PHASE" = "bootstrap" ]; then
     fi
   fi
   
-  configure_web_edge
   start_gunicorn
   start_nginx_foreground
 fi

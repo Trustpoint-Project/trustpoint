@@ -1,10 +1,10 @@
 Upgrading Trustpoint
 ====================
 
-Use this procedure to update an existing Docker Compose deployment while keeping
-its database, cryptographic keys, configuration, and runtime storage. Plan a
-maintenance window: enrollment endpoints and the web interface are unavailable
-while the application is stopped.
+Use this procedure to update an existing Docker Compose or Podman deployment
+while keeping its database, cryptographic keys, configuration, and runtime
+storage. Plan a maintenance window: enrollment endpoints and the web interface
+are unavailable while the application is stopped.
 
 Supported Upgrade Paths
 -----------------------
@@ -25,8 +25,13 @@ Run commands from the existing deployment directory. Keep the same Compose proje
 name, ``.env``, Compose file selection, overrides, and enabled profiles. Changing
 the project name can select new, empty named volumes.
 
-Examples below use ``docker compose`` for the main deployment. If your installation
-uses another configuration, include the same options before every command:
+Examples below use ``docker compose`` for the main deployment. For Podman, use
+``podman compose`` as the original deployment user with the same options. Also
+replace ``docker image tag`` with ``podman image tag`` and ``docker cp`` with
+``podman cp`` so image tagging and backups use the same rootless Podman storage.
+For an existing rootful Podman deployment, prefix all Podman commands with ``sudo``.
+If your installation uses another configuration, include the same options before
+every command:
 
 .. list-table:: Compose selection
    :header-rows: 1

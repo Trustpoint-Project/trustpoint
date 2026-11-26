@@ -66,6 +66,17 @@ jobs:
             < tests/scripts/check_encrypted_backup_restore.py
           docker compose exec -T postgres dropdb -U admin trustpoint_encrypted_restore
 
+      - name: Verify first-boot backup restoring through bootstrap
+        run: |
+          docker compose exec -T postgres createdb -U admin trustpoint_first_boot_restore
+          docker compose exec -T --user www-data \
+            -e TRUSTPOINT_PHASE=bootstrap -e DJANGO_SETTINGS_MODULE=trustpoint.settings_bootstrap \
+            -e HOME=/run/trustpoint/home \
+            -e POSTGRES_DB=trustpoint_first_boot_restore trustpoint \
+            .venv/bin/python trustpoint/manage.py shell --no-imports \
+            < tests/scripts/check_first_boot_backup_restore.py
+          docker compose exec -T postgres dropdb -U admin trustpoint_first_boot_restore
+
       - name: Stop application and recreate empty database
         run: |
           docker compose stop trustpoint

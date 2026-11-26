@@ -1,0 +1,23 @@
+name: Security / Runtime Boundary
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Run container privilege-boundary test
+        run: |
+          docker build -f tests/docker_security/Dockerfile -t trustpoint-runtime-boundary-test .
+          docker run --rm --network=none --security-opt no-new-privileges=true \
+            --tmpfs /run/secrets:rw trustpoint-runtime-boundary-test

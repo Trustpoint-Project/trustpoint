@@ -5,6 +5,8 @@ x-trustpoint: &trustpoint-service
     dockerfile: docker/trustpoint/Dockerfile
   image: "${TRUSTPOINT_IMAGE:-trustpointproject/trustpoint:latest}"
   restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
   stop_grace_period: "${TRUSTPOINT_STOP_GRACE_SECONDS:-30}s"
   extra_hosts:
     - "host.docker.internal:host-gateway"
@@ -82,6 +84,8 @@ services:
     image: trustpointproject/postgres:latest
     container_name: postgres
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     stop_grace_period: 30s
     logging:
       driver: json-file
@@ -100,7 +104,7 @@ services:
       - db_user
       - db_password
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$$(cat /run/secrets/db_user)\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -112,6 +116,8 @@ services:
       dockerfile: docker/softhsm/Dockerfile
     container_name: softhsm
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     stop_grace_period: 30s
     logging:
       driver: json-file

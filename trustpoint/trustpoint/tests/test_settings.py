@@ -457,3 +457,36 @@ def test_missing_mounted_database_secret_fails_closed(monkeypatch, tmp_path):
     monkeypatch.setenv('DATABASE_PASSWORD_FILE', str(tmp_path / 'missing-secret'))
     with pytest.raises(FileNotFoundError):
         importlib.reload(settings)
+
+
+@pytest.mark.parametrize('host', ['192.0.2.10', 'trustpoint.test'])
+def test_csrf_accepts_configured_ip_or_hostname_on_rootless_https_port(monkeypatch, host):
+    """A form posted through nginx succeeds with either configured public address."""
+    from django.http import HttpResponse
+    from django.middleware.csrf import CsrfViewMiddleware, get_token
+    from django.test import RequestFactory, override_settings
+
+    monkeypatch.setenv('TP_TLS_IPV4_ADDRESSES', '192.0.2.10')
+    monkeypatch.setenv('TP_TLS_DNS_NAMES', 'trustpoint.test')
+    monkeypatch.setenv('TP_HTTPS_PORT', '8443')
+    importlib.reload(settings)
+    with override_settings(
+        ALLOWED_HOSTS=settings.ALLOWED_HOSTS,
+        CSRF_TRUSTED_ORIGINS=settings.CSRF_TRUSTED_ORIGINS,
+        SECURE_PROXY_SSL_HEADER=settings.SECURE_PROXY_SSL_HEADER,
+    ):
+        factory = RequestFactory()
+        seed = factory.get('/')
+        token = get_token(seed)
+        request = factory.post(
+            '/setup_wizard/',
+            {'csrfmiddlewaretoken': token},
+            HTTP_HOST=f'{host}:8443',
+            HTTP_ORIGIN=f'https://{host}:8443',
+            HTTP_X_FORWARDED_PROTO='https',
+        )
+        request.COOKIES['csrftoken'] = seed.META['CSRF_COOKIE']
+        middleware = CsrfViewMiddleware(lambda _: HttpResponse())
+        middleware.process_request(request)
+        assert request.is_secure()
+        assert middleware.process_view(request, lambda _: HttpResponse(), (), {}) is None

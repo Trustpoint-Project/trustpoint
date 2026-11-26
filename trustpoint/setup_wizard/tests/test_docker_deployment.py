@@ -52,6 +52,8 @@ def test_compose_services_share_readonly_secret_and_persistent_state(tmp_path, f
         timeout=30,
     )
     config = json.loads(result.stdout)
+    for name in {'trustpoint', 'trustpoint-worker', 'postgres', 'softhsm'} & config['services'].keys():
+        assert 'no-new-privileges:true' in config['services'][name]['security_opt']
     assert config['secrets']['django_secret_key']['file'] == str(tmp_path / 'secrets/django_secret_key')
     software = not any('pkcs11' in filename or 'softhsm' in filename for filename in files)
     for name, service in config['services'].items():

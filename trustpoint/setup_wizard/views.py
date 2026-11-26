@@ -2559,6 +2559,65 @@ def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
     )
 
 
+def build_attach_target(
+    config_model: SetupWizardConfigModel,
+    *,
+    mode: OperationalAttachMode,
+) -> OperationalTargetConfig:
+    """Build the immutable attach target from staged bootstrap state."""
+    backend_kind = backend_kind_for_config(config_model)
+    return OperationalTargetConfig(
+        mode=mode,
+        database=OperationalDatabaseConfig(
+            host=config_model.operational_db_host,
+            port=config_model.operational_db_port,
+            name=config_model.operational_db_name,
+            user=config_model.operational_db_user,
+            password=config_model.operational_db_password,
+        ),
+        crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
+        app_secret_backend=OperationalBackendBinding(
+            backend_kind=(
+                BackendKind.PKCS11.value
+                if backend_kind == BackendKind.PKCS11.value
+                and config_model.fresh_install_pkcs11_enforce_app_secret_protection
+                else BackendKind.SOFTWARE.value
+            )
+        ),
+        backup_file_name=config_model.restore_backup_archive_original_name or None,
+    )
+
+
+def build_attach_compatibility_report(
+    *,
+    config_model: SetupWizardConfigModel,
+    mode: OperationalAttachMode,
+    target: OperationalTargetConfig,
+    snapshot: OperationalStateSnapshot,
+) -> OperationalCompatibilityReport:
+    """Build the attach report with backend readiness and live key checks."""
+    report = OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
+        mode=mode,
+        target=target,
+        snapshot=snapshot,
+    )
+    return report.with_checks(
+        (
+            *attach_backend_readiness_checks(config_model),
+            *app_secret_decryptability_checks(
+                config_model=config_model,
+                target=target,
+                snapshot=snapshot,
+            ),
+            *managed_key_backend_reconciliation_checks(
+                config_model=config_model,
+                target=target,
+                snapshot=snapshot,
+            ),
+        )
+    )
+
+
 class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
     """Connect-existing summary step for inspection and explicit attach."""
 
@@ -2583,27 +2642,7 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
 
     def _build_target(self, config_model: SetupWizardConfigModel) -> OperationalTargetConfig:
         """Build the immutable attach target from staged bootstrap state."""
-        backend_kind = backend_kind_for_config(config_model)
-        return OperationalTargetConfig(
-            mode=self.attach_mode,
-            database=OperationalDatabaseConfig(
-                host=config_model.operational_db_host,
-                port=config_model.operational_db_port,
-                name=config_model.operational_db_name,
-                user=config_model.operational_db_user,
-                password=config_model.operational_db_password,
-            ),
-            crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
-            app_secret_backend=OperationalBackendBinding(
-                backend_kind=(
-                    BackendKind.PKCS11.value
-                    if backend_kind == BackendKind.PKCS11.value
-                    and config_model.fresh_install_pkcs11_enforce_app_secret_protection
-                    else BackendKind.SOFTWARE.value
-                )
-            ),
-            backup_file_name=config_model.restore_backup_archive_original_name or None,
-        )
+        return build_attach_target(config_model, mode=self.attach_mode)
 
     def _build_report(self) -> OperationalCompatibilityReport:
         """Build the current compatibility report for the staged target."""
@@ -2619,25 +2658,11 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
                 exception=exception,
             )
             return report.with_checks(attach_backend_readiness_checks(config_model))
-        report = OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
+        return build_attach_compatibility_report(
+            config_model=config_model,
             mode=self.attach_mode,
             target=target,
             snapshot=snapshot,
-        )
-        return report.with_checks(
-            (
-                *attach_backend_readiness_checks(config_model),
-                *app_secret_decryptability_checks(
-                    config_model=config_model,
-                    target=target,
-                    snapshot=snapshot,
-                ),
-                *managed_key_backend_reconciliation_checks(
-                    config_model=config_model,
-                    target=target,
-                    snapshot=snapshot,
-                ),
-            )
         )
 
     def form_valid(self, form: EmptyForm) -> HttpResponse:
@@ -2692,6 +2717,13 @@ RESTORE_BACKUP_STEP_LABELS = {
     'backup-import': 'Backup Import',
     'summary': 'Inspect & Apply',
 }
+RESTORE_TARGET_DB_FIELDS = (
+    'operational_db_host',
+    'operational_db_port',
+    'operational_db_name',
+    'operational_db_user',
+    'operational_db_password',
+)
 
 
 class RestoreBackupDatabaseView(ConnectExistingDatabaseView):
@@ -2703,6 +2735,16 @@ class RestoreBackupDatabaseView(ConnectExistingDatabaseView):
     step_labels = RESTORE_BACKUP_STEP_LABELS
     success_url = reverse_lazy('setup_wizard:restore_backup_crypto_storage')
     back_url = reverse_lazy('setup_wizard:index')
+
+    def form_valid(self, form: FreshInstallDatabaseModelForm) -> HttpResponse:
+        """Drop a prior restore marker when the target database configuration changes."""
+        if form.instance.restore_backup_restored_at is not None and any(
+            field in form.changed_data for field in RESTORE_TARGET_DB_FIELDS
+        ):
+            form.instance.restore_backup_restored_at = None
+            form.instance.restore_backup_restore_error = ''
+            form.instance.save(update_fields=['restore_backup_restored_at', 'restore_backup_restore_error'])
+        return super().form_valid(form)
 
 
 class RestoreBackupCryptoStorageView(ConnectExistingCryptoStorageView):

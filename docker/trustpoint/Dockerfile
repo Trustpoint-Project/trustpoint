@@ -45,7 +45,6 @@ EXPOSE 80 443
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         opensc \
-        sudo \
         nginx \
         gettext \
         locales \
@@ -60,7 +59,12 @@ COPY --from=nginx-builder /out/modules/ngx_http_trustpoint_tls_binding_module.so
 COPY --from=nginx-builder /out/modules-enabled/50-trustpoint-tls-binding.conf /etc/nginx/modules-enabled/
 
 # Fail the build here if the runtime nginx cannot load the compiled module.
-RUN nginx -t
+# Avoid Debian's default port-80 listener in rootless builds using the host network.
+RUN printf '%s\n' 'include /etc/nginx/modules-enabled/*.conf;' \
+        'error_log stderr;' 'events {}' 'http {}' \
+        > /tmp/trustpoint-nginx-module-check.conf && \
+    nginx -t -c /tmp/trustpoint-nginx-module-check.conf && \
+    rm /tmp/trustpoint-nginx-module-check.conf
 
 # Create stable PKCS#11 module paths so provider-profile bootstrap and
 # local/dev configuration can rely on predictable values.
@@ -147,13 +151,6 @@ RUN mkdir -p /etc/trustpoint/ && \
     rm -rf /var/www/html/trustpoint/docker/trustpoint/nginx/tls-binding && \
     rm -f /etc/trustpoint/nginx/tls-binding/ngx_http_trustpoint_tls_binding_module.c \
           /etc/trustpoint/nginx/tls-binding/config
-
-# Add sudoers file and configure user and restart sudo service.
-RUN cp ./docker/trustpoint/wizard/sudoers /etc/sudoers && \
-    chown root:root /etc/sudoers && \
-    chmod 440 /etc/sudoers && \
-    visudo -cf /etc/sudoers && \
-    service sudo restart
 
 # The deployment supplies /run/secrets/django_secret_key as a read-only Compose secret.
 # No signing key is generated or stored in this image.

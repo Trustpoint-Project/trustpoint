@@ -29,7 +29,6 @@ MANAGE_PY = settings.BASE_DIR / 'manage.py'
 DEFAULT_CONTAINER_OPERATIONAL_ENV_FILE = Path('/var/lib/trustpoint/bootstrap/operational.env')
 DEFAULT_LOCAL_OPERATIONAL_ENV_FILE = settings.REPO_ROOT / 'var' / 'bootstrap' / 'operational.env'
 SWITCH_TO_OPERATIONAL_SCRIPT = Path('/etc/trustpoint/wizard/switch_to_operational.sh')
-SUDO_EXECUTABLE = '/usr/bin/sudo'
 MAX_CAPTURED_OUTPUT_LENGTH = 4000
 PASSTHROUGH_OPERATIONAL_ENV_KEYS = (
     'PKCS11_PROXY_SOCKET',
@@ -367,8 +366,7 @@ def run_operational_runtime_switch(env_file: Path | None = None) -> OperationalR
         raise DjangoValidationError(err_msg)
 
     completed_process = subprocess.run(  # noqa: S603
-        [SUDO_EXECUTABLE, str(SWITCH_TO_OPERATIONAL_SCRIPT), switch_mode],
-        env={**os.environ, 'TRUSTPOINT_APPLICATION_ENV': json.dumps(dict(os.environ))},
+        [str(SWITCH_TO_OPERATIONAL_SCRIPT), switch_mode],
         text=True,
         capture_output=True,
         check=False,

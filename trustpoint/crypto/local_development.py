@@ -79,7 +79,6 @@ def _local_software_backends_ready() -> bool:
     return AppSecretSoftwareConfigModel.objects.filter(backend=backend, wrapped_dek__isnull=False).exists()
 
 
-
 def _ensure_crypto_software_backend() -> bool:
     """Ensure local development has an active software crypto backend."""
     active_profile = CryptoProviderProfileModel.objects.filter(active=True).first()
@@ -90,9 +89,7 @@ def _ensure_crypto_software_backend() -> bool:
         return False
 
     software_profile = (
-        CryptoProviderProfileModel.objects.filter(backend_kind=BackendKind.SOFTWARE)
-        .order_by('id')
-        .first()
+        CryptoProviderProfileModel.objects.filter(backend_kind=BackendKind.SOFTWARE).order_by('id').first()
     )
     if software_profile is None:
         has_other_backend_kind = CryptoProviderProfileModel.objects.exclude(
@@ -133,7 +130,7 @@ def _ensure_software_profile_config(profile: CryptoProviderProfileModel) -> None
     defaults = {
         'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
         'encryption_source_ref': '',
-        'allow_exportable_private_keys': False,
+        'allow_exportable_private_keys': True,
     }
     config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(
         profile=profile,

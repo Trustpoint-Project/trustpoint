@@ -4,11 +4,15 @@
 """Exercise the standalone root boundary without requiring a running container."""
 
 import importlib.util
+import io
 import json
 import os
 import sqlite3
+import struct
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -231,3 +235,138 @@ def test_bootstrap_storage_creates_traversable_parents_and_private_leaf(tmp_path
     assert (tmp_path / 'new').stat().st_mode & 0o777 == 0o755
     assert storage.parent.stat().st_mode & 0o777 == 0o755
     assert storage.stat().st_mode & 0o777 == 0o750
+
+
+@pytest.mark.parametrize(
+    'arguments',
+    [
+        ['switch', '--pending'],
+        ['switch', '--final'],
+        ['privileged', 'update_tls.sh'],
+        ['privileged', 'update_tls_nginx.sh', 'no_hsm'],
+        ['privileged', 'install_pkcs11_assets.sh', '--clear-pin'],
+        ['privileged', 'install_pkcs11_assets.sh', '/staging/pin'],
+        ['privileged', 'install_pkcs11_assets.sh', '--use-installed-pin', '/staging/module', '/staging/config'],
+    ],
+)
+def test_control_accepts_only_fixed_operations(arguments):
+    assert runtime.validate_control_arguments(arguments) == arguments
+
+
+@pytest.mark.parametrize(
+    'arguments',
+    [
+        ['app', 'startup'],
+        ['entrypoint'],
+        ['control'],
+        ['resume-worker'],
+        ['switch', '/tmp/payload'],
+        ['privileged', '/bin/sh'],
+        ['privileged', 'update_tls.sh', 'extra'],
+        ['privileged', 'update_tls_nginx.sh'],
+        ['privileged', 'install_pkcs11_assets.sh', '--clear-pin', '/tmp/extra'],
+        ['privileged', 'install_pkcs11_assets.sh', 'relative/pin'],
+        ['switch', '--final\0'],
+        ['switch', 'a' * 4097],
+        None,
+        'switch',
+        [42],
+    ],
+)
+def test_control_rejects_arbitrary_commands_and_arguments(arguments):
+    with pytest.raises(ValueError):
+        runtime.validate_control_arguments(arguments)
+
+
+@pytest.mark.parametrize('uid', [0, 33, 65534])
+def test_control_authenticates_peer_and_keeps_environment_opaque(monkeypatch, uid):
+    monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.setattr(runtime.socket, 'SO_PEERCRED', 17, raising=False)
+    connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, uid, 33))
+    environment = {'LD_PRELOAD': '/tmp/attack.so', 'DATABASE_PASSWORD': 'synthetic', 'PATH': '/tmp/bin'}
+    data = json.dumps({'arguments': ['switch', '--final'], 'environment': environment}).encode() + b'\n'
+    if uid == 33:
+        assert runtime.read_control_request(connection, io.BytesIO(data)) == (['switch', '--final'], environment)
+    else:
+        with pytest.raises(ValueError, match='identity'):
+            runtime.read_control_request(connection, io.BytesIO(data))
+
+
+def test_control_fails_closed_without_peer_credentials(monkeypatch):
+    monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.delattr(runtime.socket, 'SO_PEERCRED', raising=False)
+    connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, 33, 33))
+    with pytest.raises(ValueError, match='credentials'):
+        runtime.read_control_request(connection, io.BytesIO(b'{}\n'))
+
+
+@pytest.mark.parametrize(
+    'data',
+    [
+        b'{}\n',
+        b'[]\n',
+        b'not-json\n',
+        b'{}',
+        b'x' * 65537,
+        b'{"arguments":["switch","--final"],"environment":{"BAD":42}}\n',
+        b'{"arguments":["control"],"environment":{}}\n',
+    ],
+)
+def test_control_rejects_malformed_or_oversized_requests(monkeypatch, data):
+    monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.setattr(runtime.socket, 'SO_PEERCRED', 17, raising=False)
+    connection = SimpleNamespace(getsockopt=lambda *_: struct.pack('3i', 123, 33, 33))
+    with pytest.raises((ValueError, TypeError)):
+        runtime.read_control_request(connection, io.BytesIO(data))
+
+
+@pytest.mark.parametrize('from_file', [False, True])
+def test_database_probe_uses_configured_role_and_database(tmp_path, monkeypatch, from_file):
+    monkeypatch.setattr(runtime.os, 'geteuid', lambda: 33)
+    monkeypatch.setattr(runtime.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=33))
+    monkeypatch.setattr(runtime.os, 'chdir', lambda _: None)
+    commands = []
+    monkeypatch.setattr(runtime.os, 'execve', lambda path, args, env: commands.append(args))
+    for key, value in {
+        runtime.APP_ENV_KEY: '{}',
+        runtime.APP_BASE_KEY: '{}',
+        'WWW_DATA_HOME': '/run/trustpoint/home',
+        'TRUSTPOINT_OPERATIONAL_GUNICORN_PORT': '8001',
+        'TRUSTPOINT_BOOTSTRAP_GUNICORN_PORT': '8000',
+        'DATABASE_USER': 'configured_role',
+        'POSTGRES_DB': 'configured_database',
+    }.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv('DATABASE_USER_FILE', raising=False)
+    if from_file:
+        secret = tmp_path / 'db-user'
+        secret.write_text('secret_role\n')
+        monkeypatch.setenv('DATABASE_USER_FILE', str(secret))
+    runtime.run_application('db-ready')
+    command = commands[0]
+    assert command[command.index('-U') + 1] == ('secret_role' if from_file else 'configured_role')
+    assert command[command.index('-d') + 1] == 'configured_database'
+
+
+def test_control_timeout_stops_the_operation_and_keeps_client_environment_opaque(monkeypatch):
+    environment = {'PATH': '/tmp/attack', 'LD_PRELOAD': '/tmp/attack.so', 'TP_HTTPS_PORT': 'invalid'}
+    monkeypatch.setattr(runtime, 'read_control_request', lambda *_: (['switch', '--final'], environment))
+    process = SimpleNamespace(
+        pid=123456, poll=lambda: None, wait=Mock(side_effect=[subprocess.TimeoutExpired('helper', 600), 0])
+    )
+    launch = Mock(return_value=process)
+    monkeypatch.setattr(runtime.subprocess, 'Popen', launch)
+    terminate = Mock()
+    monkeypatch.setattr(runtime.os, 'killpg', terminate)
+    handler = runtime.ControlRequestHandler.__new__(runtime.ControlRequestHandler)
+    handler.connection = None
+    handler.rfile = io.BytesIO()
+    handler.wfile = io.BytesIO()
+    handler.handle()
+    terminate.assert_called_once_with(process.pid, runtime.signal.SIGTERM)
+    assert json.loads(handler.wfile.getvalue())['returncode'] == 64
+    child_environment = launch.call_args.kwargs['env']
+    assert child_environment['PATH'] == os.environ['PATH']
+    assert json.loads(child_environment[runtime.APP_BASE_KEY]) == environment
+    assert child_environment.get('LD_PRELOAD') != '/tmp/attack.so'
+    assert child_environment.get('TP_HTTPS_PORT') != 'invalid'

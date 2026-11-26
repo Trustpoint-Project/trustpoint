@@ -186,6 +186,43 @@ The analysis is configured with a custom CodeQL configuration file and runs on a
     :language: yaml
     :caption: CodeQL workflow
 
+===================================
+Rootless Podman Deployment Pipeline
+===================================
+
+``Tests / Rootless Podman Deployment`` builds the shipped Compose deployment on
+an Ubuntu 26.04 runner using its native Podman and Docker Compose provider.
+The job verifies rootless execution and initializes private secrets inside the
+Podman user namespace. Its API uses a local Unix socket for the noninteractive
+runner session; no rootful Podman or application ``sudo`` is used.
+
+Ubuntu 26.04 runner images can ship a ``pasta`` AppArmor profile that blocks
+Podman's network cleanup signal (`runner-images#15182
+<https://github.com/actions/runner-images/issues/15182>`_). The workflow applies
+the upstream SIGTERM receive rule for Podman when missing and reloads that
+profile. It then tests rootless network cleanup before building. AppArmor and
+container ``NoNewPrivileges`` remain enabled, and the restart test still fails
+on cleanup errors. ``sudo`` is used only for the disposable AppArmor workaround
+and reading kernel logs. Kernel network/AppArmor diagnostics are retained with the logs.
+
+The HTTP check completes the interactive software-backend wizard through the
+runner's IP address on port 8443, including login, administrator creation, and
+CSRF-protected form submissions. It checks ``NoNewPrivileges`` in both
+containers, a PostgreSQL role other than ``admin``, and preservation of signing
+keys, the database encryption key, and encrypted data after restart. Missing-role
+database log entries fail the check.
+
+The workflow runs on pull requests and pushes to ``main`` except documentation-only
+changes. It also supports **Actions > Tests / Rootless Podman Deployment > Run workflow**
+once the workflow is available on the default branch. No repository secrets or
+external deployment are required. Diagnostics are uploaded for seven days and the
+disposable containers and volumes are removed after each run. This job covers
+the software backend; it does not validate a physical HSM or SELinux enforcement.
+
+.. literalinclude:: ../../../../.github/workflows/podman-deployment.yml
+    :language: yaml
+    :caption: Rootless Podman deployment workflow
+
 ============
 ZAP Pipeline
 ============

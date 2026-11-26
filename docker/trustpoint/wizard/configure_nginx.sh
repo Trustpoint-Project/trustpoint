@@ -17,6 +17,18 @@ log INFO "Installing Nginx HTTPS config..."
 cp /var/www/html/trustpoint/docker/trustpoint/nginx/trustpoint-nginx-https.conf \
    /etc/nginx/sites-available/trustpoint
 
+# Rootless deployments publish HTTPS on an unprivileged host port.
+https_port="${TP_HTTPS_PORT:-443}"
+if ! [[ "$https_port" =~ ^[0-9]{1,5}$ ]] || (( 10#$https_port < 1 || 10#$https_port > 65535 )); then
+    log ERROR "Invalid HTTPS host port"
+    exit 2
+fi
+if (( 10#$https_port != 443 )); then
+    sed -i.bak "s#https://\$host\$request_uri#https://\$host:${https_port}\$request_uri#" \
+        /etc/nginx/sites-available/trustpoint
+    rm -f /etc/nginx/sites-available/trustpoint.bak
+fi
+
 log INFO "Enabling Nginx vhost..."
 ln -sf /etc/nginx/sites-available/trustpoint /etc/nginx/sites-enabled/trustpoint
 

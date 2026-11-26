@@ -14,13 +14,20 @@ import json
 import os
 import pwd
 import re
+import signal
+import socket
+import socketserver
 import stat
+import struct
+import subprocess
 import sys
+import tempfile
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    import io
     from collections.abc import Sequence
 
 APP_DIR = Path('/var/www/html/trustpoint')
@@ -32,6 +39,11 @@ OPERATION_ARGUMENT_COUNT = 2
 SAFE_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 APP_ENV_KEY = '_TRUSTPOINT_APPLICATION_ENV'
 APP_BASE_KEY = 'TRUSTPOINT_APPLICATION_ENV'
+CONTROL_SOCKET = Path('/run/trustpoint/control.sock')
+CONTROL_READY = Path('/run/trustpoint/control.ready')
+CONTROL_TIMEOUT = 600
+MAX_CONTROL_OUTPUT = 8192
+MAX_CONTROL_ARGUMENT = 4096
 
 HANDOFF_KEYS = frozenset(
     {
@@ -210,7 +222,7 @@ def initialize_deployment() -> dict[str, str]:
 
 
 def load_deployment() -> dict[str, str]:
-    """Load the root-owned settings; sudo callers cannot replace them via environment."""
+    """Load the root-owned settings; application callers cannot replace them."""
     values: dict[str, str] = json.loads(
         read_configuration(DEPLOYMENT_FILE, root_owned=True), object_pairs_hook=_string_mapping
     )
@@ -238,7 +250,7 @@ def root_environment(deployment: dict[str, str], handoff: dict[str, str]) -> dic
             'WORKFLOWS2_WORKER_SLEEP',
         }
     }
-    # sudo retains only explicit application credentials; root controls these paths.
+    # Only the deployment controls root paths and credentials.
     environment.update(deployment)
     environment['PATH'] = SAFE_PATH
     environment['HOME'] = '/root'
@@ -308,6 +320,12 @@ def run_application(job: str) -> None:
             environment.get('DATABASE_HOST', 'localhost'),
             '-p',
             environment.get('DATABASE_PORT', '5432'),
+            '-U',
+            environment.get('DATABASE_USER', 'admin')
+            if not environment.get('DATABASE_USER_FILE')
+            else Path(environment['DATABASE_USER_FILE']).read_text(encoding='utf-8').strip(),
+            '-d',
+            environment.get('POSTGRES_DB', 'trustpoint_db'),
         ],
         'sync-security': [str(APP_DIR / '.venv/bin/python'), 'trustpoint/manage.py', 'sync_security_config'],
         'worker': [
@@ -420,16 +438,163 @@ def enter_container() -> None:
     _exec_script('entrypoint.sh', [], environment)
 
 
+def validate_control_arguments(arguments: object) -> list[str]:
+    """Allow only the existing helper operations, never startup or arbitrary executables."""
+    if not isinstance(arguments, list) or not all(
+        isinstance(value, str) and '\0' not in value and len(value) <= MAX_CONTROL_ARGUMENT for value in arguments
+    ):
+        msg = 'Invalid control arguments.'
+        raise ValueError(msg)
+    if arguments in (['switch', '--pending'], ['switch', '--final']):
+        return arguments
+    if arguments in (['privileged', 'update_tls.sh'], ['privileged', 'update_tls_nginx.sh', 'no_hsm']):
+        return arguments
+    if arguments[:2] == ['privileged', 'install_pkcs11_assets.sh']:
+        options = arguments[2:]
+        if options in (['--clear-module'], ['--clear-pin'], ['--clear-config']):
+            return arguments
+        if options[:1] == ['--use-installed-pin']:
+            options = options[1:]
+            valid_count = len(options) in (1, 2)
+        else:
+            valid_count = len(options) in (1, 2, 3)
+        # The installer additionally pins and snapshots files inside its fixed staging directory.
+        if valid_count and all(value.startswith('/') for value in options):
+            return arguments
+    msg = 'Unsupported control operation.'
+    raise ValueError(msg)
+
+
+def request_control(arguments: list[str]) -> None:
+    """Ask the root-owned supervisor to run a fixed operation without gaining privileges."""
+    validate_control_arguments(arguments)
+    request = json.dumps({'arguments': arguments, 'environment': dict(os.environ)}).encode() + b'\n'
+    if len(request) > MAX_CONFIG_BYTES:
+        msg = 'Control request exceeds the size limit.'
+        raise ValueError(msg)
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(CONTROL_TIMEOUT + 10)
+        connection.connect(str(CONTROL_SOCKET))
+        connection.sendall(request)
+        with connection.makefile('rb') as stream:
+            response = stream.readline(MAX_CONFIG_BYTES + 1)
+    if len(response) > MAX_CONFIG_BYTES:
+        msg = 'Control response exceeds the size limit.'
+        raise ValueError(msg)
+    result = json.loads(response)
+    sys.stdout.write(result['output'])
+    raise SystemExit(result['returncode'])
+
+
+def read_control_request(connection: socket.socket, stream: io.BufferedIOBase) -> tuple[list[str], dict[str, str]]:
+    """Authenticate the caller and validate the bounded control message."""
+    peer_credential_option = getattr(socket, 'SO_PEERCRED', None)  # Linux-only; fail closed elsewhere.
+    if peer_credential_option is None:
+        msg = 'Control peer credentials are unavailable.'
+        raise ValueError(msg)
+    credentials = connection.getsockopt(socket.SOL_SOCKET, peer_credential_option, struct.calcsize('3i'))
+    _, uid, _ = struct.unpack('3i', credentials)
+    if uid != pwd.getpwnam('www-data').pw_uid:
+        msg = 'Invalid control identity.'
+        raise ValueError(msg)
+    data = stream.readline(MAX_CONFIG_BYTES + 1)
+    if len(data) > MAX_CONFIG_BYTES or not data.endswith(b'\n'):
+        msg = 'Invalid control request size.'
+        raise ValueError(msg)
+    request = json.loads(data)
+    if not isinstance(request, dict) or request.keys() != {'arguments', 'environment'}:
+        msg = 'Invalid control request.'
+        raise ValueError(msg)
+    arguments = validate_control_arguments(request['arguments'])
+    environment = request['environment']
+    if not isinstance(environment, dict):
+        msg = 'Invalid application environment.'
+        raise TypeError(msg)
+    environment = _string_mapping(list(environment.items()))
+    return arguments, environment
+
+
+class ControlRequestHandler(socketserver.StreamRequestHandler):
+    """Authenticate the local application identity and keep its environment out of root commands."""
+
+    timeout = 10
+
+    def handle(self) -> None:
+        """Execute one authenticated, bounded request and return its diagnostics."""
+        result = {'returncode': 64, 'output': 'Invalid or unavailable Trustpoint control request.\n'}
+        try:
+            arguments, environment = read_control_request(self.connection, self.rfile)
+            # Never apply client PATH, loaders, credentials, or TP_* values to a root process.
+            child_environment = {**os.environ, APP_BASE_KEY: json.dumps(environment)}
+            with tempfile.TemporaryFile() as output:
+                process = subprocess.Popen(  # noqa: S603 - fixed root-owned dispatcher and validated operations.
+                    ['/usr/local/bin/python3', '-I', str(INSTALL_DIR / 'runtime_config.py'), *arguments],
+                    env=child_environment,
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    start_new_session=True,
+                )
+                try:
+                    process.wait(timeout=CONTROL_TIMEOUT)
+                finally:
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGTERM)
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            os.killpg(process.pid, signal.SIGKILL)
+                            process.wait()
+                output.seek(0, os.SEEK_END)
+                output.seek(max(0, output.tell() - MAX_CONTROL_OUTPUT))
+                result = {'returncode': process.returncode, 'output': output.read().decode('utf-8', errors='replace')}
+        except (OSError, ValueError, TypeError, KeyError, RecursionError, subprocess.TimeoutExpired):
+            pass
+        self.wfile.write(json.dumps(result, ensure_ascii=False).encode() + b'\n')
+
+
+def stop_control(_signum: int, _frame: object) -> None:
+    """Unwind request cleanup when the container supervisor stops the control process."""
+    raise SystemExit(0)
+
+
+def serve_control() -> None:
+    """Serve bounded concurrent requests, including helper calls made during operational handoff."""
+    load_deployment()
+    if CONTROL_SOCKET.exists():
+        if not stat.S_ISSOCK(CONTROL_SOCKET.lstat().st_mode):
+            msg = 'Control path must be a socket.'
+            raise ValueError(msg)
+        CONTROL_SOCKET.unlink()
+    with socketserver.ForkingUnixStreamServer(str(CONTROL_SOCKET), ControlRequestHandler) as server:
+        server.max_children = 8
+        os.chown(CONTROL_SOCKET, 0, pwd.getpwnam('www-data').pw_gid)
+        CONTROL_SOCKET.chmod(0o660)
+        CONTROL_READY.touch(mode=0o600)
+        signal.signal(signal.SIGTERM, stop_control)
+        try:
+            server.serve_forever()
+        finally:
+            for pid in server.active_children or ():
+                with suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGTERM)
+            CONTROL_READY.unlink(missing_ok=True)
+            CONTROL_SOCKET.unlink(missing_ok=True)
+
+
 def main(arguments: list[str]) -> None:
     """Dispatch a fixed startup operation; no caller-selected executable is accepted."""
     if len(arguments) == OPERATION_ARGUMENT_COUNT and arguments[0] == 'app':
         run_application(arguments[1])
         return
     if os.geteuid() != 0:
-        msg = 'Container startup operations require root.'
-        raise ValueError(msg)
+        request_control(arguments)
+        return
     if arguments == ['entrypoint']:
         enter_container()
+        return
+    if arguments == ['control']:
+        serve_control()
         return
     deployment = load_deployment()
     if arguments in (['switch', '--pending'], ['switch', '--final']):

@@ -19,7 +19,7 @@ class SoftwareProviderProfile:
     name: str
     encryption_source: str
     encryption_source_ref: str | None = None
-    allow_exportable_private_keys: bool = False
+    allow_exportable_private_keys: bool = True
 
     def require_encryption_material(self) -> bytes:
         """Resolve and return the private-key encryption material."""

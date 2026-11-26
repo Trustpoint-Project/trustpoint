@@ -71,8 +71,8 @@ class ExecuteShellScriptTests(TestCase):
 
             mock_run.assert_called_once()
             call_args = mock_run.call_args[0][0]
-            assert call_args[0] == 'sudo'
-            assert 'test_script.sh' in call_args[1]
+            assert len(call_args) == 1
+            assert 'test_script.sh' in call_args[0]
 
     @patch('setup_wizard.views.subprocess.run')
     def test_execute_script_with_arguments(self, mock_run: Mock) -> None:
@@ -120,7 +120,7 @@ class ExecuteShellScriptTests(TestCase):
     @patch('setup_wizard.views.subprocess.run')
     def test_execute_script_failure(self, mock_run: Mock) -> None:
         """Test handling of script execution failure."""
-        mock_run.side_effect = subprocess.CalledProcessError(1, 'sudo', stderr='helper failed')
+        mock_run.side_effect = subprocess.CalledProcessError(1, 'helper', stderr='helper failed')
 
         with (
             patch('setup_wizard.views.Path.exists', return_value=True),

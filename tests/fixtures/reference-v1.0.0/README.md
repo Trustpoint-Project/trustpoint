@@ -7,7 +7,9 @@ version are recorded in the adjacent text files; `demo.env` records its setup.
 The dump and manifest belong together. `test-secrets.tar.gz` contains the original
 Django signing key and software KEK required to restore this fixture. These are
 public test keys: never use them or the fixture credentials in a real deployment.
-Do not regenerate the backup or keys using newer application code.
+Do not regenerate the backup or keys using newer application code. The dump was
+captured after the v1.0.0 instance had completed an operational startup, so it
+contains the `management_appversion` record as well.
 
 The job restores into an empty PostgreSQL database, starts the current application
 in operational mode (which applies migrations), and checks HTTPS/TLS, completed

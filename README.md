@@ -60,12 +60,11 @@ Trustpoint is designed to help you:
 
 ## Quickstart
 
-Deploy Trustpoint with **Docker Compose on a Linux host**. The web setup wizard configures the application.
+Deploy Trustpoint with **Docker or Podman Compose on a Linux host**. The web setup wizard configures the application.
 
 ### Prerequisites
 
-- Docker 20.10+
-- Docker Compose 2.32.4+
+- Docker 20.10+ with Docker Compose 2.32.4+, or Podman 5+ with the Docker Compose provider
 - Git and Python 3
 
 ### Start Trustpoint
@@ -85,6 +84,22 @@ cp .env.example .env
 sudo python3 docker/init_secret.py --type all
 docker compose up -d --build
 ```
+
+For rootless Podman 5 on Linux, set `TP_HTTP_PORT=8080` and `TP_HTTPS_PORT=8443` in
+`.env`. Replace the initializer and startup commands above with:
+
+```bash
+podman unshare python3 docker/init_secret.py --type all
+systemctl --user enable --now podman.socket
+podman compose up -d --build
+```
+
+Run these commands on the Linux host. `podman unshare` is unavailable in the
+macOS/Windows remote client used by Podman Machine.
+
+Open `https://<your-server>:8443/`. The shipped application services keep
+`NoNewPrivileges` enabled. See the [deployment guide](https://trustpoint.readthedocs.io/en/latest/features/management/docker_deployment.html)
+for user mappings, SELinux, and startup after reboot.
 
 The one-time initializer creates an installation-specific Django signing key and
 an independent software database key-encryption key (KEK). Preserve

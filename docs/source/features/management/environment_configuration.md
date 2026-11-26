@@ -19,13 +19,13 @@ Unless stated otherwise, all variables are optional.
 The container entrypoint records privileged deployment paths and ports in a
 root-owned file at `/run/trustpoint/deployment.json` before starting the web
 application. Configure these through the deployment environment. The web
-application cannot override these settings through sudo or wizard state.
+application cannot override these settings through the control socket or wizard state.
 
 Wizard handoff files retain their `operational.env` / `operational.pending.env`
 names but must contain JSON data. Do not shell-source them. Shell assignments,
 malformed JSON, and unsupported settings are rejected.
 
-Runtime switching exposes only the `--pending` and `--final` sudo actions. Both
+Runtime switching exposes only the `--pending` and `--final` control-socket actions. Both
 select the corresponding deployment-configured file; arbitrary file arguments
 are rejected. Wizard values and application environment variables are applied
 only after dropping privileges to `www-data`.
@@ -42,14 +42,18 @@ and `docs/build`, plus separately configured runtime state outside the source tr
 Documentation build locks are stored under `MEDIA_ROOT`. Mount additional code
 or configuration read-only to preserve this boundary.
 
-The privileged boundary has an isolated Linux regression test using real sudo
-rules and process identities. It replaces service operations with observations,
+The privileged boundary has an isolated Linux regression test using the control
+socket, real process identities, and `NoNewPrivileges`. It replaces service operations with observations,
 so it does not start Trustpoint or require a database:
 
 ```bash
 docker build -f tests/docker_security/Dockerfile -t trustpoint-runtime-boundary-test .
-docker run --rm --network=none trustpoint-runtime-boundary-test
+docker run --rm --network=none --security-opt no-new-privileges=true \
+  --tmpfs /run/secrets:rw trustpoint-runtime-boundary-test
 ```
+
+For rootless Podman, replace `docker` with `podman`. The writable secret directory
+is only for this test's synthetic keys; production Compose secrets stay read-only.
 
 ## Django signing key
 
@@ -67,7 +71,7 @@ or silently repaired. Compose mounts the file read-only in web and worker.
 
 Production never generates a key and fails if the mounted file is missing,
 empty, or unreadable. A separate local-development key is cached under the ignored
-`var/development/` directory only when running non-Docker development settings.
+`var/development/` directory only when running non-container development settings.
 
 Keep the host key across upgrades. Import an existing installation's exact key
 with `sudo python3 docker/init_secret.py --import-from /path/to/saved-key` before
@@ -87,6 +91,19 @@ does not restore the separate database KEK or HSM state.
 | `DATABASE_HOST` | `postgres` | PostgreSQL hostname. |
 | `DATABASE_PORT` | `5432` | PostgreSQL port. |
 | `DATABASE_ENGINE` | `django.db.backends.postgresql` | Django database backend. |
+
+For rootless Podman on a Linux host, initialize secret files with
+`podman unshare python3 docker/init_secret.py --type all` so ownership matches the
+container user namespace. Use `TP_HTTP_PORT=8080` and `TP_HTTPS_PORT=8443` for
+unprivileged host ports. See the [deployment guide](docker_deployment.rst).
+Run the initializer on that Linux host; the macOS/Windows remote Podman client
+does not support `podman unshare`.
+
+`DATABASE_USER` configures both the standard/worker application and PostgreSQL
+when the database volume is first initialized. Changing it does not rename an
+existing PostgreSQL role or replace a saved operational database configuration.
+The SoftHSM stack instead reads `DATABASE_USER_FILE` from `db_user.txt`; this
+secret takes precedence over `DATABASE_USER`.
 
 The setup wizard requires its database password to match either the mounted
 `DATABASE_PASSWORD_FILE` secret or `DATABASE_PASSWORD` supplied by the deployment.

@@ -1,7 +1,7 @@
 # Copyright (c) 2026 The Trustpoint Project Authors
 # SPDX-License-Identifier: MIT
 
-"""Run only in the disposable Docker test image; exercise real Linux sudo and UIDs."""
+"""Run only in the disposable Docker test image; exercise the control socket with NoNewPrivileges and real Linux UIDs."""
 
 import json
 import os
@@ -9,6 +9,7 @@ import pwd
 import runpy
 import sqlite3
 import subprocess
+import time
 from pathlib import Path
 
 runtime = runpy.run_path('/etc/trustpoint/runtime_config.py')
@@ -23,6 +24,15 @@ marker = Path('/root/must-not-exist')
 helper = '/etc/trustpoint/wizard/switch_to_operational.sh'
 os.environ['DATABASE_PASSWORD'] = 'external-test-credential'
 runtime['initialize_deployment']()
+assert 'NoNewPrivs:\t1' in Path('/proc/self/status').read_text(), 'Run with --security-opt no-new-privileges=true'
+control = subprocess.Popen(['/usr/local/bin/python3', '-I', '/etc/trustpoint/runtime_config.py', 'control'])
+for _ in range(100):
+    if runtime['CONTROL_READY'].exists():
+        break
+    assert control.poll() is None, 'Control service exited'
+    time.sleep(0.05)
+else:
+    raise AssertionError('Control service did not start')
 
 # Real root ownership must not escape through a web-created bootstrap symlink.
 storage = Path('/var/lib/trustpoint/storage-regression/new/bootstrap')
@@ -39,10 +49,10 @@ runtime['prepare_bootstrap_storage'](deployment)
 assert storage.stat().st_uid == account.pw_uid and storage.stat().st_mode & 0o777 == 0o750
 assert storage.parent.stat().st_uid == 0 and storage.parent.stat().st_mode & 0o777 == 0o755
 write_probe = storage / 'application-write-probe'
-subprocess.run(['sudo', '-u', 'www-data', 'touch', str(write_probe)], check=True)
+subprocess.run(['runuser', '-u', 'www-data', '--', 'touch', str(write_probe)], check=True)
 write_probe.unlink()
 database = storage / 'bootstrap.sqlite3'
-subprocess.run(['sudo', '-u', 'www-data', 'ln', '-s', str(protected), str(database)], check=True)
+subprocess.run(['runuser', '-u', 'www-data', '--', 'ln', '-s', str(protected), str(database)], check=True)
 try:
     runtime['prepare_bootstrap_storage'](deployment)
 except OSError:
@@ -76,7 +86,7 @@ module.write_bytes(b'fixture module; never loaded')
 pin.write_text('synthetic-pin')
 installer = '/etc/trustpoint/wizard/install_pkcs11_assets.sh'
 result = subprocess.run(
-    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(module), str(pin)],
+    ['runuser', '-u', 'www-data', '--', installer, str(module), str(pin)],
     capture_output=True,
     text=True,
 )
@@ -89,12 +99,12 @@ legacy = Path('/tmp/trustpoint-wizard/pkcs11/pin.txt')
 legacy.parent.mkdir(parents=True)
 legacy.write_text('reject-outside-persistent-staging')
 result = subprocess.run(
-    ['sudo', '-u', 'www-data', 'sudo', '-n', installer, str(legacy)],
+    ['runuser', '-u', 'www-data', '--', installer, str(legacy)],
     capture_output=True,
 )
 assert result.returncode != 0
 assert installed_pin.read_text() == 'synthetic-pin'
-print('PASS: sudo installer accepts persistent wizard staging and rejects legacy paths.', flush=True)
+print('PASS: Control installer accepts persistent wizard staging and rejects legacy paths.', flush=True)
 
 # The host initializer is explicit and idempotent; the application only reads.
 initializer = runpy.run_path('/tests/init_secret.py')['initialize_secret']
@@ -120,7 +130,7 @@ except PermissionError:
 else:
     raise AssertionError('www-data can overwrite the signing key')
 """
-subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', key_probe], check=True)
+subprocess.run(['runuser', '-u', 'www-data', '--', '/usr/local/bin/python3', '-I', '-c', key_probe], check=True)
 software_kek = Path('/run/secrets/trustpoint_software_kek')
 assert initializer(software_kek, kind='kek')
 original_kek = software_kek.read_bytes()
@@ -130,7 +140,7 @@ assert software_kek.stat().st_mode & 0o777 == 0o440
 assert not initializer(software_kek, kind='kek')
 assert software_kek.read_bytes() == original_kek
 kek_probe = key_probe.replace('django_secret_key', 'trustpoint_software_kek')
-subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', kek_probe], check=True)
+subprocess.run(['runuser', '-u', 'www-data', '--', '/usr/local/bin/python3', '-I', '-c', kek_probe], check=True)
 
 
 # Exercise the real auto-setup switch before replacing its body below. A retry
@@ -186,7 +196,7 @@ for pid_path in Path('/run').glob('trustpoint-operational-*.pid'):
     pid_path.unlink()
 
 # Replace only the actual system operations with observations. The real wrappers,
-# parser, sudo policy, privilege drop, file ownership and process launch are used.
+# parser, control socket, privilege drop, file ownership and process launch are used.
 root_observer = """#!/bin/bash
 exec /usr/local/bin/python3 -I -c '
 import json, os
@@ -205,13 +215,12 @@ def switch(*arguments, extra_env=None):
     env = {**os.environ, **(extra_env or {})}
     return subprocess.run(
         [
-            'sudo',
+            'runuser',
             '-u',
             'www-data',
+            '--',
             '/usr/bin/env',
             *[f'{key}={value}' for key, value in (extra_env or {}).items()],
-            'sudo',
-            '-n',
             helper,
             *arguments,
         ],
@@ -222,14 +231,23 @@ def switch(*arguments, extra_env=None):
     )
 
 
-# Neither an arbitrary file nor the internal implementation is a permitted sudo command.
+# Neither an arbitrary file nor the internal implementation is a permitted control operation.
 payload = Path('/tmp/payload.env')
 payload.write_text(f'touch {marker}\n')
 assert switch(str(payload)).returncode != 0
 assert switch('--validated').returncode != 0
 assert (
     subprocess.run(
-        ['sudo', '-u', 'www-data', 'sudo', '-n', str(internal)],
+        [
+            'runuser',
+            '-u',
+            'www-data',
+            '--',
+            '/usr/local/bin/python3',
+            '-I',
+            '/etc/trustpoint/runtime_config.py',
+            'control',
+        ],
         capture_output=True,
     ).returncode
     != 0
@@ -297,7 +315,7 @@ for command in (
     ['cat', '/run/trustpoint/deployment.json'],
     ['/bin/sh', '-c', 'echo tampered > /run/trustpoint/deployment.json'],
 ):
-    assert subprocess.run(['sudo', '-u', 'www-data', *command], capture_output=True).returncode != 0
+    assert subprocess.run(['runuser', '-u', 'www-data', '--', *command], capture_output=True).returncode != 0
 
 # Application executables are reached with all root identities already dropped.
 app = Path('/var/www/html/trustpoint')
@@ -370,7 +388,9 @@ for name in ('trustpoint/media', 'trustpoint/collected_static',
     path.write_text('data')
     path.unlink()
 """
-subprocess.run(['sudo', '-u', 'www-data', '/usr/local/bin/python3', '-I', '-c', permission_probe], check=True)
+subprocess.run(['runuser', '-u', 'www-data', '--', '/usr/local/bin/python3', '-I', '-c', permission_probe], check=True)
+control.terminate()
+control.wait(timeout=5)
 print(
-    'PASS: host-provisioned signing key, idempotent initialization, permissions, auto-setup, sudo restrictions, and protected code.'
+    'PASS: host-provisioned signing key, idempotent initialization, permissions, auto-setup, control restrictions, and protected code.'
 )

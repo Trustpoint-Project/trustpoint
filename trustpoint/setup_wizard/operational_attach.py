@@ -85,6 +85,7 @@ class OperationalStateSnapshot:
     active_crypto_profile_count: int = 1
     encrypted_secret_count: int = 0
     app_secret_material_present: bool = False
+    setup_marker_present: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +300,29 @@ class OperationalAttachmentValidator:
         """Initialize validator dependencies."""
         self._version_policy = VersionCompatibilityPolicy(current_version=current_version)
 
+    def _version_check(
+        self,
+        *,
+        mode: OperationalAttachMode,
+        snapshot: OperationalStateSnapshot,
+    ) -> CompatibilityCheck:
+        """Check the recorded version, tolerating a missing row only for a marker-backed restore."""
+        if (
+            snapshot.app_version is None
+            and mode == OperationalAttachMode.RESTORE_BACKUP
+            and snapshot.setup_marker_present
+        ):
+            return CompatibilityCheck(
+                code='version.unknown_restore',
+                label='Application Version',
+                severity=CompatibilitySeverity.WARNING,
+                message=(
+                    'The backup does not record an application version. Startup will stamp it; '
+                    'restore only a backup made by this or an older Trustpoint version.'
+                ),
+            )
+        return self._version_policy.check(database_version=snapshot.app_version)
+
     def build_report(
         self,
         *,
@@ -330,7 +354,7 @@ class OperationalAttachmentValidator:
             )
             return OperationalCompatibilityReport(mode=mode, target=target, snapshot=snapshot, checks=tuple(checks))
 
-        checks.append(self._version_policy.check(database_version=snapshot.app_version))
+        checks.append(self._version_check(mode=mode, snapshot=snapshot))
 
         if not snapshot.setup_completed:
             checks.append(
@@ -655,6 +679,7 @@ class OperationalTargetInspector:
             connection.cursor() as cursor,
         ):
             app_version = self._read_app_version(cursor)
+            setup_marker_present = self._read_setup_marker_present(cursor)
             active_crypto_profile_count = self._read_active_crypto_profile_count(cursor)
             crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
             app_secret_backend_kind = self._read_app_secret_backend_kind(cursor)
@@ -684,7 +709,9 @@ class OperationalTargetInspector:
                 app_secret_backend_kind=app_secret_backend_kind,
             )
 
-        setup_completed = bool(app_version and crypto_backend_kind and app_secret_backend_kind)
+        setup_completed = bool(
+            (app_version or setup_marker_present) and crypto_backend_kind and app_secret_backend_kind
+        )
         return OperationalStateSnapshot(
             app_version=app_version,
             setup_completed=setup_completed,
@@ -699,7 +726,36 @@ class OperationalTargetInspector:
             active_crypto_profile_count=active_crypto_profile_count,
             encrypted_secret_count=0,
             app_secret_material_present=app_secret_material_present,
+            setup_marker_present=setup_marker_present,
         )
+
+    def database_has_objects(self, database: OperationalDatabaseConfig) -> bool:
+        """Return whether any non-system schema contains a table, view, sequence, or foreign table."""
+        with (
+            psycopg.connect(
+                dbname=database.name,
+                user=database.user,
+                password=database.password,
+                host=database.host,
+                port=database.port,
+                connect_timeout=5,
+            ) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+                      AND n.nspname NOT LIKE 'pg\\_%'
+                      AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+                )
+                """
+            )
+            row = cursor.fetchone()
+            return bool(row and row[0])
 
     @classmethod
     def _table_exists(cls, cursor: Any, *, table_name: str) -> bool:
@@ -726,6 +782,22 @@ class OperationalTargetInspector:
         cursor.execute('SELECT version FROM management_appversion ORDER BY id ASC LIMIT 1')
         row = cursor.fetchone()
         return str(row[0]) if row and row[0] else None
+
+    @classmethod
+    def _read_setup_marker_present(cls, cursor: Any) -> bool:
+        """Read whether the setup completion marker is set in the target database."""
+        if not cls._table_exists(cursor, table_name='setup_wizard_setupwizardcompletedmodel'):
+            return False
+        cursor.execute(
+            """
+            SELECT setup_completed_at IS NOT NULL
+            FROM setup_wizard_setupwizardcompletedmodel
+            WHERE singleton_id = 1
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        return bool(row and row[0])
 
     @classmethod
     def _read_active_crypto_backend_kind(cls, cursor: Any) -> str | None:

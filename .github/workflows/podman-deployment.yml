@@ -1,0 +1,141 @@
+name: Tests / Rootless Podman Deployment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github-assets/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  deployment:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 40
+    env:
+      COMPOSE_PROJECT_NAME: trustpoint-podman-ci
+      PODMAN_COMPOSE_PROVIDER: /usr/libexec/docker/cli-plugins/docker-compose
+      PODMAN_COMPOSE_WARNING_LOGS: 'false'
+      PODMAN_TEST_ADMIN_PASSWORD: synthetic-podman-admin-password-321
+      DATABASE_USER: podman_ci
+      DATABASE_PASSWORD: synthetic-podman-database-password-321
+      POSTGRES_DB: podman_ci
+      TP_HTTP_PORT: '8080'
+      TP_HTTPS_PORT: '8443'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      # shortcut: Ubuntu's pasta profile omits SIGTERM from Podman; remove when runner-images#15182 is deployed.
+      - name: Fix runner AppArmor permission for Podman network cleanup
+        shell: bash
+        run: |
+          profile=/etc/apparmor.d/usr.bin.pasta
+          if [ -f "$profile" ] && ! grep -Eq '^[[:space:]]*signal \(receive\) set=\(term\) peer=podman,' "$profile"; then
+            sudo sed -i '$ i\  signal (receive) set=(term) peer=podman,' "$profile"
+            sudo apparmor_parser -r "$profile"
+          fi
+          podman unshare --rootless-netns true
+
+      - name: Start rootless Podman API
+        shell: bash
+        run: |
+          test "$(id -u)" -ne 0
+          podman --version
+          test "$(podman info --format '{{.Host.Security.Rootless}}')" = true
+          test "$(podman unshare id -u)" = 0
+          test -x "$PODMAN_COMPOSE_PROVIDER"
+          "$PODMAN_COMPOSE_PROVIDER" version
+          socket="unix://$RUNNER_TEMP/trustpoint-podman.sock"
+          podman system service --time=0 "$socket" > "$RUNNER_TEMP/podman-api.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/podman-api.pid"
+          echo "DOCKER_HOST=$socket" >> "$GITHUB_ENV"
+          for _attempt in {1..50}; do
+            if [ -S "$RUNNER_TEMP/trustpoint-podman.sock" ]; then
+              exit 0
+            fi
+            kill -0 "$(cat "$RUNNER_TEMP/podman-api.pid")"
+            sleep 0.1
+          done
+          cat "$RUNNER_TEMP/podman-api.log"
+          exit 1
+
+      - name: Configure disposable deployment
+        shell: bash
+        run: |
+          host_ip=$(hostname -I | awk '{print $1}')
+          test -n "$host_ip"
+          echo "PODMAN_TEST_HOST=$host_ip" >> "$GITHUB_ENV"
+          cp .env.example .env
+          cat >> .env <<ENV
+
+          DATABASE_USER=$DATABASE_USER
+          DATABASE_PASSWORD=$DATABASE_PASSWORD
+          POSTGRES_DB=$POSTGRES_DB
+          TRUSTPOINT_IMAGE=localhost/trustpoint-podman-ci:latest
+          TRUSTPOINT_NETWORK_NAME=trustpoint-podman-ci
+          TP_AUTO_SETUP=false
+          TP_SECURITY_MODE=LAB
+          TP_TLS_IPV4_ADDRESSES=$host_ip
+          TP_TLS_DNS_NAMES=localhost
+          TP_HTTP_PORT=$TP_HTTP_PORT
+          TP_HTTPS_PORT=$TP_HTTPS_PORT
+          ENV
+          chmod 600 .env
+          podman unshare python3 docker/init_secret.py --type all
+          podman unshare stat -c '%u:%g %a' secrets/django_secret_key secrets/trustpoint_software_kek
+
+      - name: Build and start the shipped Compose deployment
+        run: podman compose up -d --build --wait --wait-timeout 300
+
+      - name: Test IP setup, privileges, database role and persistence
+        run: python3 tests/docker_security/podman_deployment.py
+
+      - name: Collect deployment diagnostics
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p reports/podman
+          cp "$RUNNER_TEMP/podman-api.log" reports/podman/ 2>/dev/null || true
+          podman info > reports/podman/info.log 2>&1 || true
+          sudo journalctl --dmesg --no-pager --grep='apparmor.*DENIED|pasta' --lines=100 \
+            > reports/podman/kernel-network.log 2>&1 || true
+          if [ -f .env ]; then
+            podman compose ps --all > reports/podman/services.log 2>&1 || true
+            podman compose logs --no-color --tail 200 > reports/podman/containers.log 2>&1 || true
+          fi
+
+      - name: Upload deployment diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rootless-podman-diagnostics
+          path: reports/podman/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove disposable deployment
+        if: always()
+        shell: bash
+        run: |
+          if [ -f .env ]; then
+            podman compose down --volumes --remove-orphans || cleanup_status=$?
+          fi
+          if [ -f "$RUNNER_TEMP/podman-api.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/podman-api.pid")" 2>/dev/null || true
+          fi
+          exit "${cleanup_status:-0}"
