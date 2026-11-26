@@ -354,7 +354,8 @@ def _stamp_restored_app_version(*, database: OperationalDatabaseConfig, version:
             connection.cursor() as cursor,
         ):
             cursor.execute("SELECT to_regclass('management_appversion')")
-            if cursor.fetchone()[0] is None:
+            row = cursor.fetchone()
+            if row is None or row[0] is None:
                 return
             cursor.execute('SELECT 1 FROM management_appversion LIMIT 1')
             if cursor.fetchone() is not None:

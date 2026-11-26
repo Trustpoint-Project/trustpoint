@@ -258,7 +258,9 @@ def test_failed_tls_update_restores_staging_files(tmp_path, monkeypatch, missing
         'select_for_update',
         lambda: SimpleNamespace(get=lambda **kwargs: SimpleNamespace(credential=credential)),
     )
-    monkeypatch.setattr(command.subprocess, 'run', Mock(return_value=SimpleNamespace(returncode=1, stderr='failed')))
+    monkeypatch.setattr(
+        command.subprocess, 'run', Mock(return_value=SimpleNamespace(returncode=1, stdout='', stderr='failed'))
+    )
     output = StringIO()
     with pytest.raises(CommandError):
         call_command('update_tls', stdout=output)
