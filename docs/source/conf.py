@@ -35,7 +35,7 @@ django.setup()  # Initialize Django
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '1.0.1'  # Project version
+release = '1.0.2'  # Project version
 
 # -- General configuration --------------------------------------------------
 
