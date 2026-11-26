@@ -70,6 +70,15 @@ def test_api_accepts_nested_and_legacy_locations(opc_device, legacy):
     assert serializer.data['opc_ua_gds_push_config']['opc_server_port'] == 4841
 
 
+def test_server_key_rollover_defaults_to_reuse(opc_device):
+    config = opc_device.opc_ua_gds_push_config
+    assert config.opc_gds_push_regenerate_server_key is False
+    config.opc_gds_push_regenerate_server_key = True
+    config.save(update_fields=['opc_gds_push_regenerate_server_key'])
+    config.refresh_from_db()
+    assert config.opc_gds_push_regenerate_server_key is True
+
+
 def test_config_change_preserves_workflow_device_event(opc_device):
     with patch('workflows2.integrations.devices.Workflow2Handler.handle') as handle:
         config = opc_device.opc_ua_gds_push_config

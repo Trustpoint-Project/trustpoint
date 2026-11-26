@@ -11,6 +11,8 @@ from unittest.mock import AsyncMock, Mock, PropertyMock, patch
 import pytest
 from asgiref.sync import async_to_sync
 from asyncua import ua
+from asyncua.ua.ua_binary import struct_to_binary
+from asyncua.ua.uaerrors import UaStatusCodeError
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -858,9 +860,59 @@ class TestGdsPushService:
             assert success is True
             assert cert_data == signed_cert
             assert chain_data == issuer_chain
-            nonce = mock_server_config.call_method.await_args_list[0].args[5]
-            assert isinstance(nonce, bytes)
-            assert len(nonce) >= 32
+            regenerate, nonce = mock_server_config.call_method.await_args_list[0].args[4:6]
+            assert regenerate is False
+            assert nonce == b''
+
+    @pytest.mark.asyncio
+    async def test_update_single_certificate_regenerates_key_with_nonce(self, mock_opc_device):
+        """Request a new server key with a nonce only when key rollover is enabled."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=Mock())
+        server_config.call_method = AsyncMock(side_effect=[b'csr', False])
+
+        with patch.object(service, '_sign_csr', return_value=(b'signed', [b'issuer'], Mock())):
+            success, cert_data, _chain_data = await service._update_single_certificate(
+                client,
+                ua.NodeId.from_string('ns=0;i=12555'),
+                regenerate_private_key=True,
+            )
+
+        assert success is True
+        assert cert_data == b'signed'
+        regenerate, nonce = server_config.call_method.await_args_list[0].args[4:6]
+        assert regenerate is True
+        assert isinstance(nonce, bytes)
+        assert len(nonce) >= 32
+
+    @pytest.mark.asyncio
+    async def test_update_single_certificate_treats_server_halted_apply_as_success(self, mock_opc_device):
+        """Treat BadServerHalted from ApplyChanges as a successful restart."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=Mock())
+        server_config.call_method = AsyncMock(
+            side_effect=[b'csr', True, UaStatusCodeError(ua.StatusCodes.BadServerHalted)]
+        )
+
+        with patch.object(service, '_sign_csr', return_value=(b'signed', [b'issuer'], Mock())):
+            success, cert_data, _chain_data = await service._update_single_certificate(
+                client, ua.NodeId.from_string('ns=0;i=12555')
+            )
+
+        assert success is True
+        assert cert_data == b'signed'
 
     # ========================================================================
     # Secure Client Creation Tests
@@ -913,16 +965,32 @@ class TestGdsPushService:
 
         mock_trustlist_node = Mock()
         mock_open_method = Mock()
+        mock_read_method = Mock()
+        mock_close_read_method = Mock()
         mock_write_method = Mock()
         mock_close_method = Mock()
         mock_apply_method = Mock()
+        methods = {
+            'Open': mock_open_method,
+            'Read': mock_read_method,
+            'Close': mock_close_read_method,
+            'Write': mock_write_method,
+            'CloseAndUpdate': mock_close_method,
+        }
 
-        mock_trustlist_node.get_child = AsyncMock(side_effect=[mock_open_method, mock_write_method, mock_close_method])
+        async def get_child(name: str) -> Mock:
+            return methods[name]
 
-        mock_file_handle = 12345
+        mock_trustlist_node.get_child = AsyncMock(side_effect=get_child)
+
+        mock_read_handle = 111
+        mock_write_handle = 12345
         mock_trustlist_node.call_method = AsyncMock(
             side_effect=[
-                mock_file_handle,  # Open
+                mock_read_handle,  # Open (read)
+                b'',  # Read -> end of file, nothing to merge
+                None,  # Close (read)
+                mock_write_handle,  # Open (write)
                 None,  # Write
                 True,  # CloseAndUpdate returns apply_changes_required
                 None,  # ApplyChanges
@@ -1129,15 +1197,30 @@ class TestGdsPushService:
 
         mock_trustlist_node = Mock()
         mock_open_method = Mock()
+        mock_read_method = Mock()
+        mock_close_read_method = Mock()
         mock_write_method = Mock()
         mock_close_method = Mock()
+        methods = {
+            'Open': mock_open_method,
+            'Read': mock_read_method,
+            'Close': mock_close_read_method,
+            'Write': mock_write_method,
+            'CloseAndUpdate': mock_close_method,
+        }
 
-        mock_trustlist_node.get_child = AsyncMock(side_effect=[mock_open_method, mock_write_method, mock_close_method])
+        async def get_child(name: str) -> Mock:
+            return methods[name]
+
+        mock_trustlist_node.get_child = AsyncMock(side_effect=get_child)
 
         mock_file_handle = 12345
         mock_trustlist_node.call_method = AsyncMock(
             side_effect=[
-                mock_file_handle,  # Open
+                1,  # Open (read)
+                b'',  # Read -> end of file
+                None,  # Close (read)
+                mock_file_handle,  # Open (write)
                 None,  # Write
                 False,  # CloseAndUpdate returns False (apply_changes_required=False)
             ]
@@ -1403,9 +1486,22 @@ class TestGdsPushServiceAdditionalCoverage:
         """Write serialized trustlist data in bounded chunks and apply changes."""
         service = GdsPushService(mock_opc_device, insecure=True)
         node = Mock()
-        open_method, write_method, close_method, apply_method = (Mock() for _ in range(4))
-        node.get_child = AsyncMock(side_effect=[open_method, write_method, close_method])
-        node.call_method = AsyncMock(side_effect=[7, None, None, None, True])
+        open_method, read_method, close_read_method, write_method, close_method, apply_method = (
+            Mock() for _ in range(6)
+        )
+        methods = {
+            'Open': open_method,
+            'Read': read_method,
+            'Close': close_read_method,
+            'Write': write_method,
+            'CloseAndUpdate': close_method,
+        }
+
+        async def get_child(name: str) -> Mock:
+            return methods[name]
+
+        node.get_child = AsyncMock(side_effect=get_child)
+        node.call_method = AsyncMock(side_effect=[1, b'', None, 7, None, None, None, True, None])
         group_node = Mock()
         groups_node = Mock()
         config_node = Mock()
@@ -1418,10 +1514,77 @@ class TestGdsPushServiceAdditionalCoverage:
         with patch('request.gds_push.gds_push_service.struct_to_binary', return_value=b'abcdef'):
             assert await service._update_single_trustlist(node, Mock(), max_chunk_size=2) is True
 
-        assert node.call_method.await_args_list[1].args[2] == b'ab'
-        assert node.call_method.await_args_list[2].args[2] == b'cd'
-        assert node.call_method.await_args_list[3].args[2] == b'ef'
+        assert node.call_method.await_args_list[4].args[2] == b'ab'
+        assert node.call_method.await_args_list[5].args[2] == b'cd'
+        assert node.call_method.await_args_list[6].args[2] == b'ef'
         config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
+
+    @pytest.mark.asyncio
+    async def test_read_trustlist_parses_chunks(self, mock_opc_device):
+        """Read and deserialize a TrustList returned in several blocks."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        node = Mock()
+        methods = {'Open': Mock(), 'Read': Mock(), 'Close': Mock()}
+
+        async def get_child(name: str) -> Mock:
+            return methods[name]
+
+        node.get_child = AsyncMock(side_effect=get_child)
+        original = ua.TrustListDataType()
+        original.SpecifiedLists = int(ua.TrustListMasks.All)
+        original.TrustedCertificates = [b'one']
+        payload = struct_to_binary(original)
+        node.call_method = AsyncMock(side_effect=[42, payload[:3], payload[3:], b'', None])
+
+        result = await service._read_trustlist(node)
+
+        assert result is not None
+        assert result.TrustedCertificates == [b'one']
+        assert node.call_method.await_args_list[-1].args == (methods['Close'].nodeid, 42)
+
+    def test_merge_trustlists_preserves_entries_and_replaces_crls(self, mock_opc_device):
+        """Merge certificates and replace only CRLs for the same issuer."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        issuer_a = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Issuer A')])
+        issuer_b = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Issuer B')])
+        now = datetime.datetime.now(datetime.UTC)
+
+        def crl(issuer: x509.Name) -> bytes:
+            return (
+                x509.CertificateRevocationListBuilder()
+                .issuer_name(issuer)
+                .last_update(now)
+                .next_update(now + datetime.timedelta(days=1))
+                .sign(key, hashes.SHA256())
+                .public_bytes(serialization.Encoding.DER)
+            )
+
+        old_a = crl(issuer_a)
+        new_a = crl(issuer_a)
+        other_b = crl(issuer_b)
+
+        current = ua.TrustListDataType()
+        current.SpecifiedLists = int(ua.TrustListMasks.All)
+        current.TrustedCertificates = [b'existing-cert']
+        current.TrustedCrls = [old_a, other_b]
+        current.IssuerCertificates = [b'existing-issuer']
+        current.IssuerCrls = [old_a, other_b]
+
+        new = ua.TrustListDataType()
+        new.SpecifiedLists = int(ua.TrustListMasks.All)
+        new.TrustedCertificates = [b'existing-cert', b'new-cert']
+        new.TrustedCrls = [new_a]
+        new.IssuerCertificates = [b'new-issuer']
+        new.IssuerCrls = [new_a]
+
+        merged = service._merge_trustlists(current, new)
+
+        assert merged.TrustedCertificates == [b'existing-cert', b'new-cert']
+        assert merged.IssuerCertificates == [b'existing-issuer', b'new-issuer']
+        assert merged.TrustedCrls == [other_b, new_a]
+        assert merged.IssuerCrls == [other_b, new_a]
+        assert merged.SpecifiedLists == int(ua.TrustListMasks.All)
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_reports_partial_success_as_failure(self, mock_opc_device):
@@ -1452,6 +1615,7 @@ class TestGdsPushServiceAdditionalCoverage:
             client=client,
             certificate_group_id=groups[1]['node_id'],
             certificate_type_id=groups[1]['certificate_type_id'],
+            regenerate_private_key=False,
         )
         update_truststore.assert_not_awaited()
 
@@ -1503,6 +1667,7 @@ class TestGdsPushServiceAdditionalCoverage:
         """Report both successful and failed TrustList group updates."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
+        client.get_node = Mock(side_effect=RuntimeError('no rejected list'))
         nodes = [
             {'group_name': 'Application', 'trustlist_node': Mock()},
             {'group_name': 'Https', 'trustlist_node': Mock()},

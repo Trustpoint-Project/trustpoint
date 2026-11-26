@@ -247,6 +247,14 @@ class OpcUaGdsPushConfig(models.Model):
         blank=True,
         help_text=_('Timestamp of the most recent scheduled periodic server certificate and trustlist update.'),
     )
+    opc_gds_push_regenerate_server_key = models.BooleanField(
+        _('Generate New Server Key on Renewal'),
+        default=False,
+        help_text=_(
+            'Generate a new private key on the server for each certificate renewal. '
+            'Disabled by default so secure elements and non-exportable keys are reused.'
+        ),
+    )
 
     opc_gds_push_enable_domain_credential_renewal = models.BooleanField(
         _('Enable Periodic Domain Credential Renewal'),

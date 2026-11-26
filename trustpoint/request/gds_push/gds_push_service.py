@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import io
 import os
 import tempfile
 from typing import TYPE_CHECKING, Any, NoReturn
@@ -15,7 +16,8 @@ from asgiref.sync import sync_to_async
 from asyncua import ua
 from asyncua.client.client import Client
 from asyncua.crypto import security_policies
-from asyncua.ua.ua_binary import struct_to_binary
+from asyncua.ua.status_codes import StatusCodes
+from asyncua.ua.ua_binary import struct_from_binary, struct_to_binary
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509 import KeyUsage
@@ -864,6 +866,13 @@ class GdsPushService(LoggerMixin):
                     if not trustlist_nodes:
                         return False, 'No TrustList nodes found on server'
 
+                    rejected = await self._read_rejected_certificates(client)
+                    if rejected:
+                        self.logger.warning(
+                            'Server reports %d rejected certificate(s); review them before trusting',
+                            len(rejected),
+                        )
+
                     success_count = 0
                     messages = []
 
@@ -906,7 +915,11 @@ class GdsPushService(LoggerMixin):
                 raise
 
             if success_count == len(trustlist_nodes):
-                msg = f'Successfully updated {success_count}/{len(trustlist_nodes)} trustlist(s): {", ".join(messages)}'
+                rejected_note = f'; {len(rejected)} rejected certificate(s) on server' if rejected else ''
+                msg = (
+                    f'Successfully updated {success_count}/{len(trustlist_nodes)} trustlist(s): '
+                    f'{", ".join(messages)}{rejected_note}'
+                )
                 return True, msg
 
             msg = (
@@ -1009,6 +1022,96 @@ class GdsPushService(LoggerMixin):
 
         return trustlist_nodes
 
+    @staticmethod
+    def _is_server_halted(error: Exception) -> bool:
+        """Return True for the expected ApplyChanges response when the server restarts."""
+        return getattr(error, 'code', None) == StatusCodes.BadServerHalted or 'BadServerHalted' in str(error)
+
+    @staticmethod
+    def _merge_byte_lists(existing: list[bytes], incoming: list[bytes]) -> list[bytes]:
+        """Append incoming entries that are not already present, preserving order."""
+        merged = list(existing)
+        seen = set(merged)
+        for item in incoming:
+            if item not in seen:
+                seen.add(item)
+                merged.append(item)
+        return merged
+
+    @staticmethod
+    def _crl_issuer_key(crl_der: bytes) -> bytes | None:
+        """Return the DER-encoded issuer name of a CRL, or None when it cannot be parsed."""
+        try:
+            return x509.load_der_x509_crl(crl_der).issuer.public_bytes()
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _merge_crls(self, existing: list[bytes], incoming: list[bytes]) -> list[bytes]:
+        """Keep CRLs for other issuers and replace CRLs from the incoming issuers."""
+        replaced = {issuer for crl in incoming if (issuer := self._crl_issuer_key(crl)) is not None}
+        kept = [crl for crl in existing if self._crl_issuer_key(crl) not in replaced]
+        return self._merge_byte_lists(kept, incoming)
+
+    def _merge_trustlists(
+        self,
+        current: ua.TrustListDataType,
+        new: ua.TrustListDataType,
+    ) -> ua.TrustListDataType:
+        """Merge server-side trust entries with the Trustpoint-managed list."""
+        merged = ua.TrustListDataType()
+        merged.SpecifiedLists = int(ua.TrustListMasks.All)
+        merged.TrustedCertificates = self._merge_byte_lists(
+            current.TrustedCertificates or [], new.TrustedCertificates or []
+        )
+        merged.TrustedCrls = self._merge_crls(current.TrustedCrls or [], new.TrustedCrls or [])
+        merged.IssuerCertificates = self._merge_byte_lists(
+            current.IssuerCertificates or [], new.IssuerCertificates or []
+        )
+        merged.IssuerCrls = self._merge_crls(current.IssuerCrls or [], new.IssuerCrls or [])
+        return merged
+
+    async def _read_trustlist(self, trustlist_node: Node) -> ua.TrustListDataType | None:
+        """Read the server's current TrustList, returning None when it cannot be read."""
+        file_handle = None
+        try:
+            open_method = await trustlist_node.get_child('Open')
+            mode = ua.Variant(int(ua.OpenFileMode.Read), ua.VariantType.Byte)
+            file_handle = await trustlist_node.call_method(open_method.nodeid, mode)
+
+            read_method = await trustlist_node.get_child('Read')
+            chunks = []
+            while True:
+                chunk = await trustlist_node.call_method(read_method.nodeid, file_handle, 8192)
+                if not chunk:
+                    break
+                chunks.append(bytes(chunk))
+
+            if not chunks:
+                return None
+            return struct_from_binary(ua.TrustListDataType, io.BytesIO(b''.join(chunks)))
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Could not read the current TrustList; replacing it: %s', e)
+            return None
+        finally:
+            if file_handle is not None:
+                with contextlib.suppress(Exception):
+                    close_method = await trustlist_node.get_child('Close')
+                    await trustlist_node.call_method(close_method.nodeid, file_handle)
+
+    async def _read_rejected_certificates(self, client: Client) -> list[bytes]:
+        """Read the server's rejected-certificate list, if available."""
+        try:
+            server_node = client.get_node('ns=0;i=2253')
+            server_config = await server_node.get_child('ServerConfiguration')
+            method = await server_config.get_child('GetRejectedList')
+            result = await server_config.call_method(method.nodeid)
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug('GetRejectedList unavailable: %s', e)
+            return []
+        if not isinstance(result, (list, tuple)):
+            return []
+        return [bytes(cert) for cert in result if isinstance(cert, (bytes, bytearray))]
+
     async def _update_single_trustlist(
         self, trustlist_node: Node, trustlist_data: ua.TrustListDataType, max_chunk_size: int = 1024
     ) -> bool:
@@ -1023,7 +1126,13 @@ class GdsPushService(LoggerMixin):
             True if successful, False otherwise.
         """
         try:
-            serialized_trustlist = struct_to_binary(trustlist_data)
+            current_trustlist = await self._read_trustlist(trustlist_node)
+            effective_trustlist = (
+                self._merge_trustlists(current_trustlist, trustlist_data)
+                if current_trustlist is not None
+                else trustlist_data
+            )
+            serialized_trustlist = struct_to_binary(effective_trustlist)
 
             # Step 1: Open
             mode = ua.Variant(int(ua.OpenFileMode.Write | ua.OpenFileMode.EraseExisting), ua.VariantType.Byte)
@@ -1060,7 +1169,12 @@ class GdsPushService(LoggerMixin):
                     server_config_node = parent
 
                 apply_changes = await server_config_node.get_child('ApplyChanges')
-                await server_config_node.call_method(apply_changes.nodeid)
+                try:
+                    await server_config_node.call_method(apply_changes.nodeid)
+                except Exception as e:
+                    if not self._is_server_halted(e):
+                        raise
+                    self.logger.info('Server halted to apply TrustList changes; reconnect required')
 
         except Exception:
             self.logger.exception('Failed to update trustlist')
@@ -1094,6 +1208,8 @@ class GdsPushService(LoggerMixin):
                     messages = []
                     issued_cert = None
                     issuer_chain = None
+                    config = getattr(self.device, 'opc_ua_gds_push_config', None)
+                    regenerate_private_key = bool(getattr(config, 'opc_gds_push_regenerate_server_key', False))
 
                     for group in cert_groups:
                         group_name = group['name']
@@ -1102,6 +1218,7 @@ class GdsPushService(LoggerMixin):
                             client=client,
                             certificate_group_id=group['node_id'],
                             certificate_type_id=group.get('certificate_type_id'),
+                            regenerate_private_key=regenerate_private_key,
                         )
 
                         if success:
@@ -1190,6 +1307,8 @@ class GdsPushService(LoggerMixin):
         client: Client,
         certificate_group_id: ua.NodeId,
         certificate_type_id: ua.NodeId | None = None,
+        *,
+        regenerate_private_key: bool = False,
     ) -> tuple[bool, bytes | None, list[bytes] | None]:
         """Update certificate for a single certificate group.
 
@@ -1197,6 +1316,7 @@ class GdsPushService(LoggerMixin):
             client: Connected OPC UA client.
             certificate_group_id: NodeId of the certificate group.
             certificate_type_id: NodeId of certificate type.
+            regenerate_private_key: Ask the server for a new key pair instead of reusing its key.
 
         Returns:
             Tuple of (success: bool, certificate: bytes | None, issuer_chain: list[bytes] | None).
@@ -1211,13 +1331,15 @@ class GdsPushService(LoggerMixin):
             # Step 1: CreateSigningRequest
             create_signing_request = await server_config.get_child('CreateSigningRequest')
 
+            # Section 7.10.10: the nonce is required only when a new key is generated.
+            nonce = os.urandom(32) if regenerate_private_key else b''
             csr = await server_config.call_method(
                 create_signing_request.nodeid,
                 certificate_group_id,
                 certificate_type_id,
                 None,  # subjectName
-                True,  # regeneratePrivateKey  # noqa: FBT003
-                os.urandom(32),  # nonce (Section 7.10.10 requires >= 32 bytes)
+                regenerate_private_key,
+                nonce,
             )
             self.logger.info('CSR generated by server (%d bytes)', len(csr))
 
@@ -1243,7 +1365,12 @@ class GdsPushService(LoggerMixin):
             # Step 4: ApplyChanges if required
             if apply_changes_required:
                 apply_changes = await server_config.get_child('ApplyChanges')
-                await server_config.call_method(apply_changes.nodeid)
+                try:
+                    await server_config.call_method(apply_changes.nodeid)
+                except Exception as e:
+                    if not self._is_server_halted(e):
+                        raise
+                    self.logger.info('Server halted to apply certificate changes; reconnect required')
 
         except Exception:
             self.logger.exception('Failed to update certificate')

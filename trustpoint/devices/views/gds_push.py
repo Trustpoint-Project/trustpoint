@@ -156,6 +156,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         self.object = self.get_object()
 
         enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
+        regenerate_server_key = request.POST.get('opc_gds_push_regenerate_server_key') == 'on'
         interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
 
         try:
@@ -169,8 +170,13 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
 
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
         self.object.opc_ua_gds_push_config.opc_gds_push_renewal_interval = interval
+        self.object.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key = regenerate_server_key
         self.object.opc_ua_gds_push_config.save(
-            update_fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval']
+            update_fields=[
+                'opc_gds_push_enable_periodic_update',
+                'opc_gds_push_renewal_interval',
+                'opc_gds_push_regenerate_server_key',
+            ]
         )
 
         if enable:

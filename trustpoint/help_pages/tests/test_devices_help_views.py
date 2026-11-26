@@ -1131,4 +1131,5 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert 'Pending' in pending_section.rows[0].value
         assert 'Disabled' in disabled_section.rows[0].value
         assert 'name="opc_gds_push_renewal_interval"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_regenerate_server_key"' in disabled_section.rows[1].value
         assert mock_reverse.called

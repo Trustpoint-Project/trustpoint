@@ -2093,6 +2093,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Both variants show the enabled state, renewal interval, and next scheduled run.
         Their settings and background tasks remain independent.
         """
+        regenerate_key = False
         if domain_credential:
             route = 'devices:devices_domain_credential_renewal_settings'
             enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
@@ -2112,6 +2113,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
             interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
             next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
+            regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
             enabled_field = 'opc_gds_push_enable_periodic_update'
             interval_field = 'opc_gds_push_renewal_interval'
             title = 'Periodic Server Certificate & Trustlist Renewal'
@@ -2142,6 +2144,23 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         else:
             next_run_html = '<span class="badge bg-secondary">Disabled</span>'
 
+        regenerate_html = ''
+        if not domain_credential:
+            regenerate_checked = 'checked' if regenerate_key else ''
+            regenerate_html = (
+                '<div class="form-check form-switch mb-2 mt-3">'
+                '  <input class="form-check-input" type="checkbox" role="switch" '
+                '         id="regenerateServerKey" name="opc_gds_push_regenerate_server_key" '
+                f'         {regenerate_checked}>'
+                '  <label class="form-check-label" for="regenerateServerKey">'
+                '    Generate a new server private key on renewal'
+                '  </label>'
+                '  <div class="form-text text-muted">'
+                '    Disabled by default so secure elements and non-exportable keys are reused.'
+                '  </div>'
+                '</div>'
+            )
+
         form_html = (
             f'<form method="post" action="{renewal_url}">'
             'CSRF_TOKEN_PLACEHOLDER'
@@ -2160,6 +2179,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             '<div class="form-text text-muted">'
             f'  {description}'
             '</div>'
+            f'{regenerate_html}'
             '</div>'
             '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
             '</form>'

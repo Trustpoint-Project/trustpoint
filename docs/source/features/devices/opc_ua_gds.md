@@ -46,6 +46,10 @@ Trustpoint provides operations to:
 - Request a certificate signing request from the server, issue a replacement
   server certificate, and push it to the server.
 
+Trustpoint reads the server's current trustlist and merges its CA chain and CRLs
+into it, so existing trust entries are preserved. The server's rejected
+certificates are read and logged; they are not trusted automatically.
+
 Generate CRLs for the CAs included in the trustlist before performing a trustlist
 update. Trustpoint requires CRLs for GDS Push trustlist operations.
 
@@ -54,6 +58,11 @@ update. Trustpoint requires CRLs for GDS Push trustlist operations.
 Periodic server certificate and trustlist renewal can be enabled for a device.
 Configure the renewal interval in hours; the minimum interval is one hour.
 Scheduled operations require a running Trustpoint task worker.
+
+By default the server's existing private key is reused for each renewal. Enable
+**Generate a new server private key on renewal** to roll the key; this is
+required only when the old key must be replaced, and may not be possible on
+servers with secure elements or non-exportable keys.
 
 Domain credential renewal is configured separately. When enabled, Trustpoint
 replaces the domain credential and revokes its predecessor at the configured
