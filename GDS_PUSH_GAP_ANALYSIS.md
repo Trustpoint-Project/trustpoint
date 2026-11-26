@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 5 (all done)**, **P1 = 12**, **P2 = 18**, **P3 = 7**, **already implemented = 6** — 13 of 48 items are done.
+Findings by priority: **P0 = 5 (all done)**, **P1 = 13**, **P2 = 19**, **P3 = 7**, **already implemented = 6** — 13 of 50 items are done.
 
 The main gaps are:
 
@@ -103,10 +103,10 @@ The main gaps are:
 
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
-| WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Partial | Periodic task does trust list first (`devices/tasks.py:61–77`); the standalone "update server certificate" task does not (`devices/tasks.py:109–127`). | Make "update certificate" always run or offer the required trust-list step first, or combine both in one workflow entry point. | [ ] |
+| WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Partial | Periodic task does trust list first (`devices/tasks.py:61–77`); the standalone "update server certificate" task does not (`devices/tasks.py:109–127`). .NET issue #2552 confirms that strict revocation checking fails with `BadCertificateRevocationUnknown` when the CRL is not in the trust list before `UpdateCertificate`. | Make "update certificate" always run or offer the required trust-list step first, or combine both in one workflow entry point. | [ ] |
 | WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Missing | Fixed interval only (`opc_gds_push_renewal_interval`); no expiry, CRL or policy check. Every cycle replaces the certificate. | Add a decision step: compare server certificate expiry, configured renewal threshold and pending CRL changes. Skip when nothing is due. | [ ] |
 | WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Implemented | `_discover_certificate_groups` reads `Purpose`/`CertificateTypes`, skips HTTPS/UserToken/unknown non-application groups, and selects a permitted type. Name fallback only when both properties are unavailable. | Done; covered by discovery tests. | [x] |
-| WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). The trust-list and certificate changes are not staged in one transaction, and the session is reused after apply. No reconnect or verification. The .NET reference stages trust list + certificate, applies once, disconnects, reconnects with the new certificate and inspects it. | Stage per workflow, apply once, handle `BadServerHalted` (WF-10), disconnect/reconnect with the new certificate, and verify. | [ ] |
+| WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). The trust-list and certificate changes are not staged in one transaction, and the session is reused after apply. No reconnect or verification. The .NET reference stages trust list + certificate, applies once, disconnects, reconnects with the new certificate and inspects it. open62541 #8093 shows a heap-use-after-free when two `ApplyChanges` calls are sent in one `CallRequest`; repeated apply is an interop risk. | Stage per workflow, apply once, handle `BadServerHalted` (WF-10), disconnect/reconnect with the new certificate, and verify. | [ ] |
 | WF-05 | P3 | Use `CreateSelfSignedCertificate` when no usable certificate exists (§7.7.4) | Missing | Method never called. | Optional. Implement only if servers without an existing certificate must be supported. | [ ] |
 | WF-06 | P2 | CertificateManager generates the private key when the server cannot (§7.7.4) | Missing | Always `RegeneratePrivateKey=True`; no fallback path. | Read `SupportedPrivateKeyFormats`; on `Bad_NotSupported`, generate key + CSR locally, sign, and upload key via `UpdateCertificate`. | [ ] |
 | WF-07 | P3 | Create Endpoint / Update Configuration workflows (§7.7.5/§7.7.6) | Missing | No `ConfigurationFile`, `UpdateTargets`, `ConfirmUpdate` usage. | Optional; separate feature. Not required for certificate replacement. | [ ] |
@@ -122,11 +122,11 @@ The main gaps are:
 | METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Implemented | `_select_application_certificate_type` reads `CertificateTypes` and prefers RsaSha256, then RsaMin, then named ECC types; groups with no application type are skipped. | Done; covered by discovery tests. Follow-up: prefer the currently assigned slot type discovered via `GetCertificates` (METH-08). | [x] |
 | METH-03 | — | `UpdateCertificate` arguments: group, type, DER cert, issuer list, key format/key (§7.10.5) | Implemented | Correct for the server-generated-key case (`:1135–1143`). `IssuerCertificates` is redundant for application certificates per the standard and is ignored by the server. | Keep; extend for METH-04. | [x] |
 | METH-04 | P2 | Upload an externally generated private key (PKCS#8/PKCS#12) (§7.7.4, §7.10.5) | Missing | `PrivateKeyFormat=''`, `PrivateKey=b''` always. | Add CM-side key generation and key upload, gated by `SupportedPrivateKeyFormats`. | [ ] |
-| METH-05 | — | TrustList write sequence: `Open(Write\|EraseExisting)`, `Write`, `CloseAndUpdate`, `ApplyChanges` (§7.7.3, §7.8.2.2) | Implemented | Correct modes and order (`:944–979`). | Keep. | [x] |
+| METH-05 | — | TrustList write sequence: `Open(Write\|EraseExisting)`, `Write`, `CloseAndUpdate`, `ApplyChanges` (§7.7.3, §7.8.2.2) | Implemented | Correct modes and order (`:944–979`). | Keep. Verify the expected `CloseAndUpdate` status codes against Mantis 9851 (possible incorrect status code in the specification/stack). | [x] |
 | METH-06 | P3 | Write block size must not exceed `MaxByteStringLength` (§7.7.3) | Partial | Fixed 1024 bytes (`:929`); property not read. | Read the property and clamp the chunk size; keep 1024 as a safe default. | [ ] |
 | METH-07 | P1 | Read `ServerConfiguration` capabilities: `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions`, `InApplicationSetup`, `HasSecureElement`, `ServerCapabilities` (§7.10.3) | Missing | No read of any of these properties. `SupportsTransactions` has no well-known singleton-instance NodeId and must be resolved by browse path; the .NET reference does exactly that. | Add a capability probe after connect; use it to size writes, choose key handling, decide transaction/reconnect behavior, detect application setup mode and secure-element key handling. | [ ] |
 | METH-08 | P2 | Use `GetCertificates`, `GetRejectedList`, `TrustList.Read`, `TransactionDiagnostics`, and the staged `DeleteCertificate`/`CreateSelfSignedCertificate` (§7.10.7/8/12/17, §7.8.2.4) | Missing | No calls. Server errors are only visible as generic exceptions. Note: `GetCertificates` is the one §7.10 method that does **not** treat a null group as `DefaultApplicationGroup`; the group must be named. It returns one row per `CertificateType`, which also identifies the slot to renew. | Add diagnostics: current certificates per type, rejected client certificates for trust bootstrap, transaction status/errors. Use explicit group IDs for `GetCertificates`. `TransactionDiagnostics` reports `Bad_OutOfService` before the first transaction, `Bad_InvalidState` while open, `Good` after completion. | [ ] |
-| METH-09 | P2 | Transaction model: `CancelChanges`, single active transaction, `Bad_TransactionPending` (§7.10.2, §7.10.11) | Partial | No explicit cancel (session close implicitly cancels); no `SupportsTransactions` handling; no `Bad_TransactionPending` retry/backoff; no staged preview/cancel. | Detect transaction support; keep one transaction per workflow; use `CancelChanges` on failure; add bounded retry for `Bad_TransactionPending`; expose apply/cancel as a separate step (see WF-04/WF-10). | [ ] |
+| METH-09 | P2 | Transaction model: `CancelChanges`, single active transaction, `Bad_TransactionPending` (§7.10.2, §7.10.11) | Partial | No explicit cancel (session close implicitly cancels); no `SupportsTransactions` handling; no `Bad_TransactionPending` retry/backoff; no staged preview/cancel. Mantis 9852/9853 report File-API deadlock and concurrent-read issues; open62541 #8093 reports a double-apply crash. | Detect transaction support; keep one transaction per workflow; use `CancelChanges` on failure; add bounded retry/backoff for `Bad_TransactionPending` and File-API contention; expose apply/cancel as a separate step (see WF-04/WF-10). | [ ] |
 | METH-10 | P3 | `ManagedApplications` / `ApplicationConfigurationType` (§7.10.14–16) | Missing | Only `ServerConfiguration` is addressed. | Optional feature. Implement only if proxy management of clients/non-UA applications is required. | [ ] |
 | METH-11 | P2 | Audit events `CertificateUpdateRequested` / `CertificateUpdated` (§7.10.26/27) | N/A (server-side) | The server raises them. Trustpoint records no per-operation audit trail and does not attribute the operation to the triggering user. | Add Trustpoint-side audit records for push operations (who, device, groups, result). Not an OPC UA client requirement, but an enterprise control. | [ ] |
 | METH-12 | P1 | Reuse the server's existing private key (`RegeneratePrivateKey=FALSE`) (§7.10.10, §7.7.4) | Implemented | New `opc_gds_push_regenerate_server_key` setting defaults to false; `CreateSigningRequest` now sends `False` with an empty nonce unless rollover is enabled, and the nonce is sent only when a new key is requested. UI checkbox added to the renewal settings. | Done; covered by service/config tests. | [x] |
@@ -136,12 +136,13 @@ The main gaps are:
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
 | TL-01 | — | `SpecifiedLists` mask and four lists (§7.8.2.8) | Implemented | `All` with all four lists populated (`:278–283`). | Keep. | [x] |
-| TL-02 | P1 | List semantics: trusted anchors vs issuers (§7.8.2.8) | Partial | The full CA chain is written to both `TrustedCertificates` and `IssuerCertificates`, and CRLs to both. Works on many servers; makes every intermediate a trust anchor and may be rejected by strict servers. | Write roots as trusted certificates, intermediates as issuer certificates, with matching CRL lists. Verify against at least one strict server. | [ ] |
+| TL-02 | P1 | List semantics: trusted anchors vs issuers (§7.8.2.8) | Partial | The full CA chain is written to both `TrustedCertificates` and `IssuerCertificates`, and CRLs to both. Works on many servers; makes every intermediate a trust anchor and may be rejected by strict servers. Duplicates can also consume two slots against device trust-list limits (see TL-08). | Write roots as trusted certificates, intermediates as issuer certificates, with matching CRL lists. Verify against at least one strict server. | [ ] |
 | TL-03 | — | Provide all issuers/CRLs needed for the new certificate (§7.7.2) | Implemented | Domain CA chain + CRLs. | Keep; include the server's new issuer after selection. | [x] |
 | TL-04 | P0 | Do not destroy unrelated trust entries | Implemented | Trust-list discovery now targets only application-purpose groups, so HTTPS/UserToken trust lists are no longer overwritten with the application CA chain. Full replacement within a targeted group remains the protocol-defined `Open(Write\|EraseExisting)` behaviour. | Done; document that the trust list is authoritative for the targeted application groups. Optional: read and display the current list before replacing it. | [x] |
-| TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
-| TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Missing | No size pre-check; oversize lists fail at the server. | Compare the serialized size against `MaxTrustListSize` (0 = unlimited) and fail with a clear message before writing. | [ ] |
-| TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. | [x] |
+| TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. .NET issue #2552 shows strict revocation checking failing after a certificate update when the CRL is missing. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
+| TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Missing | No size pre-check; oversize lists fail at the server. Device limits can be much smaller: Siemens S7-1500 documents 62 trust-list entries (CRLs consume entries) and 4,096 bytes per element; certificates shared between services count once. | Compare the serialized size against `MaxTrustListSize` (0 = unlimited) and preflight per-device entry/element limits (TL-08). | [ ] |
+| TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. Watch Mantis 9852/9853 (File-API deadlock/concurrent reads) when retrying reads. | [x] |
+| TL-08 | P1 | Device trust-list capacity and element-size preflight | Missing | No count/element-size check. Siemens S7-1500 (firmware-specific, verify) limits the trust list to 62 entries including CRLs, 4,096 bytes per element, and counts a certificate shared between services only once. Merging preserves entries and can silently exceed such limits; duplicated CA entries in trusted+issuer lists make it worse. | Add configurable per-device limits, count certificates + CRLs across lists, check each DER element size and the aggregate, and offer prune/replace behavior. Keep vendor limits configurable, not hard-coded in the generic layer. | [ ] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -154,6 +155,7 @@ The main gaps are:
 | SEC-05 | P2 | Trustpoint RBAC for push operations | Partial | `MANAGE_DEVICES` can replace a server trust list; `ISSUE_CERTIFICATES` can replace its server certificate and revoke the old one. No four-eyes/approval, no user attribution on the queued task. If Trustpoint ever acts as a GDS, the v1.05.07 `ApplicationAdmin` privilege (subset of registered applications) has no equivalent. | Split permissions if needed; record the initiating user; consider an approval step for certificate replacement; map `ApplicationAdmin` grants if the GDS role is implemented. | [ ] |
 | SEC-06 | P2 | Domain credential renewal | Partial / risk | Old credential is revoked immediately. If a server trusts only the old client certificate rather than the CA, renewal locks Trustpoint out. | Document the CA-trust requirement; verify connectivity with the new credential before revoking the old one where possible. | [ ] |
 | SEC-07 | — | Secrets at rest | Implemented | `EncryptedCharField` for the OPC password. | Keep. | [x] |
+| SEC-08 | P2 | Issued certificate must satisfy the server's configured validation policy | Missing | The server validates the pushed certificate against its own `SecurityConfiguration` (minimum key size, SHA-1 rejection, unknown revocation). .NET issue #3931 shows a server rejecting a valid push because the validation path ignored its configured policy. Trustpoint cannot read that policy over OPC UA; the `opc_ua` profile defaults may not match the device. | Make key size/signature algorithm and revocation expectations configurable per device/profile; surface `BadCertificatePolicyCheckFailed` and related status codes with actionable messages; document that the device policy must be aligned out of band. | [ ] |
 
 ### 3.6 Testing and operational robustness
 
@@ -205,6 +207,8 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [ ] **WF-04 / WF-10 / METH-09** Stage per workflow, apply once, reconnect/verify with the new certificate, and support `CancelChanges`/`Bad_TransactionPending`. (`BadServerHalted` handling is done; reconnect/verification remains.)
 - [x] **TL-07** Read the current trust list and rejected list; merge before pushing.
 - [ ] **TL-02** Correct trusted-vs-issuer list content.
+- [ ] **TL-08** Add configurable per-device trust-list capacity and element-size preflight.
+- [ ] **SEC-08** Align issued certificates with the device's configured validation policy (key size, signature, revocation).
 
 **Exit criteria:** certificate replacement works on a server that does not generate keys and on a server that only offers `Aes256Sha256RsaPss`; an existing server key can be kept; apply/restart is treated as success and the new certificate is verified after reconnect; a trust-list push preserves or explicitly replaces the existing list.
 
@@ -256,6 +260,11 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] The current trust list is read and merged; rejected certificates are read and logged.
 - [ ] `GetCertificates` is called with an explicit group and returns the current type per slot.
 - [ ] Discovery shows the server certificate and it can be imported into the truststore.
+- [ ] Trust-list entry count, per-element DER size and aggregate size are checked against the device limits before writing (e.g., S7-1500: 62 entries / 4,096 bytes).
+- [ ] No CA certificate is duplicated between trusted and issuer lists when the device counts entries across lists.
+- [ ] Only one `ApplyChanges` is sent per transaction; repeated apply is tested against open62541.
+- [ ] `UpdateCertificate` succeeds with strict revocation checking when the trust list with CRLs was applied first.
+- [ ] The issued certificate's key size/signature is accepted by the device's configured validation policy.
 
 ## 7. File and line map (current code, 2026-11-26)
 
@@ -283,3 +292,93 @@ Before closing the core conformance work, verify each item against a strict serv
 | Server certificate profile | `trustpoint/pki/default_certificate_profiles/opc_ua.json` |
 | Test server | `trustpoint/request/gds_push/asyncua-gds-push-test/server.py` |
 | User documentation | `docs/source/features/devices/opc_ua_gds.md` |
+
+## 8. Sources and research entry points
+
+These sources are **implementation aids, not normative requirements**. Part 12 remains authoritative. Verify every issue, forum note and vendor statement against the current specification revision and the target device firmware before relying on it. Keep vendor-specific limits and workarounds in configuration; do not hard-code them into the generic GDS protocol layer.
+
+### 8.1 Source priority
+
+| Priority | Source | Purpose |
+|---|---|---|
+| P0 | OPC UA Part 12 v1.05.07 | Normative requirements |
+| P0 | OPC Foundation Mantis | Ambiguities and specification corrections |
+| P0 | .NET GDS reference implementation | Practical client/server behavior |
+| P0 | .NET GDS issues, PRs and regression tests | Known edge cases and fixes |
+| P1 | open62541 implementation and tests | Independent implementation |
+| P1 | OPC Foundation CTT | Conformance expectations and negative cases (access required) |
+| P1 | Vendor documentation (Siemens, Unified Automation, Prosys, Softing, …) | Device limits and interoperability |
+| P2 | Working-group minutes and release candidates | Design rationale and future changes |
+| P2 | IOP workshop results | Real-world cross-vendor failures (confidential) |
+
+### 8.2 OPC Foundation Mantis
+
+Base: <https://mantis.opcfoundation.org/>
+
+| Issue | Subject | Relevance to Trustpoint |
+|---|---|---|
+| [9850](https://mantis.opcfoundation.org/view.php?id=9850) | Inconsistency in the Push Management transaction diagram | Interpret the intended transaction sequence against WF-04/METH-09; confirm which methods share one transaction. |
+| [9851](https://mantis.opcfoundation.org/view.php?id=9851) | Incorrect status code for `CloseAndUpdate()` | Verify the expected success/failure codes in the trust-list write path (METH-05/WF-10). |
+| [9852](https://mantis.opcfoundation.org/view.php?id=9852) | Potential deadlock when manipulating TrustLists via the File API | Add retry/backoff and avoid overlapping read/write sessions (METH-09/OPS-04). Trustpoint now reads and writes the trust list on the same connection (TL-07). |
+| [9853](https://mantis.opcfoundation.org/view.php?id=9853) | Concurrent read access to TrustLists | Serialize trust-list reads/writes per device and handle contention (TL-07/OPS-04). |
+| [9854](https://mantis.opcfoundation.org/view.php?id=9854) | Missing TrustList validation for `RemoveCertificate()` | Not used by Trustpoint; relevant only if `RemoveCertificate` is added. |
+
+These were raised by an implementer in September 2024. **Resolution status was not independently verified**; check the current specification and the target stack before coding around them.
+
+### 8.3 OPC Foundation developer forum
+
+Base: <https://forum.opcfoundation.org/>
+
+Thread: **“Issues found in the GDS Push Management”** (Marcel Patzlaff / Randy Armstrong). Read for the rationale behind transaction handling and the proposal of batch update operations. Useful for interpreting ambiguous requirements, but treat conclusions as discussion input, not normative text.
+
+### 8.4 GitHub issues, pull requests and regression tests
+
+Issue states below were checked via the GitHub API on **2026-11-26**. “Closed” does not guarantee a fix in the version you target; check the fix commit and release notes.
+
+| Item | State | Relevance |
+|---|---|---|
+| [UA-.NETStandard #2552](https://github.com/OPCFoundation/UA-.NETStandard/issues/2552) — IOP: `BadCertificateRevocationUnknown` when calling `ApplyChanges` after a certificate update | Closed | Strict revocation checking fails when the updated certificate's CRL is not in the trust list. Reinforces WF-01/TL-05: apply the trust list with CRLs before `UpdateCertificate`. |
+| [UA-.NETStandard #3795](https://github.com/OPCFoundation/UA-.NETStandard/pull/3795) — GDS Part 12 Full Compliance | Closed PR | A concrete checklist of 57 gaps across authorization, audit, push/pull, `CreateSelfSignedCertificate`, audit redaction, `ApplicationAdmin` and LDS. Use as a review checklist for METH-08, METH-10 and GDS-02. |
+| [UA-.NETStandard #3931](https://github.com/OPCFoundation/UA-.NETStandard/issues/3931) — GDS Push validation needs to honor security configuration | Closed | The server's certificate validation policy (minimum key size, SHA-1, unknown revocation) is not necessarily the default. Trustpoint cannot read it over OPC UA; see SEC-08. |
+| [open62541 #8093](https://github.com/open62541/open62541/issues/8093) — GDS PushManagement double-`ApplyChanges` use-after-free | Closed | Two `ApplyChanges` calls in one `CallRequest` crash the server. Reinforces “apply once per transaction” (WF-04/METH-09) and avoiding repeated apply loops. |
+
+Additional research entry points:
+
+- .NET Standard GDS Push issues: <https://github.com/OPCFoundation/UA-.NETStandard/issues?q=gds+push>
+- .NET Standard GDS Pull requests: <https://github.com/OPCFoundation/UA-.NETStandard/pulls?q=gds+push>
+- .NET Samples GDS issues: <https://github.com/OPCFoundation/UA-.NETStandard-Samples/issues?q=gds>
+- open62541 GDS issues: <https://github.com/open62541/open62541/issues?q=gds+push>
+- python-asyncua GDS issues: <https://github.com/FreeOpcUa/opcua-asyncio/issues?q=gds>
+
+### 8.5 Vendor-specific limits and behavior
+
+Vendor documentation describes limits the specification does not define. Treat these as **per-device configuration**, not protocol constants.
+
+- **Siemens S7-1500 GDS Push configuration limits** (verify against the firmware/STEP 7 documentation for the exact model): a maximum of **62 trust-list entries**, including resources consumed by certificate-based services; a maximum **element size of 4,096 bytes**; CRLs also consume entries; a certificate shared between services counts only once.
+  - Impact: check the number of certificates **and CRLs** per list, each DER element size, and the aggregate before pushing (TL-08). Merging existing entries (TL-07) makes overflow more likely; duplicated CA entries in trusted+issuer lists (TL-02) can consume extra slots.
+- **Other vendors:** Unified Automation, Prosys, Softing and others publish support notes, firmware release notes and SDK changelogs. Use them for capacity limits, supported security policies, certificate-type support and known regressions. Keep the generic layer vendor-neutral.
+
+### 8.6 Internal / membership-only sources
+
+These were **not accessed** and must not be presented as evidence in this document. If Trustpoint has OPC Foundation membership access, they are worth reviewing:
+
+- UA working-group minutes and technical decisions.
+- Release candidates and pre-publication changes.
+- CTT test scripts and negative test cases.
+- Interoperability workshop test database and results (confidential).
+- Certification laboratory findings.
+
+The most valuable next step for Trustpoint would be to participate in an IOP workshop as a certificate-management client, and to run the CTT against a real GDS Push target. Both expose interoperability defects that the specification text and unit tests do not.
+
+### 8.7 How these sources map to the backlog
+
+| Source | Backlog items |
+|---|---|
+| #2552 (strict revocation / missing CRL) | WF-01, TL-05 |
+| #3795 (full Part 12 compliance) | METH-08, METH-10, GDS-02; audit and `CreateSelfSignedCertificate` |
+| #3931 (server validation policy) | SEC-08 |
+| open62541 #8093 (double apply) | WF-04, METH-09 |
+| Mantis 9852/9853 (File-API deadlock/concurrency) | METH-09, TL-07, OPS-04 |
+| Mantis 9850/9851 (transaction/status codes) | WF-04, METH-05, METH-09 |
+| Siemens S7-1500 limits | TL-02, TL-06, TL-08 |
+| Forum thread on GDS Push issues | WF-04, METH-09 (transaction interpretation) |
