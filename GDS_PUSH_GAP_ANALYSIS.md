@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 5 (all done)**, **P1 = 9**, **P2 = 17**, **P3 = 7**, **already implemented = 6** — 11 of 44 items are done.
+Findings by priority: **P0 = 5 (all done)**, **P1 = 12**, **P2 = 18**, **P3 = 7**, **already implemented = 6** — 11 of 48 items are done.
 
 The main gaps are:
 
@@ -92,11 +92,12 @@ The main gaps are:
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
 | GDS-01 | P2 | GDS is an OPC UA server exposing `Directory`, registration and discovery (§6.1–§6.5) | Missing | No OPC UA server exists in Trustpoint; `gds_push_service.py` only creates `asyncua.Client` instances. | Conditional on decision B. Either document "Trustpoint is a CertificateManager, not a GDS", or implement a §6 server (large, separate project). | [ ] |
-| GDS-02 | P2 | Application registration: `FindApplications`, `RegisterApplication`, `UpdateApplication`, `UnregisterApplication`, `GetApplication` (§6.4, §6.5.4–6.5.9) | Missing | No calls to these methods anywhere. No `ApplicationId` is persisted. | Conditional on decision B. Add GDS client service and persist `ApplicationId` per device/application. | [ ] |
+| GDS-02 | P2 | Application registration: `FindApplications`, `RegisterApplication`, `UpdateApplication`, `UnregisterApplication`, `GetApplication` (§6.4, §6.5.4–6.5.9); `ApplicationAdmin` grants (v1.05.07, §7.2) | Missing | No calls to these methods anywhere. No `ApplicationId` is persisted and no per-user application grants exist. | Conditional on decision B. Add a GDS client service, persist `ApplicationId` per device/application, and map `ApplicationAdmin` to a configured subset of applications. | [ ] |
 | GDS-03 | P2 | Persist `ApplicationRecordDataType`: `ApplicationUri`, `ProductUri`, `DiscoveryUrls`, `ServerCapabilities`, `ApplicationNames` (§6.5.5) | Missing | `OpcUaGdsPushConfig` has only IP, port, OPC user/password, truststore and renewal settings (`devices/models.py:203`). | Conditional on decision B. Add fields; use discovery to populate them. | [ ] |
 | GDS-04 | P3 | Browse `Directory/CertificateGroups` and persist selected `CertificateGroupIds` (§6.4) | Missing | Trustpoint browses the server's own `ServerConfiguration/CertificateGroups` directly (`gds_push_service.py:886`). | Conditional on decision B. Otherwise keep direct browsing (current behavior is valid for interpretation A). | [ ] |
 | GDS-05 | — | Minimise connection time; disconnect after each sequence (§6.3) | Implemented | New client/session per operation in `devices/tasks.py`. | Keep. | [x] |
 | GDS-06 | P2 | Credentials must have the server's `SecurityAdmin` role (§6.2, §7.2) | Partial | Documented in `docs/source/features/devices/opc_ua_gds.md`; Trustpoint cannot verify the role and surfaces all failures generically. | Improve error classification (see METH-08); map `Bad_UserAccessDenied` / `Bad_SecurityModeInsufficient` to actionable messages. | [ ] |
+| GDS-07 | P2 | LDS/GDS discovery and autopopulation: `FindServersOnNetwork`/`FindServers` scan, admin approval, GDS self-registration with an LDS, mDNS (§4, §6.1, Annex C) | Missing | Devices are added manually by IP and port. No LDS scan, `FindServers`, or approval staging. The .NET GDS sample implements a scan → stage → `DiscoveryAdmin` approval → `RegisterApplication` flow. | Conditional on interpretation A/B. Add a scan-and-stage flow only if automatic discovery is in scope; never auto-register without an approval gate. | [ ] |
 
 ### 3.2 §7.4 / §7.7 — PushManagement workflows
 
@@ -105,28 +106,30 @@ The main gaps are:
 | WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Partial | Periodic task does trust list first (`devices/tasks.py:61–77`); the standalone "update server certificate" task does not (`devices/tasks.py:109–127`). | Make "update certificate" always run or offer the required trust-list step first, or combine both in one workflow entry point. | [ ] |
 | WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Missing | Fixed interval only (`opc_gds_push_renewal_interval`); no expiry, CRL or policy check. Every cycle replaces the certificate. | Add a decision step: compare server certificate expiry, configured renewal threshold and pending CRL changes. Skip when nothing is due. | [ ] |
 | WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Implemented | `_discover_certificate_groups` reads `Purpose`/`CertificateTypes`, skips HTTPS/UserToken/unknown non-application groups, and selects a permitted type. Name fallback only when both properties are unavailable. | Done; covered by discovery tests. | [x] |
-| WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). No reconnect or verification after the server forces channel renegotiation. | Collect `ApplyChangesRequired` across the workflow and apply once per transaction scope. Reconnect and verify the new certificate/trust list afterwards. | [ ] |
+| WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). The trust-list and certificate changes are not staged in one transaction, and the session is reused after apply. No reconnect or verification. The .NET reference stages trust list + certificate, applies once, disconnects, reconnects with the new certificate and inspects it. | Stage per workflow, apply once, handle `BadServerHalted` (WF-10), disconnect/reconnect with the new certificate, and verify. | [ ] |
 | WF-05 | P3 | Use `CreateSelfSignedCertificate` when no usable certificate exists (§7.7.4) | Missing | Method never called. | Optional. Implement only if servers without an existing certificate must be supported. | [ ] |
 | WF-06 | P2 | CertificateManager generates the private key when the server cannot (§7.7.4) | Missing | Always `RegeneratePrivateKey=True`; no fallback path. | Read `SupportedPrivateKeyFormats`; on `Bad_NotSupported`, generate key + CSR locally, sign, and upload key via `UpdateCertificate`. | [ ] |
 | WF-07 | P3 | Create Endpoint / Update Configuration workflows (§7.7.5/§7.7.6) | Missing | No `ConfigurationFile`, `UpdateTargets`, `ConfirmUpdate` usage. | Optional; separate feature. Not required for certificate replacement. | [ ] |
 | WF-08 | P2 | CertificateManager needs a `DiscoveryUrl`; NAT/hostnames supported (§7.7.2) | Missing | URL is built as `opc.tcp://{ip_address}:{port}` (`gds_push_service.py:101`). | Add an optional discovery URL / endpoint URL field, with hostname support and fallback to IP:port. | [ ] |
 | WF-09 | P0 | Workflow consistency | Implemented | `update_trustlist` and `update_server_certificate` now require every targeted group to succeed; partial updates return `False` with a per-group message and do not replace the local truststore. | Done; partial-success tests added. | [x] |
+| WF-10 | P1 | `ApplyChanges` completion and session teardown (§7.10.9, §7.7.2) | Missing | Trustpoint treats every apply error as failure and keeps the session. The .NET reference treats `BadServerHalted` as the expected result when the server restarts to apply changes, disconnects in `finally`, and reconnects with the new certificate to verify the update. | Catch `BadServerHalted` as success, always close the session after apply, reconnect with the new truststore/certificate, and report the verification result separately. | [ ] |
 
 ### 3.3 §7.10 — method-level conformance
 
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
 | METH-01 | P0 | `CreateSigningRequest`: Nonce shall be at least 32 bytes when `RegeneratePrivateKey=TRUE` (§7.10.10) | Implemented | Passes `os.urandom(32)`; unit test asserts the nonce. | Done. Still recommended: make the test server reject a missing/short nonce (OPS-02). | [x] |
-| METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Implemented | `_select_application_certificate_type` reads `CertificateTypes` and prefers RsaSha256, then RsaMin, then named ECC types; groups with no application type are skipped. | Done; covered by discovery tests. | [x] |
+| METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Implemented | `_select_application_certificate_type` reads `CertificateTypes` and prefers RsaSha256, then RsaMin, then named ECC types; groups with no application type are skipped. | Done; covered by discovery tests. Follow-up: prefer the currently assigned slot type discovered via `GetCertificates` (METH-08). | [x] |
 | METH-03 | — | `UpdateCertificate` arguments: group, type, DER cert, issuer list, key format/key (§7.10.5) | Implemented | Correct for the server-generated-key case (`:1135–1143`). `IssuerCertificates` is redundant for application certificates per the standard and is ignored by the server. | Keep; extend for METH-04. | [x] |
 | METH-04 | P2 | Upload an externally generated private key (PKCS#8/PKCS#12) (§7.7.4, §7.10.5) | Missing | `PrivateKeyFormat=''`, `PrivateKey=b''` always. | Add CM-side key generation and key upload, gated by `SupportedPrivateKeyFormats`. | [ ] |
 | METH-05 | — | TrustList write sequence: `Open(Write\|EraseExisting)`, `Write`, `CloseAndUpdate`, `ApplyChanges` (§7.7.3, §7.8.2.2) | Implemented | Correct modes and order (`:944–979`). | Keep. | [x] |
 | METH-06 | P3 | Write block size must not exceed `MaxByteStringLength` (§7.7.3) | Partial | Fixed 1024 bytes (`:929`); property not read. | Read the property and clamp the chunk size; keep 1024 as a safe default. | [ ] |
-| METH-07 | P1 | Read `ServerConfiguration` capabilities: `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions`, `InApplicationSetup`, `ServerCapabilities` (§7.10.3) | Missing | No read of any of these properties. | Add a capability probe after connect; use it to size writes, choose key handling, decide transaction/reconnect behavior and detect application setup mode. | [ ] |
-| METH-08 | P2 | Use `GetCertificates`, `GetRejectedList`, `TrustList.Read`, `TransactionDiagnostics` (§7.10.8, §7.10.12, §7.8.2.4, §7.10.17) | Missing | No calls. Server errors are only visible as generic exceptions. | Add diagnostics: current certificates, rejected client certificates for trust bootstrap, transaction error details. `GetCertificates` also supplies the current certificate type. | [ ] |
-| METH-09 | P2 | Transaction model: `CancelChanges`, transaction scope, `Bad_TransactionPending` (§7.10.2, §7.10.11) | Partial | No explicit cancel (session close implicitly cancels); no `SupportsTransactions` handling; no `Bad_TransactionPending` retry/backoff. | Detect transaction support; use `CancelChanges` on failure; add bounded retry for `Bad_TransactionPending`. | [ ] |
+| METH-07 | P1 | Read `ServerConfiguration` capabilities: `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions`, `InApplicationSetup`, `HasSecureElement`, `ServerCapabilities` (§7.10.3) | Missing | No read of any of these properties. `SupportsTransactions` has no well-known singleton-instance NodeId and must be resolved by browse path; the .NET reference does exactly that. | Add a capability probe after connect; use it to size writes, choose key handling, decide transaction/reconnect behavior, detect application setup mode and secure-element key handling. | [ ] |
+| METH-08 | P2 | Use `GetCertificates`, `GetRejectedList`, `TrustList.Read`, `TransactionDiagnostics`, and the staged `DeleteCertificate`/`CreateSelfSignedCertificate` (§7.10.7/8/12/17, §7.8.2.4) | Missing | No calls. Server errors are only visible as generic exceptions. Note: `GetCertificates` is the one §7.10 method that does **not** treat a null group as `DefaultApplicationGroup`; the group must be named. It returns one row per `CertificateType`, which also identifies the slot to renew. | Add diagnostics: current certificates per type, rejected client certificates for trust bootstrap, transaction status/errors. Use explicit group IDs for `GetCertificates`. `TransactionDiagnostics` reports `Bad_OutOfService` before the first transaction, `Bad_InvalidState` while open, `Good` after completion. | [ ] |
+| METH-09 | P2 | Transaction model: `CancelChanges`, single active transaction, `Bad_TransactionPending` (§7.10.2, §7.10.11) | Partial | No explicit cancel (session close implicitly cancels); no `SupportsTransactions` handling; no `Bad_TransactionPending` retry/backoff; no staged preview/cancel. | Detect transaction support; keep one transaction per workflow; use `CancelChanges` on failure; add bounded retry for `Bad_TransactionPending`; expose apply/cancel as a separate step (see WF-04/WF-10). | [ ] |
 | METH-10 | P3 | `ManagedApplications` / `ApplicationConfigurationType` (§7.10.14–16) | Missing | Only `ServerConfiguration` is addressed. | Optional feature. Implement only if proxy management of clients/non-UA applications is required. | [ ] |
 | METH-11 | P2 | Audit events `CertificateUpdateRequested` / `CertificateUpdated` (§7.10.26/27) | N/A (server-side) | The server raises them. Trustpoint records no per-operation audit trail and does not attribute the operation to the triggering user. | Add Trustpoint-side audit records for push operations (who, device, groups, result). Not an OPC UA client requirement, but an enterprise control. | [ ] |
+| METH-12 | P1 | Reuse the server's existing private key (`RegeneratePrivateKey=FALSE`) (§7.10.10, §7.7.4) | Missing | Always `True`; every renewal rolls the server key. The .NET push client calls `CreateSigningRequest` with `false` and an empty nonce by default, keeping the existing key. | Make key rollover configurable and default to reusing the existing key when the server has one (especially `HasSecureElement=true` or non-exportable keys); use `True` + nonce only when a new key is intended. | [ ] |
 
 ### 3.4 §7.8 — TrustList content and semantics
 
@@ -138,6 +141,7 @@ The main gaps are:
 | TL-04 | P0 | Do not destroy unrelated trust entries | Implemented | Trust-list discovery now targets only application-purpose groups, so HTTPS/UserToken trust lists are no longer overwritten with the application CA chain. Full replacement within a targeted group remains the protocol-defined `Open(Write\|EraseExisting)` behaviour. | Done; document that the trust list is authoritative for the targeted application groups. Optional: read and display the current list before replacing it. | [x] |
 | TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Missing | No size pre-check; oversize lists fail at the server. | Compare the serialized size against `MaxTrustListSize` (0 = unlimited) and fail with a clear message before writing. | [ ] |
+| TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Missing | Trustpoint never reads the server's trust list or `GetRejectedList`; it writes a full replacement. The .NET client reads the list with masks plus the rejected list, merges the GDS CA/list, and pushes the result. | Read the current lists, merge (or explicitly replace), show the rejected certificates, and push; offer a merge/replace choice. | [ ] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -145,9 +149,9 @@ The main gaps are:
 |---|---|---|---|---|---|---|
 | SEC-01 | P1 | Security policy negotiation | Partial | Hard-coded `Basic256Sha256` + `SignAndEncrypt` (`:565–573`). Servers that only offer AES/ECC policies cannot be managed. | Select from `GetEndpoints`; support at least `Basic256Sha256`, `Aes128Sha256RsaOaep`, `Aes256Sha256RsaPss`; add ECC only if in scope. Keep `SignAndEncrypt`. | [ ] |
 | SEC-02 | P2 | Server authentication and rotation | Partial | Pins the leaf certificate at truststore order 0 (`:483–527`); no chain validation against a CA truststore, no automatic rotation. Fail-closed is good. | Keep pinning as an option; add CA-based validation and a controlled update path when the server certificate changes. | [ ] |
-| SEC-03 | P1 | Trust bootstrap / TOFU (Annex G.2) | Missing | `discover_server` returns endpoints only, not the certificate (`:785–809`). The view reads `server_info['server_certificate_available']`, but this key is never set; `request.session['opc_ua_server_info']` is never used. The UI hint is dead. | Capture the server certificate during discovery, expose it for truststore creation/import, and set the flag. Or document manual bootstrap explicitly and remove the dead UI path. | [ ] |
+| SEC-03 | P1 | Trust bootstrap / TOFU (Annex G.2) | Missing | `discover_server` returns endpoints only, not the certificate (`:785–809`). The view reads `server_info['server_certificate_available']`, but this key is never set; `request.session['opc_ua_server_info']` is never used. The .NET client seeds a push application's certificate from the connected endpoint's `ServerCertificate` and uses `GetRejectedList`/the rejected store to trust client certificates. | Capture the endpoint certificate during discovery, expose it for truststore creation/import, and surface rejected client certificates via `GetRejectedList`. Or document manual bootstrap explicitly and remove the dead UI path. | [ ] |
 | SEC-04 | P3 | Client certificate profile (Part 6 §6.2.2) | Implemented | `opc_ua_domain_credential.json` has RSA key usages and `clientAuth`. Runtime validation (`:403`) omits `nonRepudiation`, but the profile includes it. | Optional hardening: align the runtime check with the profile. | [ ] |
-| SEC-05 | P2 | Trustpoint RBAC for push operations | Partial | `MANAGE_DEVICES` can replace a server trust list; `ISSUE_CERTIFICATES` can replace its server certificate and revoke the old one. No four-eyes/approval, no user attribution on the queued task. | Split permissions if needed; record the initiating user; consider an approval step for certificate replacement. | [ ] |
+| SEC-05 | P2 | Trustpoint RBAC for push operations | Partial | `MANAGE_DEVICES` can replace a server trust list; `ISSUE_CERTIFICATES` can replace its server certificate and revoke the old one. No four-eyes/approval, no user attribution on the queued task. If Trustpoint ever acts as a GDS, the v1.05.07 `ApplicationAdmin` privilege (subset of registered applications) has no equivalent. | Split permissions if needed; record the initiating user; consider an approval step for certificate replacement; map `ApplicationAdmin` grants if the GDS role is implemented. | [ ] |
 | SEC-06 | P2 | Domain credential renewal | Partial / risk | Old credential is revoked immediately. If a server trusts only the old client certificate rather than the CA, renewal locks Trustpoint out. | Document the CA-trust requirement; verify connectivity with the new credential before revoking the old one where possible. | [ ] |
 | SEC-07 | — | Secrets at rest | Implemented | `EncryptedCharField` for the OPC password. | Keep. | [x] |
 
@@ -160,6 +164,23 @@ The main gaps are:
 | OPS-03 | P1 | Real-stack conformance | Missing | No test against open62541, a commercial GDS, or an AES/ECC-only server. | Add one real-stack interoperability test before claiming conformance. | [ ] |
 | OPS-04 | P2 | Timeouts, retries, concurrency | Partial | No configurable secure-channel/session timeout (`_create_secure_client`), no retry/backoff, no lock preventing a manual push from overlapping the scheduled push. | Add configurable timeouts, bounded retries and a per-device operation lock. | [ ] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Partial | Docs claim discovery shows "certificate management capabilities"; it only lists endpoints (`docs/source/features/devices/opc_ua_gds.md`). | Either extend discovery (groups, `ServerConfiguration` capabilities) or correct the documentation. | [ ] |
+
+### 3.7 Reference implementation cross-check (.NET GDS samples)
+
+Source: [OPCFoundation/UA-.NETStandard-Samples — Samples/GDS](https://github.com/OPCFoundation/UA-.NETStandard-Samples/blob/master/Samples/GDS/README.md),
+especially [`Client/Model/TrustListModel.cs`](https://github.com/OPCFoundation/UA-.NETStandard-Samples/blob/master/Samples/GDS/Client/Model/TrustListModel.cs)
+and [`Client/Model/CertificateModel.cs`](https://github.com/OPCFoundation/UA-.NETStandard-Samples/blob/master/Samples/GDS/Client/Model/CertificateModel.cs).
+
+The sample implements v1.05.07 and exposes behavior that is easy to miss from the specification text alone. The following are now captured above:
+
+- **Everything is staged until `ApplyChanges`.** `UpdateCertificate`, `DeleteCertificate`, `CreateSelfSignedCertificate` and trust-list writes change nothing until the transaction is committed; `CancelChanges` discards it. The client shows Server Status, Apply and Cancel as separate steps, then **disconnects and reconnects with the new certificate to verify**. See WF-04/WF-10/METH-09.
+- **`BadServerHalted` is expected.** Applying changes may restart the server; it answers `BadServerHalted` and drops the connection. The reference treats that as success and closes the session. See WF-10.
+- **Trust list is read, merged and pushed.** The reference reads the current trust list (with masks) plus `GetRejectedList`, merges the GDS CA/list, and pushes the result. It does not blindly replace it. See TL-07/TL-04.
+- **Reuse the existing private key by default.** The push client calls `CreateSigningRequest` with `RegeneratePrivateKey=false` and an empty nonce; it only rolls the key when intended. This matters for secure elements and non-exportable keys. See METH-12.
+- **Per-slot certificate management.** `GetCertificates` returns one row per CertificateType and identifies the current slot; `DeleteCertificate` and `CreateSelfSignedCertificate` are staged operations. `GetCertificates` is the one method that does **not** accept a null group as the default. See METH-08/METH-02.
+- **Optional `ServerConfiguration` surface.** `SupportsTransactions` has no well-known singleton NodeId (browse path), and `HasSecureElement`, `InApplicationSetup` and `TransactionDiagnostics` statuses drive the UI. See METH-07/METH-08.
+- **Trust bootstrap uses the endpoint certificate.** For push, the reference seeds the application certificate from the connected endpoint's `ServerCertificate`; rejected client certificates are recovered through `GetRejectedList`/the rejected store. See SEC-03.
+- **GDS-side features not applicable to a pure CertificateManager:** `ManagedApplications` (METH-10), `ApplicationAdmin` grant mapping (GDS-02/SEC-05), LDS scan/autopopulation (GDS-07), Part 17 AliasNames merging and Part 21 onboarding tickets. The last two are outside certificate push and are not gaps for Trustpoint.
 
 ## 4. Implementation plan
 
@@ -177,22 +198,24 @@ The main gaps are:
 ### Milestone 2 — Interoperability and server capabilities
 
 - [ ] **SEC-01** Negotiate the security policy from the server's endpoints (AES + Basic256Sha256).
-- [ ] **METH-07** Read `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions`, `InApplicationSetup`, `ServerCapabilities`.
+- [ ] **METH-07** Read `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions` (browse path), `InApplicationSetup`, `HasSecureElement`, `ServerCapabilities`.
 - [ ] **TL-06 / METH-06** Enforce trust-list size and chunk-size limits.
-- [ ] **WF-06 / METH-04** Add the CM-generated-key fallback and private-key upload.
-- [ ] **WF-04 / METH-09** Apply changes once per workflow scope; reconnect and verify; handle `Bad_TransactionPending` and `CancelChanges`.
+- [ ] **WF-06 / METH-04 / METH-12** Reuse the existing server key by default; add the CM-generated-key fallback and private-key upload.
+- [ ] **WF-04 / WF-10 / METH-09** Stage per workflow, apply once, handle `BadServerHalted`, disconnect/reconnect with the new certificate, verify, and support `CancelChanges`/`Bad_TransactionPending`.
+- [ ] **TL-07** Read the current trust list and rejected list; merge or explicitly replace before pushing.
 - [ ] **TL-02** Correct trusted-vs-issuer list content.
 
-**Exit criteria:** certificate replacement works on a server that does not generate keys and on a server that only offers `Aes256Sha256RsaPss`.
+**Exit criteria:** certificate replacement works on a server that does not generate keys and on a server that only offers `Aes256Sha256RsaPss`; an existing server key can be kept; apply/restart is treated as success and the new certificate is verified after reconnect; a trust-list push preserves or explicitly replaces the existing list.
 
 ### Milestone 3 — Trust bootstrap, diagnostics and operations
 
 - [ ] **SEC-03** Capture the server certificate during discovery and offer it for truststore creation/import; fix or remove the dead `server_certificate_available` path.
-- [ ] **METH-08** Add `GetCertificates`, `GetRejectedList` and `TransactionDiagnostics`-based error reporting.
+- [ ] **METH-08** Add `GetCertificates` (explicit group, one row per type), `GetRejectedList`, `DeleteCertificate`, `CreateSelfSignedCertificate` and `TransactionDiagnostics`-based error reporting.
 - [ ] **WF-02** Add an expiry/CRL-based "update required" decision instead of blind interval renewal.
 - [ ] **METH-11 / SEC-05** Add per-operation audit records and user attribution.
 - [ ] **OPS-04** Add timeouts, retries and a per-device operation lock.
 - [ ] **OPS-03** Run one real-stack interoperability test.
+- [ ] **GDS-07** Add LDS/GDS scan-and-stage discovery with `DiscoveryAdmin` approval (conditional).
 
 **Exit criteria:** a fresh server can be onboarded from discovery without manual certificate export; failures show the server's transaction diagnosis and the rejected-certificate list.
 
@@ -227,6 +250,10 @@ Before closing the core conformance work, verify each item against a strict serv
 - [ ] Server without key generation is manageable via uploaded private key.
 - [ ] Oversize trust list is rejected before writing, with a clear message.
 - [ ] New certificate is usable after `ApplyChanges` (reconnect check).
+- [ ] `BadServerHalted` from `ApplyChanges` is treated as success and the session is closed.
+- [ ] An existing server key can be reused (`RegeneratePrivateKey=false`); a secure-element server is not forced to roll its key.
+- [ ] The current trust list is read and merged (or explicitly replaced) and rejected certificates are visible.
+- [ ] `GetCertificates` is called with an explicit group and returns the current type per slot.
 - [ ] Discovery shows the server certificate and it can be imported into the truststore.
 
 ## 7. File and line map (current code, 2026-11-26)
