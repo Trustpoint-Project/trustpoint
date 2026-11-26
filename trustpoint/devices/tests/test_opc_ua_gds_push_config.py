@@ -70,6 +70,18 @@ def test_api_accepts_nested_and_legacy_locations(opc_device, legacy):
     assert serializer.data['opc_ua_gds_push_config']['opc_server_port'] == 4841
 
 
+def test_trustlist_limits_default_to_disabled(opc_device):
+    config = opc_device.opc_ua_gds_push_config
+    assert config.opc_gds_push_max_trustlist_entries == 0
+    assert config.opc_gds_push_max_trustlist_element_size == 0
+    config.opc_gds_push_max_trustlist_entries = 62
+    config.opc_gds_push_max_trustlist_element_size = 4096
+    config.save(update_fields=['opc_gds_push_max_trustlist_entries', 'opc_gds_push_max_trustlist_element_size'])
+    config.refresh_from_db()
+    assert config.opc_gds_push_max_trustlist_entries == 62
+    assert config.opc_gds_push_max_trustlist_element_size == 4096
+
+
 def test_server_key_rollover_defaults_to_reuse(opc_device):
     config = opc_device.opc_ua_gds_push_config
     assert config.opc_gds_push_regenerate_server_key is False

@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 5 (all done)**, **P1 = 13**, **P2 = 19**, **P3 = 7**, **already implemented = 6** — 13 of 50 items are done.
+Findings by priority: **P0 = 5 (all done)**, **P1 = 13**, **P2 = 19**, **P3 = 7**, **already implemented = 6** — 15 of 50 items are done.
 
 The main gaps are:
 
@@ -103,7 +103,7 @@ The main gaps are:
 
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
-| WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Partial | Periodic task does trust list first (`devices/tasks.py:61–77`); the standalone "update server certificate" task does not (`devices/tasks.py:109–127`). .NET issue #2552 confirms that strict revocation checking fails with `BadCertificateRevocationUnknown` when the CRL is not in the trust list before `UpdateCertificate`. | Make "update certificate" always run or offer the required trust-list step first, or combine both in one workflow entry point. | [ ] |
+| WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Implemented | Both the periodic task and the standalone certificate update now apply the trust list first; the standalone task continues to the certificate if the trust-list update fails. .NET issue #2552 confirms that strict revocation checking needs the CRL in the trust list before `UpdateCertificate`. | Done; task-order test added. | [x] |
 | WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Missing | Fixed interval only (`opc_gds_push_renewal_interval`); no expiry, CRL or policy check. Every cycle replaces the certificate. | Add a decision step: compare server certificate expiry, configured renewal threshold and pending CRL changes. Skip when nothing is due. | [ ] |
 | WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Implemented | `_discover_certificate_groups` reads `Purpose`/`CertificateTypes`, skips HTTPS/UserToken/unknown non-application groups, and selects a permitted type. Name fallback only when both properties are unavailable. | Done; covered by discovery tests. | [x] |
 | WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Partial | Called when required, but per group/per operation (`:969`, `:1147`). The trust-list and certificate changes are not staged in one transaction, and the session is reused after apply. No reconnect or verification. The .NET reference stages trust list + certificate, applies once, disconnects, reconnects with the new certificate and inspects it. open62541 #8093 shows a heap-use-after-free when two `ApplyChanges` calls are sent in one `CallRequest`; repeated apply is an interop risk. | Stage per workflow, apply once, handle `BadServerHalted` (WF-10), disconnect/reconnect with the new certificate, and verify. | [ ] |
@@ -142,7 +142,7 @@ The main gaps are:
 | TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. .NET issue #2552 shows strict revocation checking failing after a certificate update when the CRL is missing. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Missing | No size pre-check; oversize lists fail at the server. Device limits can be much smaller: Siemens S7-1500 documents 62 trust-list entries (CRLs consume entries) and 4,096 bytes per element; certificates shared between services count once. | Compare the serialized size against `MaxTrustListSize` (0 = unlimited) and preflight per-device entry/element limits (TL-08). | [ ] |
 | TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. Watch Mantis 9852/9853 (File-API deadlock/concurrent reads) when retrying reads. | [x] |
-| TL-08 | P1 | Device trust-list capacity and element-size preflight | Missing | No count/element-size check. Siemens S7-1500 (firmware-specific, verify) limits the trust list to 62 entries including CRLs, 4,096 bytes per element, and counts a certificate shared between services only once. Merging preserves entries and can silently exceed such limits; duplicated CA entries in trusted+issuer lists make it worse. | Add configurable per-device limits, count certificates + CRLs across lists, check each DER element size and the aggregate, and offer prune/replace behavior. Keep vendor limits configurable, not hard-coded in the generic layer. | [ ] |
+| TL-08 | P1 | Device trust-list capacity and element-size preflight | Implemented | Configurable `opc_gds_push_max_trustlist_entries` and `opc_gds_push_max_trustlist_element_size` (0 = no limit) preflight the merged list, counting unique DER objects across all four lists (shared certificates count once) and checking each element size. UI fields and migration 0004_tp_v1_0_2 added. | Done; tests cover shared entries, excess count and oversized elements. Aggregate size remains in TL-06. | [x] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -191,7 +191,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **METH-01** Pass a ≥ 32-byte nonce to `CreateSigningRequest`.
 - [x] **WF-03 / METH-02** Select certificate groups by `Purpose`/`CertificateTypes`; select a permitted certificate type instead of the hard-coded base type.
 - [x] **WF-03 / TL-04** Restrict trust-list updates to the relevant application group(s); stop writing the application trust list into HTTPS/UserToken groups.
-- [ ] **WF-01** Ensure every certificate update is preceded by the required trust-list update (or combine them in one workflow).
+- [x] **WF-01** Ensure every certificate update is preceded by the required trust-list update (or combine them in one workflow).
 - [x] **WF-09** Return structured per-group results; do not report partial success as success.
 - [ ] **OPS-01 / OPS-02** Extend the test server and unit tests to catch these regressions. (Unit tests added; test server nonce/type enforcement still open.)
 
@@ -207,7 +207,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [ ] **WF-04 / WF-10 / METH-09** Stage per workflow, apply once, reconnect/verify with the new certificate, and support `CancelChanges`/`Bad_TransactionPending`. (`BadServerHalted` handling is done; reconnect/verification remains.)
 - [x] **TL-07** Read the current trust list and rejected list; merge before pushing.
 - [ ] **TL-02** Correct trusted-vs-issuer list content.
-- [ ] **TL-08** Add configurable per-device trust-list capacity and element-size preflight.
+- [x] **TL-08** Add configurable per-device trust-list capacity and element-size preflight.
 - [ ] **SEC-08** Align issued certificates with the device's configured validation policy (key size, signature, revocation).
 
 **Exit criteria:** certificate replacement works on a server that does not generate keys and on a server that only offers `Aes256Sha256RsaPss`; an existing server key can be kept; apply/restart is treated as success and the new certificate is verified after reconnect; a trust-list push preserves or explicitly replaces the existing list.
@@ -260,9 +260,11 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] The current trust list is read and merged; rejected certificates are read and logged.
 - [ ] `GetCertificates` is called with an explicit group and returns the current type per slot.
 - [ ] Discovery shows the server certificate and it can be imported into the truststore.
-- [ ] Trust-list entry count, per-element DER size and aggregate size are checked against the device limits before writing (e.g., S7-1500: 62 entries / 4,096 bytes).
+- [x] Trust-list entry count and per-element DER size are checked against the configured device limits before writing.
+- [ ] Aggregate serialized size is checked against `MaxTrustListSize` before writing (TL-06).
 - [ ] No CA certificate is duplicated between trusted and issuer lists when the device counts entries across lists.
 - [ ] Only one `ApplyChanges` is sent per transaction; repeated apply is tested against open62541.
+- [x] The standalone certificate update applies the trust list first.
 - [ ] `UpdateCertificate` succeeds with strict revocation checking when the trust list with CRLs was applied first.
 - [ ] The issued certificate's key size/signature is accepted by the device's configured validation policy.
 
@@ -278,15 +280,16 @@ Before closing the core conformance work, verify each item against a strict serv
 | Secure client, hard-coded policy | `trustpoint/request/gds_push/gds_push_service.py:563` |
 | Server certificate pinning | `trustpoint/request/gds_push/gds_push_service.py:517` |
 | Endpoint discovery | `trustpoint/request/gds_push/gds_push_service.py:714` |
-| Certificate group discovery | `trustpoint/request/gds_push/gds_push_service.py:1256` |
+| Certificate group discovery | `trustpoint/request/gds_push/gds_push_service.py:1289` |
 | Trust-list group discovery (application groups only) | `trustpoint/request/gds_push/gds_push_service.py:1004` |
-| Trust-list write sequence | `trustpoint/request/gds_push/gds_push_service.py:1115` |
-| TrustList read | `trustpoint/request/gds_push/gds_push_service.py:1073` |
+| Trust-list write sequence | `trustpoint/request/gds_push/gds_push_service.py:1147` |
+| TrustList read | `trustpoint/request/gds_push/gds_push_service.py:1105` |
+| Trust-list limits preflight | `trustpoint/request/gds_push/gds_push_service.py:1073` |
 | TrustList merge (certs/CRLs) | `trustpoint/request/gds_push/gds_push_service.py:1055` |
-| Rejected list read | `trustpoint/request/gds_push/gds_push_service.py:1101` |
-| Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1305` |
-| CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1385` |
-| Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1492` |
+| Rejected list read | `trustpoint/request/gds_push/gds_push_service.py:1133` |
+| Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1338` |
+| CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1418` |
+| Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1525` |
 | Discovery view (dead certificate flag) | `trustpoint/devices/views/credential_issuance.py:587–589` |
 | Client certificate profile | `trustpoint/pki/default_certificate_profiles/opc_ua_domain_credential.json` |
 | Server certificate profile | `trustpoint/pki/default_certificate_profiles/opc_ua.json` |

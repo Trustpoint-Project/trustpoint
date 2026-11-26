@@ -158,24 +158,37 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
         regenerate_server_key = request.POST.get('opc_gds_push_regenerate_server_key') == 'on'
         interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
+        max_entries_raw = request.POST.get('opc_gds_push_max_trustlist_entries', '0')
+        max_element_raw = request.POST.get('opc_gds_push_max_trustlist_element_size', '0')
 
         try:
             interval = int(interval_raw)
-            if interval < 1:
-                err_msg = 'Interval must be at least 1.'
+            max_entries = int(max_entries_raw or 0)
+            max_element_size = int(max_element_raw or 0)
+            if interval < 1 or max_entries < 0 or max_element_size < 0:
+                err_msg = 'Interval must be at least 1 and limits must not be negative.'
                 raise ValueError(err_msg)  # noqa: TRY301
         except (ValueError, TypeError):
-            messages.error(request, gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).'))
+            messages.error(
+                request,
+                gettext_lazy(
+                    'Invalid renewal interval or trust-list limit. Enter a positive interval and non-negative limits.'
+                ),
+            )
             return self._redirect_to_help_page()
 
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
         self.object.opc_ua_gds_push_config.opc_gds_push_renewal_interval = interval
         self.object.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key = regenerate_server_key
+        self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries = max_entries
+        self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size = max_element_size
         self.object.opc_ua_gds_push_config.save(
             update_fields=[
                 'opc_gds_push_enable_periodic_update',
                 'opc_gds_push_renewal_interval',
                 'opc_gds_push_regenerate_server_key',
+                'opc_gds_push_max_trustlist_entries',
+                'opc_gds_push_max_trustlist_element_size',
             ]
         )
 

@@ -1586,6 +1586,43 @@ class TestGdsPushServiceAdditionalCoverage:
         assert merged.IssuerCrls == [other_b, new_a]
         assert merged.SpecifiedLists == int(ua.TrustListMasks.All)
 
+    def test_trustlist_limits_allow_shared_entries_within_bounds(self, mock_opc_device):
+        """Count unique DER objects and accept a trust list within the configured limits."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        config = service.device.opc_ua_gds_push_config
+        config.opc_gds_push_max_trustlist_entries = 2
+        config.opc_gds_push_max_trustlist_element_size = 4
+
+        trustlist = ua.TrustListDataType()
+        trustlist.TrustedCertificates = [b'a']
+        trustlist.IssuerCertificates = [b'a']  # shared object counts once
+        trustlist.TrustedCrls = [b'bb']
+        trustlist.IssuerCrls = []
+
+        service._validate_trustlist_limits(trustlist)
+
+    def test_trustlist_limits_reject_excess_entries(self, mock_opc_device):
+        """Reject a merged trust list that exceeds the device entry limit."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries = 1
+
+        trustlist = ua.TrustListDataType()
+        trustlist.TrustedCertificates = [b'a', b'b']
+
+        with pytest.raises(GdsPushError, match='exceeding the device limit'):
+            service._validate_trustlist_limits(trustlist)
+
+    def test_trustlist_limits_reject_oversized_element(self, mock_opc_device):
+        """Reject a single certificate or CRL larger than the device element limit."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size = 2
+
+        trustlist = ua.TrustListDataType()
+        trustlist.TrustedCertificates = [b'abc']
+
+        with pytest.raises(GdsPushError, match='element limit'):
+            service._validate_trustlist_limits(trustlist)
+
     @pytest.mark.asyncio
     async def test_update_server_certificate_reports_partial_success_as_failure(self, mock_opc_device):
         """Do not report success when only some discovered application groups were updated."""

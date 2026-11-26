@@ -112,8 +112,28 @@ def update_gds_push_server_certificate(device_id: int) -> None:
     if device is None:
         logger.info('Device %s was deleted; skipping server certificate update', device_id)
         return
+
+    service = GdsPushService(device=device)
+    # Section 7.7.2: apply the trust list (with CRLs) before the new certificate.
     try:
-        success, message, certificate_bytes = asyncio.run(GdsPushService(device=device).update_server_certificate())
+        trustlist_success, trustlist_message = asyncio.run(service.update_trustlist())
+        if trustlist_success:
+            logger.info(
+                'Trustlist updated before certificate renewal for device %s: %s',
+                device.common_name,
+                trustlist_message,
+            )
+        else:
+            logger.warning(
+                'Trustlist update before certificate renewal failed for device %s: %s',
+                device.common_name,
+                trustlist_message,
+            )
+    except Exception:
+        logger.exception('Trustlist update before certificate renewal failed for device %s', device.common_name)
+
+    try:
+        success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
     except Exception:
         logger.exception('Server certificate update failed for device %s', device.common_name)
         return

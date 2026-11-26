@@ -223,6 +223,19 @@ class OpcUaGdsPushConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name='opc_ua_gds_push_configs',
     )
+    opc_gds_push_max_trustlist_entries = models.PositiveIntegerField(
+        _('Maximum Trust-List Entries'),
+        default=0,
+        help_text=_(
+            'Maximum number of unique certificates and CRLs in a pushed trust list. '
+            '0 means no limit. Set this for devices with fixed trust-list capacity.'
+        ),
+    )
+    opc_gds_push_max_trustlist_element_size = models.PositiveIntegerField(
+        _('Maximum Trust-List Element Size (bytes)'),
+        default=0,
+        help_text=_('Maximum size of one DER-encoded certificate or CRL in a pushed trust list. 0 means no limit.'),
+    )
 
     opc_gds_push_enable_periodic_update = models.BooleanField(
         _('Enable Periodic Certificate and Trustlist Update'),

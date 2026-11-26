@@ -424,10 +424,26 @@ class TestManualGdsPushTasks:
 
         service.update_trustlist.assert_called_once()
 
-    def test_update_server_certificate_runs_once(self, mock_models):
-        """The task delegates the certificate push to the GDS Push service."""
+    def test_update_server_certificate_runs_trustlist_first(self, mock_models):
+        """Apply the trust list before pushing the certificate."""
         device = mock_models['device']
         service = Mock(spec=GdsPushService)
+        calls = []
+        service.update_trustlist = AsyncMock(side_effect=lambda: calls.append('trustlist') or (True, 'ok'))
+        service.update_server_certificate = AsyncMock(
+            side_effect=lambda: calls.append('certificate') or (True, 'ok', b'certificate')
+        )
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            update_gds_push_server_certificate(device.pk)
+
+        assert calls == ['trustlist', 'certificate']
+
+    def test_update_server_certificate_continues_after_trustlist_failure(self, mock_models):
+        """A failed trust-list update does not block the certificate attempt."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_trustlist = AsyncMock(side_effect=RuntimeError('trustlist failed'))
         service.update_server_certificate = AsyncMock(return_value=(True, 'ok', b'certificate'))
 
         with patch('devices.tasks.GdsPushService', return_value=service):

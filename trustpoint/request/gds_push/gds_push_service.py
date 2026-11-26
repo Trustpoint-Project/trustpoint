@@ -1070,6 +1070,38 @@ class GdsPushService(LoggerMixin):
         merged.IssuerCrls = self._merge_crls(current.IssuerCrls or [], new.IssuerCrls or [])
         return merged
 
+    def _validate_trustlist_limits(self, trustlist: ua.TrustListDataType) -> None:
+        """Reject a trust list that exceeds the configured per-device capacity limits."""
+        device = getattr(self, 'device', None)
+        config = getattr(device, 'opc_ua_gds_push_config', None) if device is not None else None
+        max_entries = getattr(config, 'opc_gds_push_max_trustlist_entries', 0) or 0
+        max_element_size = getattr(config, 'opc_gds_push_max_trustlist_element_size', 0) or 0
+        if not max_entries and not max_element_size:
+            return
+
+        # Count unique DER objects: a certificate shared between lists consumes one slot.
+        entries = {
+            *trustlist.TrustedCertificates,
+            *trustlist.TrustedCrls,
+            *trustlist.IssuerCertificates,
+            *trustlist.IssuerCrls,
+        }
+        if max_entries and len(entries) > max_entries:
+            msg = (
+                f'TrustList has {len(entries)} unique entries, exceeding the device limit of {max_entries}. '
+                'Reduce the CA chain/CRLs or configure a device with more capacity.'
+            )
+            self._raise_gds_push_error(msg)
+
+        if max_element_size:
+            oversized = next((entry for entry in entries if len(entry) > max_element_size), None)
+            if oversized is not None:
+                msg = (
+                    f'TrustList entry of {len(oversized)} bytes exceeds the device element limit '
+                    f'of {max_element_size} bytes.'
+                )
+                self._raise_gds_push_error(msg)
+
     async def _read_trustlist(self, trustlist_node: Node) -> ua.TrustListDataType | None:
         """Read the server's current TrustList, returning None when it cannot be read."""
         file_handle = None
@@ -1132,6 +1164,7 @@ class GdsPushService(LoggerMixin):
                 if current_trustlist is not None
                 else trustlist_data
             )
+            self._validate_trustlist_limits(effective_trustlist)
             serialized_trustlist = struct_to_binary(effective_trustlist)
 
             # Step 1: Open

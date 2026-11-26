@@ -48,7 +48,14 @@ Trustpoint provides operations to:
 
 Trustpoint reads the server's current trustlist and merges its CA chain and CRLs
 into it, so existing trust entries are preserved. The server's rejected
-certificates are read and logged; they are not trusted automatically.
+certificates are read and logged; they are not trusted automatically. A
+certificate renewal applies the trustlist first.
+
+For devices with fixed trustlist capacity, configure **Maximum entries** and
+**Maximum element size** in the renewal settings. Limits count unique
+certificates and CRLs; `0` disables a limit. For example, some S7-1500 firmware
+documents a limit of 62 entries and 4,096 bytes per element; verify the values
+for your device.
 
 Generate CRLs for the CAs included in the trustlist before performing a trustlist
 update. Trustpoint requires CRLs for GDS Push trustlist operations.

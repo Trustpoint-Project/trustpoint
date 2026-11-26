@@ -2094,6 +2094,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Their settings and background tasks remain independent.
         """
         regenerate_key = False
+        max_trustlist_entries = 0
+        max_trustlist_element_size = 0
         if domain_credential:
             route = 'devices:devices_domain_credential_renewal_settings'
             enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
@@ -2114,6 +2116,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
             next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
             regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
+            max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
+            max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
             interval_field = 'opc_gds_push_renewal_interval'
             title = 'Periodic Server Certificate & Trustlist Renewal'
@@ -2161,6 +2165,26 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 '</div>'
             )
 
+        limits_html = ''
+        if not domain_credential:
+            limits_html = (
+                '<hr>'
+                '<h6 class="mt-3">Trust-list limits</h6>'
+                '<label for="maxTrustlistEntries" class="form-label">Maximum entries (0 = no limit)</label>'
+                '<input type="number" class="form-control tp-credential-number" id="maxTrustlistEntries" '
+                '       name="opc_gds_push_max_trustlist_entries" min="0" '
+                f'       value="{max_trustlist_entries}">'
+                '<label for="maxTrustlistElementSize" class="form-label mt-2">'
+                'Maximum element size in bytes (0 = no limit)</label>'
+                '<input type="number" class="form-control tp-credential-number" id="maxTrustlistElementSize" '
+                '       name="opc_gds_push_max_trustlist_element_size" min="0" '
+                f'       value="{max_trustlist_element_size}">'
+                '<div class="form-text text-muted">'
+                '  Counts unique certificates and CRLs. Example: S7-1500 devices may allow 62 entries '
+                'and 4,096 bytes per element; verify against the device documentation.'
+                '</div>'
+            )
+
         form_html = (
             f'<form method="post" action="{renewal_url}">'
             'CSRF_TOKEN_PLACEHOLDER'
@@ -2180,6 +2204,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             f'  {description}'
             '</div>'
             f'{regenerate_html}'
+            f'{limits_html}'
             '</div>'
             '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
             '</form>'
