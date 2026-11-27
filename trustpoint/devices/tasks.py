@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 
 from django.core.cache import cache
@@ -31,6 +32,20 @@ def _acquire_device_lock(device_id: int) -> bool:
 def _release_device_lock(device_id: int) -> None:
     """Release the per-device GDS Push operation lock."""
     cache.delete(f'gds_push_device_{device_id}')
+
+
+def _run_combined_update(service: GdsPushService, attempts: int = 2) -> tuple[bool, str, bytes | None]:
+    """Run the combined workflow, retrying once when another transaction is pending."""
+    success = False
+    message = ''
+    certificate: bytes | None = None
+    for attempt in range(attempts):
+        success, message, certificate = asyncio.run(service.update_trustlist_and_certificate())
+        if success or 'BadTransactionPending' not in message:
+            break
+        logger.warning('Transaction pending; retrying GDS Push update (%d/%d)', attempt + 1, attempts)
+        time.sleep(2)
+    return success, message, certificate
 
 
 def perform_gds_push_update(device_id: int) -> None:
@@ -79,7 +94,7 @@ def perform_gds_push_update(device_id: int) -> None:
             service = GdsPushService(device=device)
             try:
                 if service.server_certificate_needs_renewal():
-                    success, message, _certificate_bytes = asyncio.run(service.update_trustlist_and_certificate())
+                    success, message, _certificate_bytes = _run_combined_update(service)
                 else:
                     success, message = asyncio.run(service.update_trustlist())
                     message = f'certificate not due for renewal; {message}'
@@ -141,7 +156,7 @@ def update_gds_push_server_certificate(device_id: int) -> None:
     try:
         service = GdsPushService(device=device)
         try:
-            success, message, certificate_bytes = asyncio.run(service.update_trustlist_and_certificate())
+            success, message, certificate_bytes = _run_combined_update(service)
         except Exception:
             logger.exception('Combined GDS Push update failed for device %s', device.common_name)
             return

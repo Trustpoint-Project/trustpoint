@@ -73,6 +73,34 @@ class TestPerformGdsPushUpdate:
                 # Both update methods should be called
                 mock_service.update_trustlist_and_certificate.assert_called_once()
 
+    def test_transaction_pending_retries_once(self, mock_models):
+        """Retry once when another session holds an open transaction."""
+        device = mock_models['device']
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.save()
+        device.opc_ua_gds_push_config.save()
+
+        mock_service = Mock(spec=GdsPushService)
+        mock_service.server_certificate_needs_renewal = Mock(return_value=True)
+        mock_service.update_trustlist_and_certificate = AsyncMock(
+            side_effect=[
+                (False, 'BadTransactionPending (0x80...): another session has an open transaction', None),
+                (True, 'Updated', b'certificate'),
+            ]
+        )
+
+        with (
+            patch('devices.tasks.GdsPushService', return_value=mock_service),
+            patch('devices.tasks.time.sleep') as sleep,
+            patch.object(device, 'refresh_from_db'),
+            patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'),
+        ):
+            perform_gds_push_update(device.pk)
+
+        assert mock_service.update_trustlist_and_certificate.await_count == 2
+        sleep.assert_called_once_with(2)
+
     def test_periodic_update_skips_certificate_when_not_due(self, mock_models):
         """Refresh only the trust list when the certificate is outside the threshold."""
         device = mock_models['device']

@@ -1721,6 +1721,58 @@ class TestGdsPushServiceAdditionalCoverage:
             service._validate_trustlist_limits(ua.TrustListDataType(), serialized_size=5)
 
     @pytest.mark.asyncio
+    async def test_read_group_certificates(self, mock_opc_device):
+        """Read the currently assigned certificate per type from GetCertificates."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        method = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=method)
+        server_config.call_method = AsyncMock(
+            return_value=([ua.NodeId(12560), ua.NodeId(12559)], [b'cert-a', b'cert-b'])
+        )
+
+        result = await service._read_group_certificates(client, ua.NodeId(1, 1))
+
+        assert result == {ua.NodeId(12560): b'cert-a', ua.NodeId(12559): b'cert-b'}
+
+    @pytest.mark.asyncio
+    async def test_discovery_prefers_current_certificate_type(self, mock_opc_device):
+        """Renew the certificate slot that is currently assigned."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        purpose_node = Mock()
+        purpose_node.read_value = AsyncMock(return_value=ua.NodeId(12557))
+        types_node = Mock()
+        types_node.read_value = AsyncMock(return_value=[ua.NodeId(12560), ua.NodeId(12559)])
+        group = Mock()
+        group.nodeid = ua.NodeId(1, 2)
+        group.read_browse_name = AsyncMock(return_value=Mock(Name='Application'))
+        group.get_child = AsyncMock(
+            side_effect=lambda name: {'Purpose': purpose_node, 'CertificateTypes': types_node}[name]
+        )
+        groups_node = Mock()
+        groups_node.get_children = AsyncMock(return_value=[group])
+        server_config = Mock()
+        server_config.get_child = AsyncMock(return_value=groups_node)
+        server_node = Mock()
+        server_node.get_child = AsyncMock(return_value=server_config)
+        client = Mock()
+        client.get_node.return_value = server_node
+
+        with patch.object(
+            service,
+            '_read_group_certificates',
+            new_callable=AsyncMock,
+            return_value={ua.NodeId(12559): b'current-cert'},
+        ):
+            groups = await service._discover_certificate_groups(client)
+
+        assert groups[0]['certificate_type_id'] == ua.NodeId(12559)
+
+    @pytest.mark.asyncio
     async def test_read_server_capabilities(self, mock_opc_device):
         """Read the ServerConfiguration properties used by the push workflow."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -1844,6 +1896,7 @@ class TestGdsPushServiceAdditionalCoverage:
         """Do not stage certificates or apply when the trust-list step failed."""
         service = GdsPushService(mock_opc_device, insecure=True)
         client = AsyncMock()
+        client.get_node = Mock(side_effect=RuntimeError('no cancel'))
         with (
             patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
             patch.object(service, '_read_server_capabilities', new_callable=AsyncMock),

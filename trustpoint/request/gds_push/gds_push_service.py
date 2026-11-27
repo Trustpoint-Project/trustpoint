@@ -1055,6 +1055,8 @@ class GdsPushService(LoggerMixin):
 
                     if success_count == len(trustlist_nodes) and self._apply_changes_required:
                         await self._apply_changes(client)
+                    elif success_count != len(trustlist_nodes):
+                        await self._cancel_changes(client)
 
             except Exception:
                 app_uri = 'unknown'
@@ -1411,6 +1413,28 @@ class GdsPushService(LoggerMixin):
             self.logger.info('Server uses a secure element or hardware-backed private keys')
         return capabilities
 
+    async def _read_group_certificates(self, client: Client, certificate_group_id: ua.NodeId) -> dict[ua.NodeId, bytes]:
+        """Return the currently assigned certificates of a group (type -> DER)."""
+        try:
+            server_node = client.get_node('ns=0;i=2253')
+            server_config = await server_node.get_child('ServerConfiguration')
+            method = await server_config.get_child('GetCertificates')
+            result = await server_config.call_method(method.nodeid, certificate_group_id)
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug('GetCertificates unavailable for %s: %s', certificate_group_id, e)
+            return {}
+
+        if not isinstance(result, (list, tuple)) or len(result) < 2:  # noqa: PLR2004
+            return {}
+        type_ids, certificates = result[0], result[1]
+        if not isinstance(type_ids, (list, tuple)) or not isinstance(certificates, (list, tuple)):
+            return {}
+        return {
+            type_id: bytes(certificate)
+            for type_id, certificate in zip(type_ids, certificates, strict=False)
+            if isinstance(type_id, ua.NodeId) and isinstance(certificate, (bytes, bytearray))
+        }
+
     async def _read_rejected_certificates(self, client: Client) -> list[bytes]:
         """Read the server's rejected-certificate list, if available."""
         try:
@@ -1424,6 +1448,16 @@ class GdsPushService(LoggerMixin):
         if not isinstance(result, (list, tuple)):
             return []
         return [bytes(cert) for cert in result if isinstance(cert, (bytes, bytearray))]
+
+    async def _cancel_changes(self, client: Client) -> None:
+        """Discard any pending transaction changes."""
+        try:
+            server_node = client.get_node('ns=0;i=2253')
+            server_config = await server_node.get_child('ServerConfiguration')
+            method = await server_config.get_child('CancelChanges')
+            await server_config.call_method(method.nodeid)
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug('Could not cancel pending changes: %s', e)
 
     async def _apply_changes(self, client: Client) -> None:
         """Apply the pending transaction once for the current workflow."""
@@ -1578,6 +1612,8 @@ class GdsPushService(LoggerMixin):
 
                     if success_count == len(cert_groups) and self._apply_changes_required:
                         await self._apply_changes(client)
+                    elif success_count != len(cert_groups):
+                        await self._cancel_changes(client)
 
             except Exception as connect_error:
                 if 'certificate mismatch' in str(connect_error).lower():
@@ -1640,6 +1676,7 @@ class GdsPushService(LoggerMixin):
                     trustlist_success += int(success)
                     messages.append(f'{"✓" if success else "✗"} trustlist {group_name}')
                 if trustlist_success != len(trustlist_nodes):
+                    await self._cancel_changes(client)
                     return False, f'Trustlist update failed before certificate update: {", ".join(messages)}', None
 
                 config = getattr(self.device, 'opc_ua_gds_push_config', None)
@@ -1661,6 +1698,7 @@ class GdsPushService(LoggerMixin):
                         issued_cert = cert_bytes
                         issuer_chain = chain_bytes
                 if certificate_success != len(cert_groups):
+                    await self._cancel_changes(client)
                     return False, f'Certificate update failed: {", ".join(messages)}', None
 
                 if self._apply_changes_required:
@@ -1714,12 +1752,21 @@ class GdsPushService(LoggerMixin):
                         self.logger.warning('Certificate group %s permits no application certificate type', group_name)
                         continue
 
+                    current_certificates = await self._read_group_certificates(client, group_node.nodeid)
+                    current_type = next(
+                        (type_id for type_id in certificate_types if type_id in current_certificates),
+                        None,
+                    )
+                    if current_type is not None:
+                        certificate_type_id = current_type
+
                     groups.append(
                         {
                             'name': group_name,
                             'node_id': group_node.nodeid,
                             'group_node': group_node,
                             'certificate_type_id': certificate_type_id,
+                            'current_certificates': current_certificates,
                         }
                     )
 
