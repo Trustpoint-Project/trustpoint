@@ -211,13 +211,13 @@ def update_gds_push_server_certificate(device_id: int, initiated_by_id: int | No
             logger.exception('Combined GDS Push update failed for device %s', device.common_name)
             _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
             return
-        if not success or not certificate_bytes:
+        if not success:
             logger.warning('GDS Push update rejected for device %s: %s', device.common_name, message)
             _record_gds_push_audit(device, initiated_by_id, 'failed', message)
             return
         logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
         _record_gds_push_audit(device, initiated_by_id, 'success', message)
-        if device.onboarding_config is not None:
+        if certificate_bytes and device.onboarding_config is not None:
             device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             device.onboarding_config.save(update_fields=['onboarding_status'])
     finally:

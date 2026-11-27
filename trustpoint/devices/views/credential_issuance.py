@@ -6,11 +6,14 @@
 import abc
 import asyncio
 import base64
+import uuid
 from typing import Any, cast
 
+from cryptography import x509
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
@@ -682,11 +685,52 @@ class OpcUaGdsPushTruststoreAssociationView(
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle both association and import form submissions."""
+        """Handle association, upload, and remote certificate retrieval."""
+        if request.POST.get('action') == 'retrieve_server_certificate':
+            return self._handle_retrieve(request)
         if 'trust_store_file' in request.FILES:
             return self._handle_import(request)
 
         return super().post(request, *args, **kwargs)
+
+    def _handle_retrieve(self, request: HttpRequest) -> HttpResponse:
+        """Create a truststore from fresh discovery and select it for association."""
+        if not request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
+        device = self.get_device()
+        association_url = reverse('devices:devices_truststore_association', kwargs={'pk': device.pk})
+        try:
+            service = GdsPushService(device=device, insecure=True)
+            success, message, server_info = asyncio.run(
+                asyncio.wait_for(service.discover_server(), timeout=DISCOVERY_TIMEOUT_SECONDS)
+            )
+            if not success:
+                messages.error(request, f'Failed to retrieve server certificate: {message}')
+                return HttpResponseRedirect(association_url)
+            if not server_info or not server_info.get('server_certificate'):
+                messages.error(request, 'The remote server did not provide a server certificate.')
+                return HttpResponseRedirect(association_url)
+
+            certificate = x509.load_der_x509_certificate(
+                base64.b64decode(server_info['server_certificate'], validate=True)
+            )
+            with transaction.atomic():
+                truststore = TruststoreAddForm.save_trust_store(
+                    unique_name=f'opc-ua-server-{device.pk}-{uuid.uuid4().hex}',
+                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH,
+                    certificates=[certificate],
+                )
+        except TimeoutError:
+            messages.error(request, 'Failed to retrieve server certificate: the request timed out.')
+        except Exception as e:
+            self.logger.exception('Failed to create truststore from remote server certificate')
+            messages.error(request, f'Failed to retrieve server certificate: {e}')
+        else:
+            server_info['device_id'] = device.pk
+            request.session['opc_ua_server_info'] = server_info
+            messages.success(request, 'Created an OPC UA GDS Push truststore. Review it and associate it below.')
+            return HttpResponseRedirect(f'{association_url}?truststore_id={truststore.pk}')
+        return HttpResponseRedirect(association_url)
 
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Handle truststore import from modal."""

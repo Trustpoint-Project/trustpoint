@@ -519,6 +519,23 @@ class TestManualGdsPushTasks:
         assert device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory['certificate_groups'] == []
         assert device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory_updated_at is not None
 
+    def test_deferred_certificate_replacement_is_not_a_failure(self, mock_models):
+        """A verified TrustList push with a deferred certificate is a successful operation."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.update_trustlist_and_certificate = AsyncMock(
+            return_value=(True, 'certificate replacement deferred', None)
+        )
+
+        with (
+            patch('devices.tasks.GdsPushService', return_value=service),
+            patch('devices.tasks.AuditLog.create_entry') as create_entry,
+        ):
+            update_gds_push_server_certificate(device.pk)
+
+        create_entry.assert_called_once()
+        assert create_entry.call_args.kwargs['details']['result'] == 'success'
+
     def test_update_server_certificate_reports_combined_failure(self, mock_models):
         """A combined workflow failure does not mark onboarding complete."""
         device = mock_models['device']

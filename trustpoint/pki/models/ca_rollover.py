@@ -51,6 +51,7 @@ class CaRolloverTrustlistDeployment(models.Model):
         related_name='ca_rollover_trustlist_deployments',
     )
     both_deployed_at = models.DateTimeField(auto_now=True)
+    certificate_replaced_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         """One deployment record per rollover and device."""
@@ -221,9 +222,19 @@ class CaRolloverModel(LoggerMixin, models.Model):
         deployed = set(self.trustlist_deployments.values_list('device_id', flat=True))
         return [device.common_name for device in devices if device.pk not in deployed]
 
-    def all_devices_received_both_trustlists(self) -> bool:
-        """Return whether every GDS Push device in the old CA's domains has both TrustLists."""
-        return not self.missing_trustlist_devices()
+    def missing_certificate_devices(self) -> list[str]:
+        """Return GDS Push devices without a verified replacement server certificate."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+
+        devices = DeviceModel.objects.filter(
+            domain__in=self.old_issuing_ca.domains.all(),
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
+        ).order_by('common_name')
+        deployed = {
+            deployment.device_id: deployment.certificate_replaced_at is not None
+            for deployment in self.trustlist_deployments.all()
+        }
+        return [device.common_name for device in devices if not deployed.get(device.pk, False)]
 
     def schedule_transition_check(self) -> None:
         """Schedule a task to check if this rollover should transition from PREPARATION to TRANSITION.

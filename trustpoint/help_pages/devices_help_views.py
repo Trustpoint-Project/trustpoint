@@ -2196,7 +2196,6 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         regenerate_key = False
         require_crls = False
         renewal_threshold_days = 30
-        server_validation = 'pinned'
         max_trustlist_entries = 0
         max_trustlist_element_size = 0
         if domain_credential:
@@ -2221,7 +2220,6 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
             require_crls = device.opc_ua_gds_push_config.opc_gds_push_require_crls
             renewal_threshold_days = device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days
-            server_validation = device.opc_ua_gds_push_config.opc_gds_push_server_validation
             max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
             max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
@@ -2280,6 +2278,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             for store in TruststoreModel.objects.order_by('unique_name')
         )
         if not domain_credential:
+            server_validation = device.opc_ua_gds_push_config.opc_gds_push_server_validation
             pinned_selected = 'selected' if server_validation == 'pinned' else ''
             ca_selected = 'selected' if server_validation == 'ca' else ''
             limits_html = (

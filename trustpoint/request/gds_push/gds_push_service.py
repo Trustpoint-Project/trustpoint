@@ -315,6 +315,15 @@ class GdsPushService(LoggerMixin):
         )
         return True
 
+    async def _record_rollover_certificate_replacement(self, rollover: CaRolloverModel) -> None:
+        """Mark that this device's server certificate was replaced during the rollover."""
+        await sync_to_async(
+            CaRolloverTrustlistDeployment.objects.filter(
+                rollover=rollover,
+                device=self.device,
+            ).update
+        )(certificate_replaced_at=dt.datetime.now(dt.UTC))
+
     def _setup_secure_mode(self) -> None:
         """Setup credentials and truststore for secure operations.
 
@@ -545,8 +554,11 @@ class GdsPushService(LoggerMixin):
         trusted_crls: list[bytes] = []
         issuer_certificates: list[bytes] = []
         issuer_crls: list[bytes] = []
+        chain_subjects = {certificate.subject for _der, _crl, certificate in chain_material}
         for certificate_der, entry_crl_der, certificate in chain_material:
-            if certificate.subject == certificate.issuer:
+            # A certificate is an anchor when it is self-signed or its issuer is not part of the
+            # supplied chain. The latter covers cross-signed roots and truncated chains.
+            if certificate.subject == certificate.issuer or certificate.issuer not in chain_subjects:
                 trusted_certificates.append(certificate_der)
                 if entry_crl_der is not None:
                     trusted_crls.append(entry_crl_der)
@@ -2347,7 +2359,7 @@ class GdsPushService(LoggerMixin):
     # Public API - Update Server Certificate
     # ========================================================================
 
-    async def update_server_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0912
+    async def update_server_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0912, PLR0915
         """Update server certificate using CSR-based workflow.
 
         Implements OPC UA Part 12 Section 7.7.4 UpdateCertificate workflow.
@@ -2424,6 +2436,8 @@ class GdsPushService(LoggerMixin):
                 verification_note = (
                     '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
                 )
+                if rollover is not None and issued_cert is not None:
+                    await self._record_rollover_certificate_replacement(rollover)
                 msg = (
                     f'Successfully updated {success_count}/{len(cert_groups)} certificate(s): '
                     f'{", ".join(messages)}{verification_note}'
@@ -2527,6 +2541,8 @@ class GdsPushService(LoggerMixin):
         if trustlist_verified:
             if rollover is not None:
                 await self._record_rollover_trustlist_deployment(rollover, effective_by_group)
+                if issued_cert is not None:
+                    await self._record_rollover_certificate_replacement(rollover)
             state_by_group = self._compute_managed_state(
                 current_by_group,
                 dict.fromkeys(effective_by_group, trustlist),
@@ -2759,6 +2775,8 @@ class GdsPushService(LoggerMixin):
             if trustlist_verified and desired is not None:
                 if rollover is not None:
                     await self._record_rollover_trustlist_deployment(rollover, effective_by_group)
+                    if issued_cert is not None:
+                        await self._record_rollover_certificate_replacement(rollover)
                 state_by_group = self._compute_managed_state(
                     current_by_group,
                     dict.fromkeys(effective_by_group, desired),

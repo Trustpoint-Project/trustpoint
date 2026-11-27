@@ -17,6 +17,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('both_deployed_at', models.DateTimeField(auto_now=True)),
+                ('certificate_replaced_at', models.DateTimeField(blank=True, null=True)),
                 (
                     'device',
                     models.ForeignKey(

@@ -8,6 +8,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone
 
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
@@ -224,7 +225,12 @@ class TestCaRolloverServiceFinalize:
         with pytest.raises(CaRolloverError, match='rollover-gate-device'):
             CaRolloverService.finalize_rollover(rollover)
 
-        CaRolloverTrustlistDeployment.objects.create(rollover=rollover, device=device)
+        deployment = CaRolloverTrustlistDeployment.objects.create(rollover=rollover, device=device)
+        with pytest.raises(CaRolloverError, match='server certificate'):
+            CaRolloverService.finalize_rollover(rollover)
+
+        deployment.certificate_replaced_at = timezone.now()
+        deployment.save(update_fields=['certificate_replaced_at'])
         CaRolloverService.finalize_rollover(rollover)
         rollover.refresh_from_db()
         assert rollover.state == CaRolloverState.COMPLETED

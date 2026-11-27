@@ -2886,6 +2886,45 @@ class TestGdsPushServiceAdditionalCoverage:
         await service._validate_csr_identity(csr, expect_new_key=True)
 
     @pytest.mark.asyncio
+    async def test_sign_csr_uses_replacement_ca_domain(self, mock_opc_device):
+        """Issue the rollover certificate through the new CA without saving the domain copy."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        new_ca = CaModel()
+        certificate, csr = self._identity_material()
+        captured: dict[str, Any] = {}
+
+        def process_operation(context: Any) -> None:
+            captured['context'] = context
+            context.issued_certificate = certificate
+
+        mock_opc_device.domain.get_allowed_cert_profile = Mock(return_value=Mock())
+        processor = Mock()
+        processor.process_operation = Mock(side_effect=process_operation)
+
+        with (
+            patch.object(service, '_issuing_ca_for_certificate', new_callable=AsyncMock, return_value=new_ca),
+            patch.object(service, '_validate_csr_identity', new_callable=AsyncMock),
+            patch.object(
+                service,
+                '_get_cryptographic_policy',
+                new_callable=AsyncMock,
+                return_value=(Mock(), CryptographicPolicy()),
+            ),
+            patch.object(service, '_build_ca_chain', new_callable=AsyncMock, return_value=[]),
+            patch('request.gds_push.gds_push_service.ProfileValidator.validate'),
+            patch(
+                'request.gds_push.gds_push_service.CertificateIssueProcessor',
+                return_value=processor,
+            ),
+        ):
+            await service._sign_csr(csr.public_bytes(serialization.Encoding.DER))
+
+        context = captured['context']
+        assert context.domain.issuing_ca is new_ca
+        assert context.domain is not mock_opc_device.domain
+        assert context.domain.pk == mock_opc_device.domain.pk
+
+    @pytest.mark.asyncio
     async def test_sign_csr_rejects_invalid_der(self, mock_opc_device):
         """Wrap malformed server CSR data as a GdsPushError."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -3383,6 +3422,31 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._build_trustlist_for_server()
 
     @pytest.mark.asyncio
+    async def test_build_trustlist_keeps_two_rollover_roots(self, mock_opc_device):
+        """Keep both roots trusted when an active rollover supplies two CA chains."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_require_crls = False
+        old_root, _old_leaf = _make_ca_chain()
+        new_root, _new_leaf = _make_ca_chain()
+
+        def ca_model(certificate: x509.Certificate, name: str) -> Mock:
+            cert_model = Mock()
+            serializer = Mock()
+            serializer.as_crypto = Mock(return_value=certificate)
+            cert_model.get_certificate_serializer.return_value = serializer
+            return Mock(unique_name=name, ca_certificate_model=cert_model, crl_pem='')
+
+        with patch.object(
+            service,
+            '_build_ca_chain',
+            new=AsyncMock(return_value=[ca_model(old_root, 'Old CA'), ca_model(new_root, 'New CA')]),
+        ):
+            trustlist = await service._build_trustlist_for_server()
+
+        assert old_root.public_bytes(serialization.Encoding.DER) in trustlist.TrustedCertificates
+        assert new_root.public_bytes(serialization.Encoding.DER) in trustlist.TrustedCertificates
+
+    @pytest.mark.asyncio
     async def test_build_trustlist_allows_missing_crls_when_optional(self, mock_opc_device, mock_ca_with_crl):
         """Continue without a CRL when the device explicitly permits it."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -3394,9 +3458,9 @@ class TestGdsPushServiceAdditionalCoverage:
         ):
             trustlist = await service._build_trustlist_for_server()
 
-        assert trustlist.TrustedCertificates == []
+        assert len(trustlist.TrustedCertificates) == 1
         assert trustlist.TrustedCrls == []
-        assert len(trustlist.IssuerCertificates) == 1
+        assert trustlist.IssuerCertificates == []
         assert trustlist.IssuerCrls == []
 
     @pytest.mark.asyncio
