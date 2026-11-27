@@ -10,12 +10,14 @@ import logging
 import time
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
 from devices.domain_credential_renewal import renew_gds_push_domain_credential
 from devices.models import DeviceModel, OpcUaGdsPushConfig
+from management.models.audit_log import AuditLog
 from onboarding.enums import OnboardingStatus
 from request.gds_push import GdsPushError, GdsPushService
 
@@ -32,6 +34,26 @@ def _acquire_device_lock(device_id: int) -> bool:
 def _release_device_lock(device_id: int) -> None:
     """Release the per-device GDS Push operation lock."""
     cache.delete(f'gds_push_device_{device_id}')
+
+
+def _record_gds_push_audit(
+    device: DeviceModel,
+    initiated_by_id: int | None,
+    result: str,
+    message: str,
+) -> None:
+    """Record a GDS Push operation with optional user attribution."""
+    try:
+        actor = get_user_model().objects.filter(pk=initiated_by_id).first() if initiated_by_id else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.GDS_PUSH_UPDATE,
+            target=device,
+            target_display=f'Device: {device.common_name}',
+            actor=actor,
+            details={'protocol': 'OPC UA GDS Push', 'result': result, 'message': message[:1000]},
+        )
+    except Exception:
+        logger.exception('Failed to record GDS Push audit entry for device %s', device.pk)
 
 
 def _run_combined_update(service: GdsPushService, attempts: int = 2) -> tuple[bool, str, bytes | None]:
@@ -100,8 +122,10 @@ def perform_gds_push_update(device_id: int) -> None:
                     message = f'certificate not due for renewal; {message}'
                 if success:
                     logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
+                    _record_gds_push_audit(device, None, 'success', message)
                 else:
                     logger.warning('GDS Push update failed for device %s: %s', device.common_name, message)
+                    _record_gds_push_audit(device, None, 'failed', message)
             except GdsPushError:
                 logger.exception('GDS Push error during combined update for device %s', device.common_name)
         except Exception:
@@ -116,7 +140,7 @@ def perform_gds_push_update(device_id: int) -> None:
         _release_device_lock(device_id)
 
 
-def update_gds_push_trustlist(device_id: int) -> None:
+def update_gds_push_trustlist(device_id: int, initiated_by_id: int | None = None) -> None:
     """Push the current trustlist to one OPC UA GDS Push device from a background job."""
     device = DeviceModel.objects.filter(pk=device_id).first()
     if device is None:
@@ -130,18 +154,21 @@ def update_gds_push_trustlist(device_id: int) -> None:
     try:
         try:
             success, message = asyncio.run(GdsPushService(device=device).update_trustlist())
-        except Exception:
+        except Exception as e:
             logger.exception('Trustlist update failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
             return
         if success:
             logger.info('Trustlist updated for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'success', message)
         else:
             logger.warning('Trustlist update rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
     finally:
         _release_device_lock(device_id)
 
 
-def update_gds_push_server_certificate(device_id: int) -> None:
+def update_gds_push_server_certificate(device_id: int, initiated_by_id: int | None = None) -> None:
     """Push a server certificate to one OPC UA GDS Push device from a background job."""
     device = DeviceModel.objects.filter(pk=device_id).first()
     if device is None:
@@ -157,13 +184,16 @@ def update_gds_push_server_certificate(device_id: int) -> None:
         service = GdsPushService(device=device)
         try:
             success, message, certificate_bytes = _run_combined_update(service)
-        except Exception:
+        except Exception as e:
             logger.exception('Combined GDS Push update failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
             return
         if not success or not certificate_bytes:
             logger.warning('GDS Push update rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
             return
         logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
+        _record_gds_push_audit(device, initiated_by_id, 'success', message)
         if device.onboarding_config is not None:
             device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             device.onboarding_config.save(update_fields=['onboarding_status'])

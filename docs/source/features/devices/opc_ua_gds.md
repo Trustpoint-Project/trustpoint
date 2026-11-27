@@ -61,10 +61,12 @@ automatically. A certificate renewal applies the trustlist first.
 
 Before signing the server's CSR, Trustpoint verifies that it keeps the current
 Common Name, ApplicationUri and DNS/IP SANs, and that a requested key rollover
-actually produced a new key. A server that changes these values or ignores the
-rollover is rejected with an explanatory error. After `ApplyChanges`, Trustpoint
-reconnects and reports whether the new certificate/trustlist is usable; a
-reconnect failure does not mark an already-applied update as failed.
+actually produced a new key. A server that changes these values is rejected with
+an explanatory error. If the server cannot generate a key, or ignores a requested
+rollover, Trustpoint generates one and uploads it in a format the server
+advertises (PFX, PEM or PKCS#8). After `ApplyChanges`, Trustpoint reconnects and
+reports whether the new certificate/trustlist is usable; a reconnect failure does
+not mark an already-applied update as failed.
 
 For devices with fixed trustlist capacity, configure **Maximum entries** and
 **Maximum element size** in the renewal settings. Limits count unique

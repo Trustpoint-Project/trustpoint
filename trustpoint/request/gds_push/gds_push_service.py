@@ -9,6 +9,7 @@ import base64
 import contextlib
 import datetime as dt
 import io
+import ipaddress
 import os
 import tempfile
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn
@@ -21,6 +22,8 @@ from asyncua.ua.status_codes import StatusCodes, get_name_and_doc
 from asyncua.ua.ua_binary import struct_from_binary, struct_to_binary
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, NameOID
 from django.db import transaction
@@ -50,6 +53,14 @@ class GdsPushError(Exception):
 
 class CertificateTypes:
     """OPC UA GDS Certificate Types (Section 7.8.4)."""
+
+    ECC_APPLICATION_TYPE_ID = 23537
+    ECC_NIST_P256_TYPE_ID = 23538
+    ECC_NIST_P384_TYPE_ID = 23539
+    ECC_BRAINPOOL_P256_TYPE_ID = 23540
+    ECC_BRAINPOOL_P384_TYPE_ID = 23541
+    ECC_CURVE25519_TYPE_ID = 23542
+    ECC_CURVE448_TYPE_ID = 23543
 
     APPLICATION_CERTIFICATE = ua.NodeId.from_string('ns=0;i=12557')
     HTTPS_CERTIFICATE = ua.NodeId.from_string('ns=0;i=12558')
@@ -1779,7 +1790,94 @@ class GdsPushService(LoggerMixin):
 
         return groups
 
-    async def _update_single_certificate(
+    async def _generate_server_key_and_csr(  # noqa: C901, PLR0912
+        self, certificate_type_id: ua.NodeId
+    ) -> tuple[bytes, Any]:
+        """Generate a key and CSR locally when the server cannot generate a key."""
+        type_identifier = certificate_type_id.Identifier if isinstance(certificate_type_id, ua.NodeId) else None
+        key: Any
+        if type_identifier in {
+            CertificateTypes.ECC_APPLICATION_TYPE_ID,
+            CertificateTypes.ECC_NIST_P256_TYPE_ID,
+        }:
+            key = ec.generate_private_key(ec.SECP256R1())
+        elif type_identifier == CertificateTypes.ECC_NIST_P384_TYPE_ID:
+            key = ec.generate_private_key(ec.SECP384R1())
+        elif type_identifier == CertificateTypes.ECC_BRAINPOOL_P256_TYPE_ID:
+            key = ec.generate_private_key(ec.BrainpoolP256R1())
+        elif type_identifier == CertificateTypes.ECC_BRAINPOOL_P384_TYPE_ID:
+            key = ec.generate_private_key(ec.BrainpoolP384R1())
+        elif type_identifier in {
+            CertificateTypes.ECC_CURVE25519_TYPE_ID,
+            CertificateTypes.ECC_CURVE448_TYPE_ID,
+        }:
+            msg = 'Locally generated Curve25519/Curve448 keys are not supported for OPC UA certificates.'
+            self._raise_gds_push_error(msg)
+        else:
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        common_name = self.device.common_name or 'trustpoint-managed-server'
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
+        application_uri = f'urn:trustpoint:opcua:{getattr(self.device, "rfc_4122_uuid", common_name)}'
+        san_values: list[x509.GeneralName] = [x509.UniformResourceIdentifier(application_uri)]
+        if self.device.ip_address:
+            with contextlib.suppress(ValueError):
+                san_values.append(x509.IPAddress(ipaddress.ip_address(self.device.ip_address)))
+        if common_name:
+            san_values.append(x509.DNSName(common_name))
+
+        if self.server_truststore is not None:
+            try:
+                current = x509.load_der_x509_certificate(await self._get_server_certificate())
+            except GdsPushError:
+                current = None
+            if current is not None:
+                subject = current.subject
+                try:
+                    san = current.extensions.get_extension_for_class(x509.SubjectAlternativeName).value
+                except x509.ExtensionNotFound:
+                    pass
+                else:
+                    san_values = list(san)
+
+        csr = (
+            x509.CertificateSigningRequestBuilder()
+            .subject_name(subject)
+            .add_extension(x509.SubjectAlternativeName(san_values), critical=False)
+            .sign(key, hashes.SHA256())
+        )
+        return csr.public_bytes(serialization.Encoding.DER), key
+
+    def _encode_private_key(self, key: Any, certificate_der: bytes) -> tuple[str, bytes]:
+        """Encode a generated private key in a format advertised by the server."""
+        formats = {str(value).upper() for value in (self._capabilities.get('SupportedPrivateKeyFormats') or [])}
+        if 'PFX' in formats:
+            certificate = x509.load_der_x509_certificate(certificate_der)
+            encoded = pkcs12.serialize_key_and_certificates(
+                None,
+                key,
+                certificate,
+                None,
+                serialization.NoEncryption(),
+            )
+            return 'PFX', encoded
+        if 'PEM' in formats:
+            encoded = key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            )
+            return 'PEM', encoded
+        if 'PKCS8' in formats:
+            encoded = key.private_bytes(
+                serialization.Encoding.DER,
+                serialization.PrivateFormat.PKCS8,
+                serialization.NoEncryption(),
+            )
+            return 'PKCS8', base64.b64encode(encoded)
+        msg = 'Server advertises no supported private key format (PEM, PFX or PKCS8).'
+        raise GdsPushError(msg)
+
+    async def _update_single_certificate(  # noqa: C901, PLR0912
         self,
         client: Client,
         certificate_group_id: ua.NodeId,
@@ -1812,23 +1910,56 @@ class GdsPushService(LoggerMixin):
 
             # Section 7.10.10: the nonce is required only when a new key is generated.
             nonce = os.urandom(32) if regenerate_private_key else b''
-            csr = await server_config.call_method(
-                create_signing_request.nodeid,
-                certificate_group_id,
-                certificate_type_id,
-                None,  # subjectName
-                regenerate_private_key,
-                nonce,
-            )
-            self.logger.info('CSR generated by server (%d bytes)', len(csr))
+            generated_key = None
+            try:
+                csr = await server_config.call_method(
+                    create_signing_request.nodeid,
+                    certificate_group_id,
+                    certificate_type_id,
+                    None,  # subjectName
+                    regenerate_private_key,
+                    nonce,
+                )
+            except Exception as e:
+                if getattr(e, 'code', None) not in (
+                    StatusCodes.BadNotSupported,
+                    StatusCodes.BadInvalidState,
+                ):
+                    raise
+                if not (self._capabilities.get('SupportedPrivateKeyFormats') or []):
+                    raise
+                self.logger.warning(
+                    'Server cannot generate a private key; generating one in Trustpoint and uploading it'
+                )
+                csr, generated_key = await self._generate_server_key_and_csr(certificate_type_id)
+            self.logger.info('CSR generated (%d bytes)', len(csr))
 
             # Step 2: Sign the CSR
             self.logger.info('Signing CSR with domain issuing CA')
-            signed_cert, issuer_chain, _ = await self._sign_csr(csr, expect_new_key=regenerate_private_key)
+            try:
+                signed_cert, issuer_chain, _ = await self._sign_csr(
+                    csr, expect_new_key=regenerate_private_key or generated_key is not None
+                )
+            except GdsPushError as e:
+                if (
+                    generated_key is not None
+                    or not regenerate_private_key
+                    or 'ignored RegeneratePrivateKey' not in str(e)
+                    or not (self._capabilities.get('SupportedPrivateKeyFormats') or [])
+                ):
+                    raise
+                self.logger.warning('Server ignored rollover; generating and uploading a new key')
+                csr, generated_key = await self._generate_server_key_and_csr(certificate_type_id)
+                signed_cert, issuer_chain, _ = await self._sign_csr(csr, expect_new_key=True)
 
             # Step 3: UpdateCertificate
             self.logger.info('Uploading signed certificate via UpdateCertificate')
             update_certificate = await server_config.get_child('UpdateCertificate')
+
+            key_format = ''
+            key_bytes = b''
+            if generated_key is not None:
+                key_format, key_bytes = self._encode_private_key(generated_key, signed_cert)
 
             apply_changes_required = await server_config.call_method(
                 update_certificate.nodeid,
@@ -1836,8 +1967,8 @@ class GdsPushService(LoggerMixin):
                 certificate_type_id,
                 signed_cert,
                 issuer_chain,
-                '',  # privateKeyFormat
-                b'',  # privateKey
+                key_format,
+                key_bytes,
             )
             self.logger.info('Certificate uploaded, ApplyChanges required: %s', apply_changes_required)
 

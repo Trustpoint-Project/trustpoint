@@ -468,6 +468,26 @@ class TestManualGdsPushTasks:
 
         service.update_trustlist_and_certificate.assert_called_once()
 
+    def test_manual_update_records_actor_audit(self, mock_models, django_user_model):
+        """Attribute a manual GDS Push operation to the initiating user."""
+        device = mock_models['device']
+        user = django_user_model.objects.create_user(username='gds-auditor', password='test-password')
+        service = Mock(spec=GdsPushService)
+        service.update_trustlist = AsyncMock(return_value=(True, 'ok'))
+
+        with (
+            patch('devices.tasks.GdsPushService', return_value=service),
+            patch('devices.tasks.AuditLog.create_entry') as create_entry,
+        ):
+            update_gds_push_trustlist(device.pk, user.pk)
+
+        create_entry.assert_called_once()
+        kwargs = create_entry.call_args.kwargs
+        assert kwargs['actor'] == user
+        assert kwargs['target'] == device
+        assert kwargs['operation_type'] == 'GDS_PUSH_UPDATE'
+        assert kwargs['details']['result'] == 'success'
+
     def test_manual_update_skips_when_device_locked(self, mock_models):
         """Do not run a manual GDS Push operation while another one holds the lock."""
         device = mock_models['device']

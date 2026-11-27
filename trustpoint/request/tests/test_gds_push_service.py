@@ -1992,6 +1992,61 @@ class TestGdsPushServiceAdditionalCoverage:
         update_truststore.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_update_single_certificate_uploads_generated_key_when_needed(self, mock_opc_device):
+        """Fall back to a Trustpoint-generated key and upload it as PEM."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service._capabilities = {'SupportedPrivateKeyFormats': ['PEM']}
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=Mock())
+        server_config.call_method = AsyncMock(side_effect=[UaStatusCodeError(StatusCodes.BadNotSupported), False])
+
+        with patch.object(service, '_sign_csr', return_value=(b'signed', [b'issuer'], Mock())):
+            success, cert_data, _chain_data = await service._update_single_certificate(
+                client, ua.NodeId(1, 2), regenerate_private_key=True
+            )
+
+        assert success is True
+        assert cert_data == b'signed'
+        update_args = server_config.call_method.await_args_list[1].args
+        assert update_args[5] == 'PEM'
+        assert update_args[6]
+
+    @pytest.mark.asyncio
+    async def test_update_single_certificate_generates_key_when_rollover_is_ignored(self, mock_opc_device):
+        """Honor rollover by generating and uploading a new key when the server ignores the flag."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service._capabilities = {'SupportedPrivateKeyFormats': ['PEM']}
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=Mock())
+        server_config.call_method = AsyncMock(side_effect=[b'csr', False])
+
+        with patch.object(
+            service,
+            '_sign_csr',
+            side_effect=[
+                GdsPushError('Server ignored RegeneratePrivateKey; the CSR still uses the current public key.'),
+                (b'signed', [b'issuer'], Mock()),
+            ],
+        ):
+            success, cert_data, _chain_data = await service._update_single_certificate(
+                client, ua.NodeId(1, 2), regenerate_private_key=True
+            )
+
+        assert success is True
+        assert cert_data == b'signed'
+        update_args = server_config.call_method.await_args_list[1].args
+        assert update_args[5] == 'PEM'
+        assert update_args[6]
+
+    @pytest.mark.asyncio
     async def test_update_single_certificate_returns_false_on_server_error(self, mock_opc_device):
         """Return a failed result when the server rejects CSR creation."""
         service = GdsPushService(mock_opc_device, insecure=True)

@@ -66,7 +66,7 @@ class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMi
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-        async_task('devices.tasks.update_gds_push_trustlist', self.object.pk)
+        async_task('devices.tasks.update_gds_push_trustlist', self.object.pk, request.user.pk)
         messages.info(request, 'Trustlist update queued.')
 
         return self._redirect_to_help_page()
@@ -106,7 +106,7 @@ class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageC
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-        async_task('devices.tasks.update_gds_push_server_certificate', self.object.pk)
+        async_task('devices.tasks.update_gds_push_server_certificate', self.object.pk, request.user.pk)
         messages.info(request, 'Server certificate update queued.')
 
         return self._redirect_to_help_page()

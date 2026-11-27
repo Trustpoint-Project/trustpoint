@@ -37,7 +37,7 @@ def test_gds_action_requires_permission(client, django_user_model, gds_device, a
         enqueue.assert_not_called()
         user.role.permissions.add(Permission.objects.get(codename=permission))
         assert client.post(url).status_code == 302
-        enqueue.assert_called_once_with(task, gds_device.pk)
+        enqueue.assert_called_once_with(task, gds_device.pk, user.pk)
 
 
 @pytest.fixture

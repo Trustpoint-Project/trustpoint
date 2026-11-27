@@ -147,6 +147,7 @@ class AuditLog(models.Model):
         SCEP_RETRY = 'SCEP_RETRY', _('SCEP: Verified Retry')
         SCEP_REJECTED = 'SCEP_REJECTED', _('SCEP: Request Rejected')
         SCEP_SECRET_PROVISIONED = 'SCEP_SECRET_PROVISIONED', _('SCEP: Enrollment Secret Provisioned')
+        GDS_PUSH_UPDATE = 'GDS_PUSH_UPDATE', _('GDS Push Update')
         EXTERNAL_EVENT = 'EXTERNAL_EVENT', _('External Event')
 
     timestamp = models.DateTimeField(
