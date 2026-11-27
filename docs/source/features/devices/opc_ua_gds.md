@@ -79,11 +79,22 @@ device.
 devices whose CA chain legitimately has no CRL; otherwise strict revocation
 checks can reject later certificate updates.
 
-**Minimum certificate key size** and **Reject SHA-1 signed server certificates**
-preflight the certificate Trustpoint issues before it is uploaded. Set the
-minimum to match the device's validation policy; `0` disables the key-size
-check. The device's own policy is not readable over OPC UA and must be aligned
-out of band.
+Issued certificate key sizes, RSA minima, permitted ECC curves and blocked
+signature hashes come from the central **Security Configuration**
+(`SecurityConfig`). Trustpoint validates the server CSR and the issued
+certificate against that policy before deployment. Do not duplicate those
+settings per device; a stricter device validation policy must be aligned out of
+band because it is not readable over OPC UA.
+
+**OPC UA security policies** are selected from the
+`SecurityConfig.permitted_opc_ua_security_policies` allow-list. Trustpoint reads
+the server's SignAndEncrypt endpoints and picks the strongest permitted policy.
+It never falls back to a disabled or legacy policy. `Basic256` and
+`Basic128Rsa15` must be enabled explicitly and are marked as legacy. If no
+permitted policy is compatible with the server's endpoints and the configured
+RSA/ECC rules, the operation fails with the advertised and permitted lists.
+The Python OPC UA client library does not implement the ECC SecurityPolicies, so
+ECC-only endpoints are reported as incompatible rather than selected.
 
 **Server certificate validation** defaults to pinning the certificate at
 truststore order 0. Select **CA chain validation** when the server certificate

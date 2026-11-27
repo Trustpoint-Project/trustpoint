@@ -1168,7 +1168,6 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert 'name="opc_gds_push_max_trustlist_element_size"' in disabled_section.rows[1].value
         assert 'name="opc_gds_push_require_crls"' in disabled_section.rows[1].value
         assert 'name="opc_gds_push_renewal_threshold_days"' in disabled_section.rows[1].value
-        assert 'name="opc_gds_push_minimum_key_size"' in disabled_section.rows[1].value
-        assert 'name="opc_gds_push_reject_sha1"' in disabled_section.rows[1].value
         assert 'name="opc_gds_push_server_validation"' in disabled_section.rows[1].value
+        assert 'controlled centrally by the Security Configuration' in disabled_section.rows[1].value
         assert mock_reverse.called

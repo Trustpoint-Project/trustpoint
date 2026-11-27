@@ -31,9 +31,25 @@ from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, NameOID
 from django.conf import settings
 from django.db import transaction
+from trustpoint_core.oid import NamedCurve
 
+from management.models.security import SecurityConfig
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
 from pki.models.certificate import RevokedCertificateModel
+from pki.opc_ua_security_policy import (
+    OPC_UA_SECURITY_POLICIES,
+    OPC_UA_SECURITY_POLICY_PREFERENCE,
+    UNSUPPORTED_ECC_SECURITY_POLICIES,
+    OpcUaSecurityPolicyDefinition,
+    policy_name_from_uri,
+)
+from pki.security_policy import (
+    CryptographicPolicy,
+    CryptographicPolicyError,
+    enforce_cryptographic_policy,
+    public_key_facts,
+    signature_facts,
+)
 from pki.services.csr import parse_csr
 from pki.services.revocation import revoke_certificate
 from request.operation_processor import CertificateIssueProcessor
@@ -92,6 +108,12 @@ class CertificateTypes:
     )
     # CertificateGroupType.Purpose values that are not application certificates.
     NON_APPLICATION_PURPOSE_IDS = frozenset({12558, 19323, 19324, 19325, 19326})
+    ECC_TYPE_CURVES: ClassVar[dict[int, NamedCurve]] = {
+        23538: NamedCurve.SECP256R1,
+        23539: NamedCurve.SECP384R1,
+        23540: NamedCurve.BRAINPOOLP256R1,
+        23541: NamedCurve.BRAINPOOLP384R1,
+    }
     # Prefer SHA-256 RSA, then RSA minimum, then the named ECC curves.
     PREFERRED_APPLICATION_TYPE_IDS = (
         12560,
@@ -149,6 +171,7 @@ class GdsPushService(LoggerMixin):
         self._capabilities: dict[str, Any] = {}
         self._apply_changes_required = False
         self._apply_changes_attempted = False
+        self._security_config: SecurityConfig | None = None
         self._validate_device_config()
 
         configured_url = (getattr(device.opc_ua_gds_push_config, 'opc_server_url', '') or '').strip()
@@ -177,6 +200,21 @@ class GdsPushService(LoggerMixin):
                 'or an OPC server URL configured'
             )
             self._raise_gds_push_error(msg)
+
+    async def _get_security_config(self) -> SecurityConfig:
+        """Return the central SecurityConfig, failing closed when it is not initialized."""
+        if self._security_config is not None:
+            return self._security_config
+        config = await sync_to_async(SecurityConfig.objects.first)()
+        if config is None:
+            msg = 'Security configuration is not initialized; OPC UA GDS Push cannot select a policy.'
+            raise GdsPushError(msg)
+        return config
+
+    async def _get_cryptographic_policy(self) -> tuple[SecurityConfig, CryptographicPolicy]:
+        """Return the central SecurityConfig and its immutable cryptographic policy snapshot."""
+        config = await self._get_security_config()
+        return config, CryptographicPolicy.from_config(config)
 
     def _setup_secure_mode(self) -> None:
         """Setup credentials and truststore for secure operations.
@@ -583,27 +621,21 @@ class GdsPushService(LoggerMixin):
         """Return a DN attribute value as text."""
         return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value
 
-    def _validate_issued_certificate_policy(self, certificate: x509.Certificate) -> None:
-        """Preflight the issued certificate against the configured device policy."""
-        config = getattr(self.device, 'opc_ua_gds_push_config', None)
-        minimum_key_size = getattr(config, 'opc_gds_push_minimum_key_size', 0) or 0
-        if minimum_key_size:
-            key_size = getattr(certificate.public_key(), 'key_size', 0)
-            if key_size and key_size < minimum_key_size:
-                msg = (
-                    f'Issued certificate key size {key_size} is below the configured minimum '
-                    f'of {minimum_key_size} bits.'
-                )
-                self._raise_gds_push_error(msg)
-
-        if getattr(config, 'opc_gds_push_reject_sha1', True):
-            try:
-                algorithm = certificate.signature_hash_algorithm
-            except Exception:  # noqa: BLE001
-                algorithm = None
-            if algorithm is not None and algorithm.name.lower() == 'sha1':
-                msg = 'Issued certificate is signed with SHA-1; the device policy requires a stronger hash.'
-                self._raise_gds_push_error(msg)
+    def _validate_issued_certificate_policy(
+        self,
+        certificate: x509.Certificate,
+        policy: CryptographicPolicy,
+    ) -> None:
+        """Preflight the issued certificate against the central SecurityConfig."""
+        try:
+            enforce_cryptographic_policy(
+                policy,
+                key=public_key_facts(certificate.public_key()),
+                signature=signature_facts(certificate),
+            )
+        except CryptographicPolicyError as e:
+            msg = f'Issued certificate violates the active security policy: {e}'
+            self._raise_gds_push_error(msg)
 
     async def _validate_csr_identity(  # noqa: C901
         self,
@@ -623,6 +655,17 @@ class GdsPushService(LoggerMixin):
         common_names = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
         if not common_names:
             msg = 'Server CSR has no Common Name; the certificate must identify the application.'
+            self._raise_gds_push_error(msg)
+
+        _, policy = await self._get_cryptographic_policy()
+        try:
+            enforce_cryptographic_policy(
+                policy,
+                key=public_key_facts(csr.public_key()),
+                signature=signature_facts(csr),
+            )
+        except CryptographicPolicyError as e:
+            msg = f'Server CSR violates the active security policy: {e}'
             self._raise_gds_push_error(msg)
 
         current: x509.Certificate | None = None
@@ -865,39 +908,110 @@ class GdsPushService(LoggerMixin):
         'Basic256': security_policies.SecurityPolicyBasic256,
         'Basic128Rsa15': security_policies.SecurityPolicyBasic128Rsa15,
     }
-    _SECURITY_POLICY_PREFERENCE: ClassVar[tuple[str, ...]] = (
-        'Aes256Sha256RsaPss',
-        'Aes128Sha256RsaOaep',
-        'Basic256Sha256',
-        'Basic256',
-        'Basic128Rsa15',
-    )
 
-    async def _select_security_policy(self) -> tuple[type[security_policies.SecurityPolicy], str]:
-        """Select the strongest SignAndEncrypt policy advertised by the server."""
-        discovery = None
+    def _policy_incompatibility(
+        self,
+        definition: OpcUaSecurityPolicyDefinition,
+        policy: CryptographicPolicy,
+        client_certificate: x509.Certificate,
+        server_certificate: x509.Certificate,
+    ) -> list[str]:
+        """Return why a policy cannot be used with the active SecurityConfig and certificates."""
+        reasons: list[str] = []
+        if definition.requires_rsa:
+            if policy.rsa_minimum_key_size is None:
+                reasons.append('RSA is not permitted by SecurityConfig')
+            for label, certificate in (
+                ('client', client_certificate),
+                ('server', server_certificate),
+            ):
+                public_key = certificate.public_key()
+                if not isinstance(public_key, rsa.RSAPublicKey):
+                    reasons.append(f'{label} certificate is not RSA')
+                elif policy.rsa_minimum_key_size and public_key.key_size < policy.rsa_minimum_key_size:
+                    reasons.append(
+                        f'{label} RSA key is {public_key.key_size} bits, below the '
+                        f'{policy.rsa_minimum_key_size}-bit SecurityConfig minimum'
+                    )
+        if definition.signature_hash_oid in policy.blocked_signature_oids:
+            reasons.append(f'{definition.name} uses a signature hash blocked by SecurityConfig')
+        return reasons
+
+    async def _select_security_policy(
+        self,
+        client_certificate: x509.Certificate,
+        server_certificate: x509.Certificate,
+    ) -> tuple[type[security_policies.SecurityPolicy], str]:
+        """Select the strongest permitted SignAndEncrypt policy; never downgrade silently."""
+        security_config, policy = await self._get_cryptographic_policy()
+        permitted = [
+            name
+            for name in (security_config.permitted_opc_ua_security_policies or [])
+            if name in OPC_UA_SECURITY_POLICIES
+        ]
+        if not permitted:
+            msg = (
+                'No supported OPC UA security policy is permitted by SecurityConfig. '
+                f'Configure one of: {", ".join(OPC_UA_SECURITY_POLICIES)}.'
+            )
+            raise GdsPushError(msg)
+
+        discovery = self._create_insecure_client()
         try:
-            discovery = self._create_insecure_client()
             endpoints = await discovery.connect_and_get_server_endpoints()
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning('Could not discover server security policies: %s', e)
-            return security_policies.SecurityPolicyBasic256Sha256, 'Basic256Sha256'
+        except Exception as e:
+            msg = f'Could not discover the server security policies; refusing to select one blindly: {e}'
+            raise GdsPushError(msg) from e
         finally:
-            if discovery is not None:
-                with contextlib.suppress(Exception):
-                    await discovery.disconnect()
+            with contextlib.suppress(Exception):
+                await discovery.disconnect()
 
-        available = {
-            endpoint.SecurityPolicyUri.rsplit('#', 1)[-1]
+        advertised = {
+            policy_name_from_uri(endpoint.SecurityPolicyUri)
             for endpoint in endpoints
             if endpoint.SecurityMode == ua.MessageSecurityMode.SignAndEncrypt
         }
-        for name in self._SECURITY_POLICY_PREFERENCE:
-            if name in available:
-                return self._SECURITY_POLICIES[name], name
+        if not advertised:
+            msg = 'The server advertises no SignAndEncrypt endpoint; certificate management requires one.'
+            raise GdsPushError(msg)
 
-        self.logger.warning('No supported SignAndEncrypt endpoint advertised; falling back to Basic256Sha256')
-        return security_policies.SecurityPolicyBasic256Sha256, 'Basic256Sha256'
+        rejected: dict[str, list[str]] = {}
+        for definition in OPC_UA_SECURITY_POLICY_PREFERENCE:
+            if definition.name not in permitted or definition.name not in advertised:
+                continue
+            reasons = self._policy_incompatibility(
+                definition,
+                policy,
+                client_certificate,
+                server_certificate,
+            )
+            if reasons:
+                rejected[definition.name] = reasons
+                continue
+            if definition.legacy:
+                self.logger.warning(
+                    'Selecting legacy OPC UA security policy %s because SecurityConfig explicitly permits it',
+                    definition.name,
+                )
+            return self._SECURITY_POLICIES[definition.name], definition.name
+
+        details = [f'permitted={sorted(permitted)}', f'advertised={sorted(advertised)}']
+        if rejected:
+            details.append(
+                'incompatible=' + '; '.join(f'{name}: {", ".join(reasons)}' for name, reasons in rejected.items())
+            )
+        unsupported_ecc = advertised & UNSUPPORTED_ECC_SECURITY_POLICIES
+        if unsupported_ecc:
+            details.append(
+                'the client library does not implement the advertised ECC policies '
+                + ', '.join(sorted(unsupported_ecc))
+            )
+        msg = (
+            'No permitted and compatible SignAndEncrypt OPC UA security policy is available ('
+            + '; '.join(details)
+            + ').'
+        )
+        raise GdsPushError(msg)
 
     async def _create_secure_client(self) -> Client:
         """Create OPC UA client with secure connection.
@@ -917,7 +1031,8 @@ class GdsPushService(LoggerMixin):
 
             application_uri = self._extract_application_uri(client_cert_crypto)
 
-            policy, policy_name = await self._select_security_policy()
+            server_certificate = x509.load_der_x509_certificate(server_cert_der)
+            policy, policy_name = await self._select_security_policy(client_cert_crypto, server_certificate)
             self.logger.info('Setting security policy: %s', policy_name)
 
             client_cert_chain_pem = await self._build_client_certificate_chain()
@@ -1330,16 +1445,60 @@ class GdsPushService(LoggerMixin):
         name = group_name.lower()
         return not any(marker in name for marker in ('https', 'tls', 'usertoken'))
 
+    def _is_certificate_type_permitted(self, type_id: int, security_config: SecurityConfig) -> bool:
+        """Return whether SecurityConfig permits a certificate type's key family and curve."""
+        rsa_permitted = security_config.rsa_minimum_key_size is not None
+        if type_id in {
+            CertificateTypes.RSA_MIN_APPLICATION_CERTIFICATE.Identifier,
+            CertificateTypes.RSA_SHA256_APPLICATION_CERTIFICATE.Identifier,
+        }:
+            return rsa_permitted
+        if type_id == CertificateTypes.APPLICATION_CERTIFICATE.Identifier:
+            return rsa_permitted or self._select_permitted_ecc_curve(security_config) is not None
+        curve = CertificateTypes.ECC_TYPE_CURVES.get(type_id)
+        if curve is None:
+            return False
+        return curve.dotted_string not in (security_config.not_permitted_ecc_curve_oids or [])
+
+    def _permitted_ecc_curve(
+        self,
+        type_id: int,
+        security_config: SecurityConfig,
+    ) -> NamedCurve | None:
+        """Return the curve for an ECC certificate type when SecurityConfig permits it."""
+        curve = CertificateTypes.ECC_TYPE_CURVES.get(type_id)
+        if curve is None:
+            return None
+        if curve.dotted_string in (security_config.not_permitted_ecc_curve_oids or []):
+            return None
+        return curve
+
+    def _select_permitted_ecc_curve(self, security_config: SecurityConfig) -> NamedCurve | None:
+        """Pick the strongest ECC curve permitted by SecurityConfig."""
+        blocked = set(security_config.not_permitted_ecc_curve_oids or [])
+        for curve in (
+            NamedCurve.SECP384R1,
+            NamedCurve.SECP256R1,
+            NamedCurve.BRAINPOOLP384R1,
+            NamedCurve.BRAINPOOLP256R1,
+        ):
+            if curve.dotted_string not in blocked:
+                return curve
+        return None
+
     def _select_application_certificate_type(
         self,
         certificate_types: list[ua.NodeId],
+        security_config: SecurityConfig,
     ) -> ua.NodeId | None:
-        """Pick a permitted application CertificateType, or None when the group has none."""
+        """Pick the strongest application CertificateType permitted by SecurityConfig."""
         available = {type_id for node_id in certificate_types if (type_id := self._node_id_int(node_id)) is not None}
         if not available:
             return CertificateTypes.APPLICATION_CERTIFICATE
         for preferred_type_id in CertificateTypes.PREFERRED_APPLICATION_TYPE_IDS:
-            if preferred_type_id in available:
+            if preferred_type_id in available and self._is_certificate_type_permitted(
+                preferred_type_id, security_config
+            ):
                 return ua.NodeId.from_string(f'ns=0;i={preferred_type_id}')
         return None
 
@@ -2179,6 +2338,7 @@ class GdsPushService(LoggerMixin):
         lists and certificate slots are not overwritten.
         """
         groups = []
+        security_config = await self._get_security_config()
 
         try:
             server_node = client.get_node('ns=0;i=2253')
@@ -2197,9 +2357,12 @@ class GdsPushService(LoggerMixin):
                         self.logger.info('Skipping non-application certificate group: %s', group_name)
                         continue
 
-                    certificate_type_id = self._select_application_certificate_type(certificate_types)
+                    certificate_type_id = self._select_application_certificate_type(certificate_types, security_config)
                     if certificate_type_id is None:
-                        self.logger.warning('Certificate group %s permits no application certificate type', group_name)
+                        self.logger.warning(
+                            'Certificate group %s permits no application certificate type allowed by SecurityConfig',
+                            group_name,
+                        )
                         continue
 
                     current_certificates = await self._read_group_certificates(client, group_node.nodeid)
@@ -2207,7 +2370,12 @@ class GdsPushService(LoggerMixin):
                         (type_id for type_id in certificate_types if type_id in current_certificates),
                         None,
                     )
-                    if current_type is not None:
+                    current_type_id = self._node_id_int(current_type) if current_type is not None else None
+                    if (
+                        current_type is not None
+                        and current_type_id is not None
+                        and self._is_certificate_type_permitted(current_type_id, security_config)
+                    ):
                         certificate_type_id = current_type
 
                     groups.append(
@@ -2301,16 +2469,14 @@ class GdsPushService(LoggerMixin):
         self.logger.info('Read certificate inventory from server')
         return True, 'Certificate inventory read from server', inventory
 
-    async def _generate_server_key_and_csr(  # noqa: C901, PLR0912
+    async def _generate_server_key_and_csr(  # noqa: C901, PLR0912, PLR0915
         self, certificate_type_id: ua.NodeId
     ) -> tuple[bytes, Any]:
         """Generate a key and CSR locally when the server cannot generate a key."""
         type_identifier = certificate_type_id.Identifier if isinstance(certificate_type_id, ua.NodeId) else None
+        security_config = await self._get_security_config()
         key: Any
-        if type_identifier in {
-            CertificateTypes.ECC_APPLICATION_TYPE_ID,
-            CertificateTypes.ECC_NIST_P256_TYPE_ID,
-        }:
+        if type_identifier == CertificateTypes.ECC_NIST_P256_TYPE_ID:
             key = ec.generate_private_key(ec.SECP256R1())
         elif type_identifier == CertificateTypes.ECC_NIST_P384_TYPE_ID:
             key = ec.generate_private_key(ec.SECP384R1())
@@ -2324,8 +2490,19 @@ class GdsPushService(LoggerMixin):
         }:
             msg = 'Locally generated Curve25519/Curve448 keys are not supported for OPC UA certificates.'
             self._raise_gds_push_error(msg)
+        elif type_identifier == CertificateTypes.ECC_APPLICATION_TYPE_ID:
+            curve = self._select_permitted_ecc_curve(security_config)
+            curve_class = curve.curve if curve is not None else None
+            if curve_class is None:
+                msg = 'SecurityConfig permits no ECC curve for a locally generated OPC UA key.'
+                self._raise_gds_push_error(msg)
+            key = ec.generate_private_key(curve_class())
         else:
-            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            minimum = security_config.rsa_minimum_key_size
+            if minimum is None:
+                msg = 'SecurityConfig does not permit RSA, but the selected certificate type requires it.'
+                self._raise_gds_push_error(msg)
+            key = rsa.generate_private_key(public_exponent=65537, key_size=max(2048, minimum or 0))
         common_name = self.device.common_name or 'trustpoint-managed-server'
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
         application_uri = f'urn:trustpoint:opcua:{getattr(self.device, "rfc_4122_uuid", common_name)}'
@@ -2566,7 +2743,8 @@ class GdsPushService(LoggerMixin):
                 self._raise_gds_push_error(msg)
 
             issued_cert = context.issued_certificate
-            self._validate_issued_certificate_policy(issued_cert)
+            _, policy = await self._get_cryptographic_policy()
+            self._validate_issued_certificate_policy(issued_cert, policy)
 
             cert_der = issued_cert.public_bytes(serialization.Encoding.DER)
 

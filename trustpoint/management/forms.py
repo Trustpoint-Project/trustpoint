@@ -56,6 +56,7 @@ from pki.forms.est_request import EstRequestFormMixin
 from pki.key_types import TLS_KEY_TYPE_CHOICES
 from pki.models import CaModel, CertificateProfileModel, CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.opc_ua_security_policy import OPC_UA_SECURITY_POLICY_PREFERENCE
 from pki.services import credential_upload as uploads
 from pki.services.credential_upload import parse_pkcs12
 from pki.services.external_csr import certificate_matches_credential, parse_single_certificate
@@ -305,6 +306,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
                 'permitted_cmp_hmac_algorithms',
+                'permitted_opc_ua_security_policies',
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 HTML(
                     '{% load i18n %}'
@@ -368,6 +370,24 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         ),
     )
 
+    permitted_opc_ua_security_policies = forms.MultipleChoiceField(
+        choices=[
+            (
+                definition.name,
+                f'{definition.name} (legacy)' if definition.legacy else definition.name,
+            )
+            for definition in OPC_UA_SECURITY_POLICY_PREFERENCE
+        ],
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Permitted OPC UA security policies'),
+        help_text=_(
+            'Policies the GDS Push client may negotiate. SignAndEncrypt is always required. '
+            'Legacy Basic256/Basic128Rsa15 are disabled unless explicitly selected and are never '
+            'used as a silent fallback.'
+        ),
+    )
+
     permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
         choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
         widget=forms.CheckboxSelectMultiple,
@@ -403,6 +423,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'allow_self_signed_ca',
             'allow_imported_private_keys',
             'permitted_cmp_hmac_algorithms',
+            'permitted_opc_ua_security_policies',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols',
         ]
@@ -484,6 +505,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             self.add_error(
                 'permitted_cmp_hmac_algorithms',
                 'One or more selected HMAC algorithms are not permitted at this security level.',
+            )
+
+        permitted_policies = set(defaults['permitted_opc_ua_security_policies'])
+        if set(cleaned.get('permitted_opc_ua_security_policies') or []) - permitted_policies:
+            self.add_error(
+                'permitted_opc_ua_security_policies',
+                'One or more selected OPC UA security policies are not permitted at this security level.',
             )
 
         protocol_fields: list[tuple[str, list[int]]] = [

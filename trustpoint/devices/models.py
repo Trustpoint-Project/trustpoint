@@ -288,16 +288,6 @@ class OpcUaGdsPushConfig(models.Model):
             'The trust list is still refreshed each cycle.'
         ),
     )
-    opc_gds_push_minimum_key_size = models.PositiveIntegerField(
-        _('Minimum Certificate Key Size (bits)'),
-        default=0,
-        help_text=_('Reject a newly issued server certificate below this key size. 0 means no check.'),
-    )
-    opc_gds_push_reject_sha1 = models.BooleanField(
-        _('Reject SHA-1 Signed Server Certificates'),
-        default=True,
-        help_text=_('Reject a newly issued server certificate that is signed with SHA-1.'),
-    )
     opc_gds_push_last_update_scheduled_at = models.DateTimeField(
         _('Last Periodic Update Scheduled At'),
         null=True,

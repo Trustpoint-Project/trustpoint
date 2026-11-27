@@ -20,20 +20,36 @@ from asyncua.ua.uaerrors import UaStatusCodeError
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID, ObjectIdentifier
+from cryptography.x509.oid import NameOID, ObjectIdentifier, SignatureAlgorithmOID
 from django.db import IntegrityError
 from django.test import override_settings
+from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from devices.models import DeviceModel
+from management.models import SecurityConfig
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CaModel, CertificateModel, TruststoreModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import TruststoreOrderModel
+from pki.security_policy import CryptographicPolicy
 from pki.tests.credential_helpers import issue_test_credential
 from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
 from pki.util.x509 import CertificateGenerator
-from request.gds_push.gds_push_service import GdsPushError, GdsPushService
+from request.gds_push.gds_push_service import CertificateTypes, GdsPushError, GdsPushService
 from request.tests.test_est_client import certificate_and_csr
+
+
+@pytest.fixture(autouse=True)
+def default_security_config(monkeypatch: pytest.MonkeyPatch) -> SecurityConfig:
+    """Use an in-memory SecurityConfig so async tests do not read the test transaction."""
+    config = SecurityConfig()
+    config.apply_security_settings(save=False)
+
+    async def get_config(service: GdsPushService) -> SecurityConfig:
+        return service._security_config or config
+
+    monkeypatch.setattr(GdsPushService, '_get_security_config', get_config)
+    return config
 
 
 @pytest.fixture
@@ -160,6 +176,16 @@ def mock_domain_credential(mock_opc_device):
     return credential
 
 
+def _set_service_security_config(service: GdsPushService, **overrides: Any) -> SecurityConfig:
+    """Attach an in-memory SecurityConfig with selected overrides to a service."""
+    config = SecurityConfig()
+    config.apply_security_settings(save=False)
+    for field_name, value in overrides.items():
+        setattr(config, field_name, value)
+    service._security_config = config
+    return config
+
+
 def _make_ca_chain() -> tuple[x509.Certificate, x509.Certificate]:
     """Return a self-signed root CA and a leaf issued by it."""
     root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -237,9 +263,8 @@ class TestGdsPushService:
             assert not revoked
 
     def test_issued_certificate_policy_rejects_small_key(self, mock_opc_device):
-        """Reject a certificate below the configured minimum key size."""
+        """Reject a certificate below the SecurityConfig RSA minimum."""
         service = GdsPushService(mock_opc_device, insecure=True)
-        service.device.opc_ua_gds_push_config.opc_gds_push_minimum_key_size = 2048
         key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'server')])
         cert = (
@@ -253,22 +278,23 @@ class TestGdsPushService:
             .sign(key, hashes.SHA256())
         )
 
-        with pytest.raises(GdsPushError, match='below the configured minimum'):
-            service._validate_issued_certificate_policy(cert)
+        with pytest.raises(GdsPushError, match='below the minimum'):
+            service._validate_issued_certificate_policy(cert, CryptographicPolicy(rsa_minimum_key_size=2048))
 
-    def test_issued_certificate_policy_rejects_sha1(self, mock_opc_device):
-        """Reject a SHA-1 signed certificate when the device policy forbids it."""
+    def test_issued_certificate_policy_rejects_blocked_sha1(self, mock_opc_device):
+        """Reject a SHA-1 signed certificate when SecurityConfig blocks SHA-1."""
         service = GdsPushService(mock_opc_device, insecure=True)
         algorithm = Mock()
         algorithm.name = 'sha1'
         cert = Mock()
-        cert.public_key.return_value = Mock(key_size=2048)
+        cert.public_key.return_value = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
         cert.signature_hash_algorithm = algorithm
+        cert.signature_algorithm_oid = SignatureAlgorithmOID.RSA_WITH_SHA1
+        policy = CryptographicPolicy(blocked_signature_oids=frozenset({HashAlgorithm.SHA1.dotted_string}))
 
-        with pytest.raises(GdsPushError, match='SHA-1'):
-            service._validate_issued_certificate_policy(cert)
-        service.device.opc_ua_gds_push_config.opc_gds_push_reject_sha1 = False
-        service._validate_issued_certificate_policy(cert)
+        with pytest.raises(GdsPushError, match='not permitted'):
+            service._validate_issued_certificate_policy(cert, policy)
+        service._validate_issued_certificate_policy(cert, CryptographicPolicy())
 
     @override_settings(GDS_PUSH_CHANNEL_TIMEOUT_MS=1234, GDS_PUSH_SESSION_TIMEOUT_MS=5678)
     def test_create_insecure_client_uses_configured_timeouts(self, mock_opc_device):
@@ -2768,11 +2794,13 @@ class TestGdsPushServiceAdditionalCoverage:
         client = Mock()
         client.set_security = AsyncMock()
         certificate = Mock()
+        _root, leaf = _make_ca_chain()
+        server_der = leaf.public_bytes(serialization.Encoding.DER)
 
         async def load_security_files(*args, **kwargs):
             assert Path(kwargs['certificate']).read_bytes() == b'client-chain'
             assert Path(kwargs['private_key']).read_bytes() == b'private-key'
-            assert Path(kwargs['server_certificate']).read_bytes() == b'server-cert'
+            assert Path(kwargs['server_certificate']).read_bytes() == server_der
             if security_fails:
                 raise RuntimeError('security setup failed')
 
@@ -2783,10 +2811,16 @@ class TestGdsPushServiceAdditionalCoverage:
             patch.object(
                 service, '_get_client_credentials', new_callable=AsyncMock, return_value=(certificate, b'private-key')
             ),
-            patch.object(service, '_get_server_certificate', new_callable=AsyncMock, return_value=b'server-cert'),
+            patch.object(service, '_get_server_certificate', new_callable=AsyncMock, return_value=server_der),
             patch.object(service, '_extract_application_uri', return_value='urn:test:app'),
             patch.object(
                 service, '_build_client_certificate_chain', new_callable=AsyncMock, return_value=b'client-chain'
+            ),
+            patch.object(
+                service,
+                '_select_security_policy',
+                new_callable=AsyncMock,
+                return_value=(security_policies.SecurityPolicyBasic256Sha256, 'Basic256Sha256'),
             ),
         ):
             if security_fails:
@@ -2810,34 +2844,162 @@ class TestGdsPushServiceAdditionalCoverage:
         assert len({path.parent for path in paths}) == 1
         assert not paths[0].parent.exists()
 
-    @pytest.mark.asyncio
-    async def test_select_security_policy_prefers_strongest_aes(self, mock_opc_device):
-        """Choose the strongest SignAndEncrypt policy advertised by the server."""
-        service = GdsPushService(mock_opc_device, insecure=True)
+    @staticmethod
+    def _policy_endpoint(name: str, mode: ua.MessageSecurityMode = ua.MessageSecurityMode.SignAndEncrypt) -> Mock:
+        return Mock(
+            SecurityMode=mode,
+            SecurityPolicyUri=f'http://opcfoundation.org/UA/SecurityPolicy#{name}',
+        )
+
+    @staticmethod
+    def _select_policy_discovery(*endpoints: Mock) -> Mock:
         discovery = Mock()
         discovery.disconnect = AsyncMock()
-        discovery.connect_and_get_server_endpoints = AsyncMock(
-            return_value=[
-                Mock(
-                    SecurityMode=ua.MessageSecurityMode.SignAndEncrypt,
-                    SecurityPolicyUri='http://opcfoundation.org/UA/SecurityPolicy#Basic256Sha256',
-                ),
-                Mock(
-                    SecurityMode=ua.MessageSecurityMode.SignAndEncrypt,
-                    SecurityPolicyUri='http://opcfoundation.org/UA/SecurityPolicy#Aes256Sha256RsaPss',
-                ),
-                Mock(
-                    SecurityMode=ua.MessageSecurityMode.None_,
-                    SecurityPolicyUri='http://opcfoundation.org/UA/SecurityPolicy#None',
-                ),
-            ]
+        discovery.connect_and_get_server_endpoints = AsyncMock(return_value=list(endpoints))
+        return discovery
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_prefers_strongest_permitted(self, mock_opc_device):
+        """Choose the strongest permitted SignAndEncrypt policy advertised by the server."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        discovery = self._select_policy_discovery(
+            self._policy_endpoint('Basic256Sha256'),
+            self._policy_endpoint('Aes128Sha256RsaOaep'),
+            self._policy_endpoint('Aes256Sha256RsaPss'),
+            self._policy_endpoint('None', ua.MessageSecurityMode.None_),
         )
 
         with patch.object(service, '_create_insecure_client', return_value=discovery):
-            policy, name = await service._select_security_policy()
+            policy, name = await service._select_security_policy(leaf, leaf)
 
         assert name == 'Aes256Sha256RsaPss'
         assert policy is security_policies.SecurityPolicyAes256Sha256RsaPss
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_respects_allow_list(self, mock_opc_device):
+        """Do not select a policy disabled in SecurityConfig."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        _set_service_security_config(service, permitted_opc_ua_security_policies=['Basic256Sha256'])
+        discovery = self._select_policy_discovery(
+            self._policy_endpoint('Aes256Sha256RsaPss'),
+            self._policy_endpoint('Basic256Sha256'),
+        )
+
+        with patch.object(service, '_create_insecure_client', return_value=discovery):
+            _policy, name = await service._select_security_policy(leaf, leaf)
+
+        assert name == 'Basic256Sha256'
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_never_falls_back_to_legacy(self, mock_opc_device):
+        """Fail instead of silently downgrading when only a legacy policy is advertised."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        _set_service_security_config(
+            service, permitted_opc_ua_security_policies=['Aes256Sha256RsaPss', 'Basic256Sha256']
+        )
+        discovery = self._select_policy_discovery(self._policy_endpoint('Basic256'))
+
+        with (
+            patch.object(service, '_create_insecure_client', return_value=discovery),
+            pytest.raises(GdsPushError, match='No permitted and compatible'),
+        ):
+            await service._select_security_policy(leaf, leaf)
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_rejects_when_rsa_forbidden(self, mock_opc_device):
+        """Fail when SecurityConfig forbids RSA and no supported ECC policy exists."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        _set_service_security_config(service, rsa_minimum_key_size=None)
+        discovery = self._select_policy_discovery(self._policy_endpoint('Aes256Sha256RsaPss'))
+
+        with (
+            patch.object(service, '_create_insecure_client', return_value=discovery),
+            pytest.raises(GdsPushError, match='RSA is not permitted'),
+        ):
+            await service._select_security_policy(leaf, leaf)
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_reports_unsupported_ecc(self, mock_opc_device):
+        """Report that the client library cannot use ECC-only endpoints."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        discovery = self._select_policy_discovery(self._policy_endpoint('EccNistP256'))
+
+        with (
+            patch.object(service, '_create_insecure_client', return_value=discovery),
+            pytest.raises(GdsPushError, match='ECC policies'),
+        ):
+            await service._select_security_policy(leaf, leaf)
+
+    @pytest.mark.asyncio
+    async def test_select_security_policy_requires_discovery(self, mock_opc_device):
+        """Do not choose a policy blindly when endpoint discovery fails."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        discovery = Mock()
+        discovery.disconnect = AsyncMock()
+        discovery.connect_and_get_server_endpoints = AsyncMock(side_effect=RuntimeError('offline'))
+
+        with (
+            patch.object(service, '_create_insecure_client', return_value=discovery),
+            pytest.raises(GdsPushError, match='refusing to select one blindly'),
+        ):
+            await service._select_security_policy(leaf, leaf)
+
+    def test_certificate_type_selection_skips_rsa_when_forbidden(self, mock_opc_device):
+        """Prefer an ECC certificate type when SecurityConfig forbids RSA."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        config = _set_service_security_config(service, rsa_minimum_key_size=None, not_permitted_ecc_curve_oids=[])
+        types = [
+            ua.NodeId.from_string(f'ns=0;i={CertificateTypes.RSA_SHA256_APPLICATION_CERTIFICATE.Identifier}'),
+            ua.NodeId.from_string(f'ns=0;i={CertificateTypes.ECC_NIST_P384_APPLICATION_CERTIFICATE.Identifier}'),
+        ]
+
+        selected = service._select_application_certificate_type(types, config)
+
+        assert selected == CertificateTypes.ECC_NIST_P384_APPLICATION_CERTIFICATE
+
+    def test_certificate_type_selection_respects_blocked_curve(self, mock_opc_device):
+        """Do not select an ECC certificate type whose curve SecurityConfig blocks."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        config = _set_service_security_config(
+            service,
+            rsa_minimum_key_size=None,
+            not_permitted_ecc_curve_oids=[NamedCurve.SECP384R1.dotted_string],
+        )
+        types = [
+            ua.NodeId.from_string(f'ns=0;i={CertificateTypes.ECC_NIST_P384_APPLICATION_CERTIFICATE.Identifier}'),
+        ]
+
+        assert service._select_application_certificate_type(types, config) is None
+
+    @pytest.mark.asyncio
+    async def test_generated_rsa_key_uses_security_config_minimum(self, mock_opc_device):
+        """Generate the locally uploaded RSA key at the SecurityConfig minimum."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _set_service_security_config(service, rsa_minimum_key_size=3072)
+
+        csr_der, key = await service._generate_server_key_and_csr(
+            ua.NodeId.from_string(f'ns=0;i={CertificateTypes.RSA_SHA256_APPLICATION_CERTIFICATE.Identifier}')
+        )
+
+        assert key.key_size == 3072
+        assert x509.load_der_x509_csr(csr_der).is_signature_valid
+
+    @pytest.mark.asyncio
+    async def test_generated_key_rejects_rsa_when_forbidden(self, mock_opc_device):
+        """Fail rather than generate an RSA key when SecurityConfig forbids RSA."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _set_service_security_config(service, rsa_minimum_key_size=None)
+
+        with pytest.raises(GdsPushError, match='does not permit RSA'):
+            await service._generate_server_key_and_csr(
+                ua.NodeId.from_string(f'ns=0;i={CertificateTypes.RSA_SHA256_APPLICATION_CERTIFICATE.Identifier}')
+            )
 
     @pytest.mark.asyncio
     async def test_verify_server_connection_success(self, mock_opc_device):
