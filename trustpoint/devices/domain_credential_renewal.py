@@ -3,6 +3,8 @@
 
 """Profile-based renewal of the local GDS Push client identity."""
 
+from collections.abc import Callable
+
 from cryptography import x509
 from django.db import transaction
 
@@ -16,8 +18,15 @@ from request.request_context import ManualCredentialRequestContext, ManualIssuan
 
 
 @transaction.atomic
-def renew_gds_push_domain_credential(device: DeviceModel) -> IssuedCredentialModel:
-    """Issue a replacement before revoking the old identity; roll back both on failure."""
+def renew_gds_push_domain_credential(
+    device: DeviceModel,
+    verify: Callable[[IssuedCredentialModel], tuple[bool, str]] | None = None,
+) -> IssuedCredentialModel:
+    """Issue a replacement before revoking the old identity; roll back both on failure.
+
+    The optional verify callback runs after issuance and before revocation. A failed
+    verification rolls back the replacement and leaves the previous credential valid.
+    """
     if device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH or device.domain is None:
         message = 'Domain credential renewal requires an OPC UA GDS Push device with a domain.'
         raise ValueError(message)
@@ -58,6 +67,11 @@ def renew_gds_push_domain_credential(device: DeviceModel) -> IssuedCredentialMod
     if replacement is None or not replacement.is_valid_domain_credential()[0]:
         message = 'Domain credential renewal did not produce a valid replacement.'
         raise ValueError(message)
+    if verify is not None:
+        verified, verification_reason = verify(replacement)
+        if not verified:
+            message = f'Replacement domain credential could not authenticate: {verification_reason}'
+            raise ValueError(message)
     revoked, reason = revoke_primary_certificate(
         previous.pk,
         RevokedCertificateModel.ReasonCode.SUPERSEDED,

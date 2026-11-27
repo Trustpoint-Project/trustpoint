@@ -79,6 +79,12 @@ device.
 devices whose CA chain legitimately has no CRL; otherwise strict revocation
 checks can reject later certificate updates.
 
+**Minimum certificate key size** and **Reject SHA-1 signed server certificates**
+preflight the certificate Trustpoint issues before it is uploaded. Set the
+minimum to match the device's validation policy; `0` disables the key-size
+check. The device's own policy is not readable over OPC UA and must be aligned
+out of band.
+
 Generate CRLs for the CAs included in the trustlist before performing a trustlist
 update. Trustpoint requires CRLs for GDS Push trustlist operations.
 

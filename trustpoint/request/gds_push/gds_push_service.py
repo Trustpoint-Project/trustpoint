@@ -26,6 +26,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID, NameOID
+from django.conf import settings
 from django.db import transaction
 
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
@@ -547,6 +548,28 @@ class GdsPushService(LoggerMixin):
         """Return a DN attribute value as text."""
         return value.decode('utf-8', errors='replace') if isinstance(value, bytes) else value
 
+    def _validate_issued_certificate_policy(self, certificate: x509.Certificate) -> None:
+        """Preflight the issued certificate against the configured device policy."""
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        minimum_key_size = getattr(config, 'opc_gds_push_minimum_key_size', 0) or 0
+        if minimum_key_size:
+            key_size = getattr(certificate.public_key(), 'key_size', 0)
+            if key_size and key_size < minimum_key_size:
+                msg = (
+                    f'Issued certificate key size {key_size} is below the configured minimum '
+                    f'of {minimum_key_size} bits.'
+                )
+                self._raise_gds_push_error(msg)
+
+        if getattr(config, 'opc_gds_push_reject_sha1', True):
+            try:
+                algorithm = certificate.signature_hash_algorithm
+            except Exception:  # noqa: BLE001
+                algorithm = None
+            if algorithm is not None and algorithm.name.lower() == 'sha1':
+                msg = 'Issued certificate is signed with SHA-1; the device policy requires a stronger hash.'
+                self._raise_gds_push_error(msg)
+
     async def _validate_csr_identity(  # noqa: C901
         self,
         csr: x509.CertificateSigningRequest,
@@ -762,8 +785,8 @@ class GdsPushService(LoggerMixin):
 
                 client = Client(self.server_url)
                 client.application_uri = application_uri
-                client.secure_channel_timeout = 10000
-                client.session_timeout = 20000
+                client.secure_channel_timeout = getattr(settings, 'GDS_PUSH_CHANNEL_TIMEOUT_MS', 10000)
+                client.session_timeout = getattr(settings, 'GDS_PUSH_SESSION_TIMEOUT_MS', 20000)
 
                 await client.set_security(
                     policy,
@@ -795,8 +818,8 @@ class GdsPushService(LoggerMixin):
         """
         client = Client(self.server_url)
         client.application_uri = 'urn:trustpoint:gds-push'
-        client.secure_channel_timeout = 10000  # 10 seconds
-        client.session_timeout = 20000  # 20 seconds
+        client.secure_channel_timeout = getattr(settings, 'GDS_PUSH_CHANNEL_TIMEOUT_MS', 10000)
+        client.session_timeout = getattr(settings, 'GDS_PUSH_SESSION_TIMEOUT_MS', 20000)
         return client
 
     async def _log_certificate_mismatch_details(self, client: Client) -> None:
@@ -1216,6 +1239,9 @@ class GdsPushService(LoggerMixin):
         StatusCodes.BadCertificateHostNameInvalid: 'the certificate lacks the host name/IP used to connect',
         StatusCodes.BadApplicationSignatureInvalid: 'the application signature or certificate chain was rejected',
         StatusCodes.BadSecurityChecksFailed: 'the certificate failed the server security checks',
+        StatusCodes.BadCertificatePolicyCheckFailed: (
+            'the server rejected the certificate against its configured key/signature policy'
+        ),
         StatusCodes.BadTransactionPending: 'another session has an open transaction; retry later',
     }
 
@@ -1372,6 +1398,10 @@ class GdsPushService(LoggerMixin):
             not_after = not_after.replace(tzinfo=dt.UTC)
         return bool(not_after <= dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=threshold_days))
 
+    async def verify_connection(self) -> tuple[bool, str]:
+        """Public reconnect check used to validate a replacement client identity."""
+        return await self._verify_server_connection()
+
     async def _verify_server_connection(self) -> tuple[bool, str]:
         """Reconnect with the current truststore to verify the applied identity."""
         try:
@@ -1470,6 +1500,32 @@ class GdsPushService(LoggerMixin):
         except Exception as e:  # noqa: BLE001
             self.logger.debug('Could not cancel pending changes: %s', e)
 
+    async def _read_transaction_diagnostics(self, client: Client) -> str:
+        """Format the server's TransactionDiagnostics for error reporting."""
+        try:
+            server_node = client.get_node('ns=0;i=2253')
+            server_config = await server_node.get_child('ServerConfiguration')
+            diagnostics = await server_config.get_child('TransactionDiagnostics')
+            parts = []
+            for name in (
+                'Result',
+                'StartTime',
+                'EndTime',
+                'AffectedTrustLists',
+                'AffectedCertificateGroups',
+                'Errors',
+            ):
+                try:
+                    value = await (await diagnostics.get_child(name)).read_value()
+                except Exception as e:  # noqa: BLE001
+                    self.logger.debug('TransactionDiagnostics.%s unavailable: %s', name, e)
+                    continue
+                parts.append(f'{name}={value!r}')
+            return ', '.join(parts)
+        except Exception as e:  # noqa: BLE001
+            self.logger.debug('TransactionDiagnostics unavailable: %s', e)
+            return ''
+
     async def _apply_changes(self, client: Client) -> None:
         """Apply the pending transaction once for the current workflow."""
         server_node = client.get_node('ns=0;i=2253')
@@ -1478,9 +1534,14 @@ class GdsPushService(LoggerMixin):
         try:
             await server_config.call_method(method.nodeid)
         except Exception as e:
-            if not self._is_server_halted(e):
-                raise
-            self.logger.info('Server halted to apply changes; reconnect required')
+            if self._is_server_halted(e):
+                self.logger.info('Server halted to apply changes; reconnect required')
+                return
+            diagnostics = await self._read_transaction_diagnostics(client)
+            message = f'ApplyChanges failed: {e}'
+            if diagnostics:
+                message = f'{message}; transaction diagnostics: {diagnostics}'
+            raise GdsPushError(message) from e
 
     def _effective_chunk_size(self, requested: int) -> int:
         """Clamp the write block size to the server's MaxByteStringLength."""
@@ -2055,6 +2116,7 @@ class GdsPushService(LoggerMixin):
                 self._raise_gds_push_error(msg)
 
             issued_cert = context.issued_certificate
+            self._validate_issued_certificate_policy(issued_cert)
 
             cert_der = issued_cert.public_bytes(serialization.Encoding.DER)
 

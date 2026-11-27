@@ -7,7 +7,7 @@ import json
 from datetime import timedelta
 from ipaddress import IPv4Address
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from cryptography import x509
@@ -146,6 +146,14 @@ def test_real_renewal_preserves_identity_and_revokes_previous(renewal_device):
     assert revoked.revocation_reason == RevokedCertificateModel.ReasonCode.SUPERSEDED
 
 
+def test_verification_failure_retains_previous_identity(renewal_device):
+    previous = renewal_device.issued_credentials.get()
+    with pytest.raises(ValueError, match='could not authenticate'):
+        renew_gds_push_domain_credential(renewal_device, verify=lambda _replacement: (False, 'denied'))
+    assert previous.is_valid_domain_credential()[0]
+    assert renewal_device.issued_credentials.count() == 1
+
+
 def test_issuance_failure_retains_previous_identity(renewal_device):
     previous = renewal_device.issued_credentials.get()
     with patch(
@@ -176,7 +184,9 @@ def test_task_renews_and_schedules_next_run(admin_client, renewal_device):
         opc_gds_push_domain_credential_next_renewal_at=timezone.now() - timedelta(seconds=1)
     )
     previous = device.issued_credentials.get()
-    perform_gds_push_domain_credential_renewal(device.pk)
+    with patch('devices.tasks.GdsPushService') as service:
+        service.return_value.verify_connection = AsyncMock(return_value=(True, ''))
+        perform_gds_push_domain_credential_renewal(device.pk)
     device.refresh_from_db()
     assert device.issued_credentials.count() == 2
     assert not previous.is_valid_domain_credential()[0]

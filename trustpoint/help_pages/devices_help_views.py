@@ -2096,6 +2096,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         regenerate_key = False
         require_crls = False
         renewal_threshold_days = 30
+        minimum_key_size = 0
+        reject_sha1 = True
         max_trustlist_entries = 0
         max_trustlist_element_size = 0
         if domain_credential:
@@ -2120,6 +2122,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
             require_crls = device.opc_ua_gds_push_config.opc_gds_push_require_crls
             renewal_threshold_days = device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days
+            minimum_key_size = device.opc_ua_gds_push_config.opc_gds_push_minimum_key_size
+            reject_sha1 = device.opc_ua_gds_push_config.opc_gds_push_reject_sha1
             max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
             max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
@@ -2192,6 +2196,19 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 '         id="requireCrls" name="opc_gds_push_require_crls" '
                 f'         {"checked" if require_crls else ""}>'
                 '  <label class="form-check-label" for="requireCrls">Require CRLs in pushed trust lists</label>'
+                '</div>'
+                '<label for="minimumKeySize" class="form-label mt-3">'
+                'Minimum certificate key size in bits (0 = no check)</label>'
+                '<input type="number" class="form-control tp-credential-number" id="minimumKeySize" '
+                '       name="opc_gds_push_minimum_key_size" min="0" '
+                f'       value="{minimum_key_size}">'
+                '<div class="form-check form-switch mt-2">'
+                '  <input class="form-check-input" type="checkbox" role="switch" '
+                '         id="rejectSha1" name="opc_gds_push_reject_sha1" '
+                f'         {"checked" if reject_sha1 else ""}>'
+                '  <label class="form-check-label" for="rejectSha1">'
+                '    Reject SHA-1 signed server certificates'
+                '  </label>'
                 '</div>'
             )
 

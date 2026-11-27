@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID, ObjectIdentifier
 from django.db import IntegrityError
+from django.test import override_settings
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
@@ -212,6 +213,48 @@ class TestGdsPushService:
         assert service.server_certificate_needs_renewal() is False
         service.device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 400
         assert service.server_certificate_needs_renewal() is True
+
+    def test_issued_certificate_policy_rejects_small_key(self, mock_opc_device):
+        """Reject a certificate below the configured minimum key size."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_minimum_key_size = 2048
+        key = rsa.generate_private_key(public_exponent=65537, key_size=1024)
+        subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'server')])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(subject)
+            .public_key(key.public_key())
+            .serial_number(1)
+            .not_valid_before(datetime.datetime.now(datetime.UTC))
+            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=1))
+            .sign(key, hashes.SHA256())
+        )
+
+        with pytest.raises(GdsPushError, match='below the configured minimum'):
+            service._validate_issued_certificate_policy(cert)
+
+    def test_issued_certificate_policy_rejects_sha1(self, mock_opc_device):
+        """Reject a SHA-1 signed certificate when the device policy forbids it."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        algorithm = Mock()
+        algorithm.name = 'sha1'
+        cert = Mock()
+        cert.public_key.return_value = Mock(key_size=2048)
+        cert.signature_hash_algorithm = algorithm
+
+        with pytest.raises(GdsPushError, match='SHA-1'):
+            service._validate_issued_certificate_policy(cert)
+        service.device.opc_ua_gds_push_config.opc_gds_push_reject_sha1 = False
+        service._validate_issued_certificate_policy(cert)
+
+    @override_settings(GDS_PUSH_CHANNEL_TIMEOUT_MS=1234, GDS_PUSH_SESSION_TIMEOUT_MS=5678)
+    def test_create_insecure_client_uses_configured_timeouts(self, mock_opc_device):
+        """Read channel/session timeouts from settings."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = service._create_insecure_client()
+        assert client.secure_channel_timeout == 1234
+        assert client.session_timeout == 5678
 
     def test_init_uses_configured_server_url(self, mock_opc_device):
         """A configured endpoint URL overrides the IP/port-derived URL."""
@@ -1684,6 +1727,38 @@ class TestGdsPushServiceAdditionalCoverage:
 
         with pytest.raises(GdsPushError, match='element limit'):
             service._validate_trustlist_limits(trustlist)
+
+    @pytest.mark.asyncio
+    async def test_read_transaction_diagnostics(self, mock_opc_device):
+        """Read and format the TransactionDiagnostics object."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = Mock()
+        server_node = Mock()
+        server_config = Mock()
+        diagnostics = Mock()
+        client.get_node.return_value = server_node
+        server_node.get_child = AsyncMock(return_value=server_config)
+        server_config.get_child = AsyncMock(return_value=diagnostics)
+        values = {
+            'Result': 'Good',
+            'StartTime': 'start',
+            'EndTime': 'end',
+            'AffectedTrustLists': ['tl'],
+            'AffectedCertificateGroups': ['cg'],
+            'Errors': [],
+        }
+
+        async def get_child(name: str) -> Mock:
+            node = Mock()
+            node.read_value = AsyncMock(return_value=values[name])
+            return node
+
+        diagnostics.get_child = AsyncMock(side_effect=get_child)
+
+        result = await service._read_transaction_diagnostics(client)
+
+        assert 'Result=' in result
+        assert 'AffectedTrustLists=' in result
 
     def test_effective_chunk_size_clamps_to_server_limit(self, mock_opc_device):
         """Never write a block larger than MaxByteStringLength."""

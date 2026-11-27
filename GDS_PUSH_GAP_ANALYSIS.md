@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 6 (all done)**, **P1 = 13**, **P2 = 21**, **P3 = 7**, **already implemented = 6** — 35 of 53 items are done.
+Findings by priority: **P0 = 6 (all done)**, **P1 = 13**, **P2 = 21**, **P3 = 7**, **already implemented = 6** — 38 of 53 items are done.
 
 The main gaps are:
 
@@ -125,7 +125,7 @@ The main gaps are:
 | METH-05 | — | TrustList write sequence: `Open(Write\|EraseExisting)`, `Write`, `CloseAndUpdate`, `ApplyChanges` (§7.7.3, §7.8.2.2) | Implemented | Correct modes and order (`:944–979`). | Keep. Verify the expected `CloseAndUpdate` status codes against Mantis 9851 (possible incorrect status code in the specification/stack). node-opcua's Part 12 fixes (#1776/#1779) cover `AddCertificate`/`RemoveCertificate` status codes, chain completeness and CRL cleanup; relevant if those methods are added. | [x] |
 | METH-06 | P3 | Write block size must not exceed `MaxByteStringLength` (§7.7.3) | Implemented | `_read_server_capabilities` reads `MaxByteStringLength`; `_effective_chunk_size` clamps the write block to it (0 = no limit, 1024 default). | Done; clamping test added. | [x] |
 | METH-07 | P1 | Read `ServerConfiguration` capabilities: `MaxTrustListSize`, `SupportedPrivateKeyFormats`, `SupportsTransactions`, `InApplicationSetup`, `HasSecureElement`, `ServerCapabilities` (§7.10.3) | Implemented | `_read_server_capabilities` probes all six properties after connect (browse path for `SupportsTransactions`) and stores them on the service. `MaxTrustListSize` is enforced during preflight. | Done; tests cover property reads and max-size rejection. Use the remaining values for key handling/transactions in follow-ups. | [x] |
-| METH-08 | P2 | Use `GetCertificates`, `GetRejectedList`, `TrustList.Read`, `TransactionDiagnostics`, and the staged `DeleteCertificate`/`CreateSelfSignedCertificate` (§7.10.7/8/12/17, §7.8.2.4) | Partial | `GetCertificates` is used with an explicit group ID to read the currently assigned certificates and prefer the existing certificate type; `GetRejectedList` is read/logged; `TrustList.Read` is implemented. `DeleteCertificate`, `CreateSelfSignedCertificate` and `TransactionDiagnostics` remain unused. | Remaining: staged delete/self-signed and transaction diagnostics/inventory UI. | [ ] |
+| METH-08 | P2 | Use `GetCertificates`, `GetRejectedList`, `TrustList.Read`, `TransactionDiagnostics`, and the staged `DeleteCertificate`/`CreateSelfSignedCertificate` (§7.10.7/8/12/17, §7.8.2.4) | Partial | `GetCertificates` reads current certificates and prefers the existing type; `GetRejectedList` and `TrustList.Read` are used; `TransactionDiagnostics` is read and appended to `ApplyChanges` failures. `DeleteCertificate`, `CreateSelfSignedCertificate` and an inventory UI remain. | Remaining: staged delete/self-signed and inventory UI. | [ ] |
 | METH-09 | P2 | Transaction model: `CancelChanges`, single active transaction, `Bad_TransactionPending` (§7.10.2, §7.10.11) | Partial | One transaction per combined workflow; failures call `CancelChanges`; the task retries once after `Bad_TransactionPending`. No `SupportsTransactions` branch, File-API backoff, or staged apply/cancel UI. | Remaining: transaction-support detection, File-API retry/backoff, and apply/cancel UI. | [ ] |
 | METH-10 | P3 | `ManagedApplications` / `ApplicationConfigurationType` (§7.10.14–16) | Missing | Only `ServerConfiguration` is addressed. | Optional feature. Implement only if proxy management of clients/non-UA applications is required. | [ ] |
 | METH-11 | P2 | Audit events `CertificateUpdateRequested` / `CertificateUpdated` (§7.10.26/27) | Implemented | Manual push operations create a `GDS_PUSH_UPDATE` audit entry with actor, device, result and message; periodic operations are recorded with a system actor. The server-side OPC UA audit events remain the server's responsibility. | Done; task audit test added. | [x] |
@@ -154,9 +154,9 @@ The main gaps are:
 | SEC-03 | P1 | Trust bootstrap / TOFU (Annex G.2) | Implemented | Discovery captures the endpoint certificate (base64 in `server_info`), sets `server_certificate_available`, and exposes a download on the truststore-association page for import via the existing truststore modal. `GetRejectedList` is read/logged. Capabilities include `InApplicationSetup` with a warning. | Done; manual import is intentional. Vendor-specific provisioning modes are documented in §8.8. | [x] |
 | SEC-04 | P3 | Client certificate profile (Part 6 §6.2.2) | Implemented | The domain credential profile has RSA key usages and `clientAuth`; runtime validation now also requires `content_commitment` (nonRepudiation), matching the profile. | Done; test certificate updated. | [x] |
 | SEC-05 | P2 | Trustpoint RBAC for push operations | Partial | Audit entries now attribute manual operations to the initiating user. `MANAGE_DEVICES` can still replace a trust list and `ISSUE_CERTIFICATES` can replace a certificate; no four-eyes/approval or permission split. `ApplicationAdmin` grant mapping has no equivalent. | Remaining: approval workflow and finer permission split. | [ ] |
-| SEC-06 | P2 | Domain credential renewal | Partial / risk | Old credential is revoked immediately. If a server trusts only the old client certificate rather than the CA, renewal locks Trustpoint out. | Document the CA-trust requirement; verify connectivity with the new credential before revoking the old one where possible. | [ ] |
+| SEC-06 | P2 | Domain credential renewal | Implemented | The replacement is issued, then used to verify a fresh connection, and only then is the previous credential revoked. A failed verification rolls back the replacement and keeps the old identity. The callback runs inside the renewal transaction (documented shortcut). | Done; direct and task tests cover success/failure. | [x] |
 | SEC-07 | — | Secrets at rest | Implemented | `EncryptedCharField` for the OPC password. | Keep. | [x] |
-| SEC-08 | P2 | Issued certificate must satisfy the server's configured validation policy | Missing | The server validates the pushed certificate against its own `SecurityConfiguration` (minimum key size, SHA-1 rejection, unknown revocation). .NET issue #3931 shows a server rejecting a valid push because the validation path ignored its configured policy. Trustpoint cannot read that policy over OPC UA; the `opc_ua` profile defaults may not match the device. | Make key size/signature algorithm and revocation expectations configurable per device/profile; surface `BadCertificatePolicyCheckFailed` and related status codes with actionable messages; document that the device policy must be aligned out of band. | [ ] |
+| SEC-08 | P2 | Issued certificate must satisfy the server's configured validation policy | Implemented | `opc_gds_push_minimum_key_size` and `opc_gds_push_reject_sha1` preflight the issued certificate; `BadCertificatePolicyCheckFailed` has a dedicated status hint. The server's own policy is still not readable and must be aligned out of band. | Done for client-side preflight; document the out-of-band requirement. | [x] |
 | SEC-09 | P0 | Validate and preserve the CSR/issued certificate identity (SAN, ApplicationUri, CN) | Implemented | `_validate_csr_identity` requires exactly one ApplicationUri SAN, at least one DNS/IP SAN, and a CN; it compares URI, CN and all current DNS/IP SANs with the server's current certificate before signing. Missing/changed identity values are rejected with actionable errors. | Done; tests cover valid identity, missing URI, changed CN and missing DNS SAN. Verify against real vendor CSRs. | [x] |
 
 ### 3.6 Testing and operational robustness
@@ -166,7 +166,7 @@ The main gaps are:
 | OPS-01 | P1 | Unit tests cover real protocol strictness | Implemented | Tests now cover nonce length, group/type filtering, partial results, trust-list limits, SAN/CN identity, policy selection, apply-once and status-code hints. Stack interactions are still mocked; OPS-03 covers real-stack interop. | Done for unit-level strictness. | [x] |
 | OPS-02 | P1 | Integration server behaves like a strict server | Implemented | The test server now rejects a missing/short nonce when key rollover is requested and rejects non-application certificate types. Group filtering is covered by discovery tests. | Done; negative tests added. | [x] |
 | OPS-03 | P1 | Real-stack conformance | Missing | No test against open62541, a commercial GDS, or an AES/ECC-only server. | Add one real-stack interoperability test before claiming conformance. | [ ] |
-| OPS-04 | P2 | Timeouts, retries, concurrency | Partial | Secure client uses fixed 10 s channel / 20 s session timeouts; periodic/manual tasks share a per-device cache lock; the combined workflow retries once on `Bad_TransactionPending`. Timeouts are not configurable and other transient failures are not retried. | Remaining: configurable timeouts and broader bounded retry/backoff. | [ ] |
+| OPS-04 | P2 | Timeouts, retries, concurrency | Implemented | Channel/session timeouts are configurable via `GDS_PUSH_CHANNEL_TIMEOUT_MS` / `GDS_PUSH_SESSION_TIMEOUT_MS`; all tasks share a per-device cache lock; the combined workflow retries once on transaction-pending, timeout, communication/connection/secure-channel errors. | Done. | [x] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Implemented | Discovery now captures the endpoint certificate and exposes it for truststore import; the user guide documents policy negotiation, identity validation, trust-list merge and reconnect verification. | Done. | [x] |
 | OPS-06 | P2 | Preserve OPC UA status codes and distinguish auth/trust/config failures | Implemented | `_status_error` keeps the symbolic name and hex code and adds actionable hints for access denied, insufficient security, untrusted/invalid/revocation-unknown certificates, hostname mismatch, signature failure, security-check failure and pending transactions. | Done; status-code test added. | [x] |
 
@@ -215,7 +215,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **TL-07** Read the current trust list and rejected list; merge before pushing.
 - [x] **TL-02** Correct trusted-vs-issuer list content.
 - [x] **TL-08** Add configurable per-device trust-list capacity and element-size preflight.
-- [ ] **SEC-08** Align issued certificates with the device's configured validation policy (key size, signature, revocation).
+- [x] **SEC-08** Preflight issued certificates against the configured key-size/SHA-1 policy.
 
 **Exit criteria:** certificate replacement works on a server that does not generate keys and on a server that only offers `Aes256Sha256RsaPss`; an existing server key can be kept; apply/restart is treated as success and the new certificate is verified after reconnect; a trust-list push preserves or explicitly replaces the existing list.
 
@@ -226,9 +226,10 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [ ] **WF-02** Add an expiry/CRL-based "update required" decision. (Certificate expiry done; CRL-change detection remains.)
 - [x] **METH-11** Add per-operation audit records and user attribution.
 - [ ] **SEC-05** Add approval/finer permission split for certificate replacement.
+- [x] **SEC-06** Verify the replacement domain credential before revoking the previous one.
 - [x] **METH-13** Verify that key rollover actually changed the public key (or fail/warn).
 - [x] **OPS-06** Preserve OPC UA status codes and separate auth/trust/configuration failures.
-- [ ] **OPS-04** Add timeouts, retries and a per-device operation lock.
+- [x] **OPS-04** Add configurable timeouts, bounded retries and a per-device operation lock.
 - [ ] **OPS-03** Run one real-stack interoperability test against a third independent stack (node-opcua).
 - [ ] **GDS-07** Add LDS/GDS scan-and-stage discovery with `DiscoveryAdmin` approval (conditional).
 
@@ -276,12 +277,13 @@ Before closing the core conformance work, verify each item against a strict serv
 - [ ] Only one `ApplyChanges` is sent per transaction; repeated apply is tested against open62541.
 - [x] The standalone certificate update applies the trust list first.
 - [ ] `UpdateCertificate` succeeds with strict revocation checking when the trust list with CRLs was applied first.
-- [ ] The issued certificate's key size/signature is accepted by the device's configured validation policy.
+- [x] The issued certificate is preflighted against the configured key-size/SHA-1 policy (the device policy itself remains out-of-band).
 - [x] The issued server certificate has the ApplicationUri and DNS/IP SANs required by clients; the CN matches the vendor's rule.
 - [x] A requested key rollover is verified by comparing public keys; an ignored rollover is detected.
 - [x] Failure messages preserve the original OPC UA StatusCode and distinguish auth, trust, hostname and configuration errors.
 - [x] Advertised endpoint URLs preserve host and resource path, and the connection address is configurable separately.
 - [ ] Certificate inventory is read from the device (`GetCertificates`) rather than inferred from the last deployment.
+- [x] A replacement domain credential is verified before the previous credential is revoked.
 
 ## 7. File and line map (current code, 2026-11-27)
 

@@ -669,6 +669,10 @@ class UTCFormatter(logging.Formatter):
     converter = staticmethod(time.gmtime)
 
 
+# OPC UA GDS Push network timeouts (milliseconds).
+GDS_PUSH_CHANNEL_TIMEOUT_MS = int(os.environ.get('GDS_PUSH_CHANNEL_TIMEOUT_MS', '10000'))
+GDS_PUSH_SESSION_TIMEOUT_MS = int(os.environ.get('GDS_PUSH_SESSION_TIMEOUT_MS', '20000'))
+
 LOGGING = {
     'version': 1,  # Indicates the version of the logging configuration
     'disable_existing_loggers': False,  # Don't disable the default Django logging configuration

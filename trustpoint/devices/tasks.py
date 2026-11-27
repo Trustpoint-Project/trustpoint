@@ -63,7 +63,15 @@ def _run_combined_update(service: GdsPushService, attempts: int = 2) -> tuple[bo
     certificate: bytes | None = None
     for attempt in range(attempts):
         success, message, certificate = asyncio.run(service.update_trustlist_and_certificate())
-        if success or 'BadTransactionPending' not in message:
+        retryable = (
+            'BadTransactionPending',
+            'BadTimeout',
+            'BadCommunicationError',
+            'BadConnectionClosed',
+            'BadServerNotConnected',
+            'BadSecureChannelClosed',
+        )
+        if success or not any(name in message for name in retryable):
             break
         logger.warning('Transaction pending; retrying GDS Push update (%d/%d)', attempt + 1, attempts)
         time.sleep(2)
@@ -231,8 +239,13 @@ def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
 
     try:
         try:
+            # shortcut: the replacement is verified over the network inside the atomic renewal;
+            # move issuance/verification/revocation into separate transactions if lock time becomes an issue.
+            def verify_replacement(_replacement: object) -> tuple[bool, str]:
+                return asyncio.run(GdsPushService(device=device).verify_connection())
+
             with transaction.atomic():
-                replacement = renew_gds_push_domain_credential(device)
+                replacement = renew_gds_push_domain_credential(device, verify=verify_replacement)
             logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
         except Exception:
             logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
