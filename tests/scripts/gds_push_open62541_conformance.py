@@ -123,7 +123,7 @@ def _generate_pki(directory: Path) -> dict[str, Any]:
         .add_extension(
             x509.SubjectAlternativeName(
                 [
-                    x509.UniformResourceIdentifier('urn:open62541:gds:conformance-server'),
+                    x509.UniformResourceIdentifier('urn:open62541.unconfigured.application'),
                     x509.DNSName('localhost'),
                     x509.IPAddress(ipaddress.ip_address('127.0.0.1')),
                 ]
@@ -296,7 +296,7 @@ def _wait_for_port(port: int, process: subprocess.Popen[str], timeout: float = 3
     raise TimeoutError(msg)
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0911, PLR0915
     """Run the conformance test and return a process exit code."""
     binary = os.environ.get('OPEN62541_CI_SERVER')
     if not binary:
@@ -313,7 +313,8 @@ def main() -> int:
         pki = _generate_pki(Path(temp_dir))
         port = _free_port()
         log_path = log_dir / 'ci_server.log'
-        with log_path.open('w', encoding='utf-8') as log_file:
+        raw_log_path = Path(temp_dir) / 'ci_server.raw.log'
+        with raw_log_path.open('w', encoding='utf-8') as log_file:
             server = subprocess.Popen(
                 [
                     binary,
@@ -325,6 +326,7 @@ def main() -> int:
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,
+                env={**os.environ, 'UA_LOG_LEVEL': 'ERROR'},
             )
             try:
                 _wait_for_port(port, server)
@@ -353,17 +355,33 @@ def main() -> int:
                 success, message = asyncio.run(service.update_trustlist())
                 print(f'TrustList update: {message}')
                 if not success or 'trust lists verified' not in message:
-                    print(log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
+                    print(raw_log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
                     return 1
 
                 success, message, certificate = asyncio.run(service.reconcile())
                 print(f'Idempotent reconciliation: {message}')
                 if not success or 'No certificate or trust list update required' not in message:
-                    print(log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
+                    print(raw_log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
                     return 1
                 if certificate is not None:
                     print('Reconciliation unexpectedly renewed a certificate', file=sys.stderr)
                     return 1
+
+                # The ci_server example emits expected AccessControl/RBAC setup warnings.
+                # Keep only error/fatal lines in the uploaded artifact; real errors still fail.
+                server_log = raw_log_path.read_text(encoding='utf-8', errors='replace')
+                error_lines = [
+                    line for line in server_log.splitlines() if 'error/' in line.lower() or 'fatal/' in line.lower()
+                ]
+                if error_lines:
+                    log_path.write_text(server_log, encoding='utf-8')
+                    print('\n'.join(error_lines), file=sys.stderr)
+                    print('open62541 logged an error during the conformance test', file=sys.stderr)
+                    return 1
+                log_path.write_text(
+                    'No open62541 error-level messages.\n',
+                    encoding='utf-8',
+                )
             finally:
                 server.terminate()
                 try:
