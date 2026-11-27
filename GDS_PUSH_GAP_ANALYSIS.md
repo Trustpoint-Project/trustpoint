@@ -71,19 +71,17 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 6 (all done)**, **P1 = 13**, **P2 = 21**, **P3 = 7**, **already implemented = 6** — 43 of 53 items are done.
+Findings by priority: **P0 = 6 (all done)**, **P1 = 15**, **P2 = 25**, **P3 = 9**, **already implemented/N/A = 7** — 49 of 62 items are done.
 
-The main gaps are:
+The main remaining gaps are:
 
-1. one explicit method-level violation (`CreateSigningRequest` nonce),
-2. certificate group/certificate type selection based on names instead of the
-   information model, causing wrong or failed updates,
-3. incomplete workflow ordering (standalone certificate update skips the trust list),
-4. no server capability negotiation (security policy, private-key formats,
-   trust-list size limits),
-5. no trust bootstrap / dead discovery-to-truststore path,
-6. optional §7.10 features missing (key upload, rejected list, certificate
-   inventory, transaction diagnostics, managed applications).
+1. conditional §6 GDS directory/discovery and `ManagedApplications` features,
+2. a per-device lock that is not yet shared across worker processes (OPS-07),
+3. stale CA certificates/CRLs retained when a CA is removed or rolled over (TL-09),
+4. no warning for hardware-configuration vs runtime-managed certificate conflicts (WF-12),
+5. real-stack interoperability and CTT-style conformance runs (OPS-03),
+6. optional `CreateSelfSignedCertificate`, Create Endpoint and independent
+   certificate/trust-list scheduling (WF-02/WF-05/WF-07).
 
 ## 3. Findings
 
@@ -113,6 +111,8 @@ The main gaps are:
 | WF-08 | P2 | CertificateManager needs a `DiscoveryUrl`; NAT/hostnames supported (§7.7.2) | Implemented | `opc_server_url` is an optional full endpoint URL (including resource path) that overrides IP/port; discovery returns advertised endpoint URLs unchanged. node-opcua's Erlangen IOP findings drove the separation of connection address and advertised URL. | Done; service/model/form tests added. | [x] |
 | WF-09 | P0 | Workflow consistency | Implemented | `update_trustlist` and `update_server_certificate` now require every targeted group to succeed; partial updates return `False` with a per-group message and do not replace the local truststore. | Done; partial-success tests added. | [x] |
 | WF-10 | P1 | `ApplyChanges` completion and session teardown (§7.10.9, §7.7.2) | Implemented | `BadServerHalted` is treated as success; after a trust-list or certificate update Trustpoint reconnects with the current truststore and reports `reconnect verified` or the verification error without failing the applied update. | Done; verification success/failure tests added. | [x] |
+| WF-11 | P1 | A timeout during `ApplyChanges` must not re-issue a certificate or apply twice | Implemented | The service records when `ApplyChanges` was sent; the retry wrapper stops retrying the whole workflow once that flag is set. Failures before the apply can still be retried, so a lost response cannot silently create a second certificate. | Done; task test covers an apply-time timeout with no retry. | [x] |
+| WF-12 | P2 | Hardware-configuration downloads can conflict with runtime-managed GDS certificates (STEP 7 V21) | Partial | The inventory shows the device's actual certificate slots, but Trustpoint does not compare them with an expected hardware configuration or warn about the conflict. It never restarts or memory-resets equipment. | Add a conflict warning based on the inventory snapshot; document the STEP 7 recovery procedure and keep it manual. | [ ] |
 
 ### 3.3 §7.10 — method-level conformance
 
@@ -131,6 +131,8 @@ The main gaps are:
 | METH-11 | P2 | Audit events `CertificateUpdateRequested` / `CertificateUpdated` (§7.10.26/27) | Implemented | Manual push operations create a `GDS_PUSH_UPDATE` audit entry with actor, device, result and message; periodic operations are recorded with a system actor. The server-side OPC UA audit events remain the server's responsibility. | Done; task audit test added. | [x] |
 | METH-12 | P1 | Reuse the server's existing private key (`RegeneratePrivateKey=FALSE`) (§7.10.10, §7.7.4) | Implemented | New `opc_gds_push_regenerate_server_key` setting defaults to false; `CreateSigningRequest` now sends `False` with an empty nonce unless rollover is enabled, and the nonce is sent only when a new key is requested. UI checkbox added to the renewal settings. | Done; covered by service/config tests. | [x] |
 | METH-13 | P2 | Verify that key rollover actually happened | Implemented | When `regenerate_private_key` is true, `_validate_csr_identity` compares the CSR public key with the current certificate and rejects a reused key. Traeger-style servers that ignore the flag now fail with a clear error instead of silently reusing the key. | Done; tests cover reused and new keys. | [x] |
+| METH-14 | P3 | Handle concatenated DER server certificates (`ExtraData` parse errors) | Implemented | Discovery stores only the leading certificate; CA validation and the secure-client path both peel the leaf before parsing. A chained endpoint no longer produces an invalid downloaded certificate. | Done; regression test uses a leaf+root DER blob. | [x] |
+| METH-15 | P3 | `GetRejectedList` is not scoped to a certificate group | Implemented | The rejected list is read globally and labelled as such in the inventory; it is never attributed to the selected application group. It is only logged/counted. | Done; inventory test. | [x] |
 
 ### 3.4 §7.8 — TrustList content and semantics
 
@@ -144,6 +146,7 @@ The main gaps are:
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Implemented | `_read_server_capabilities` reads `MaxTrustListSize`; `_validate_trustlist_limits` rejects a serialized trust list above it before writing. Device entry/element limits are separate (TL-08). | Done. | [x] |
 | TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. Watch Mantis 9852/9853 (File-API deadlock/concurrent reads) when retrying reads. | [x] |
 | TL-08 | P1 | Device trust-list capacity and element-size preflight | Implemented | Configurable `opc_gds_push_max_trustlist_entries` and `opc_gds_push_max_trustlist_element_size` (0 = no limit) preflight the merged list, counting unique DER objects across all four lists (shared certificates count once) and checking each element size. UI fields and migration 0004_tp_v1_0_2 added. | Done; tests cover shared entries, excess count and oversized elements. Aggregate size remains in TL-06. | [x] |
+| TL-09 | P2 | Remove stale CA certificates and CRLs after CA removal/rollover | Partial | `_merge_trustlists` keeps existing certificates and keeps CRLs for issuers not present in the incoming list, so a CA removed from the domain can remain trusted on the device. This is deliberate merge behavior, but there is no prune/replace option or warning. | Decide the trust-list authority; optionally prune Trustpoint-managed entries or expose an explicit replace mode. Test CA removal and CA rollover. | [ ] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -158,6 +161,8 @@ The main gaps are:
 | SEC-07 | — | Secrets at rest | Implemented | `EncryptedCharField` for the OPC password. | Keep. | [x] |
 | SEC-08 | P2 | Issued certificate must satisfy the server's configured validation policy | Implemented | `opc_gds_push_minimum_key_size` and `opc_gds_push_reject_sha1` preflight the issued certificate; `BadCertificatePolicyCheckFailed` has a dedicated status hint. The server's own policy is still not readable and must be aligned out of band. | Done for client-side preflight; document the out-of-band requirement. | [x] |
 | SEC-09 | P0 | Validate and preserve the CSR/issued certificate identity (SAN, ApplicationUri, CN) | Implemented | `_validate_csr_identity` requires exactly one ApplicationUri SAN, at least one DNS/IP SAN, and a CN; it compares URI, CN and all current DNS/IP SANs with the server's current certificate before signing. Missing/changed identity values are rejected with actionable errors. | Done; tests cover valid identity, missing URI, changed CN and missing DNS SAN. Verify against real vendor CSRs. | [x] |
+| SEC-10 | P2 | Validate CA certificates before deploying them in a trust list | Implemented | `_validate_ca_material` requires `BasicConstraints.ca`, `keyCertSign`, and `cRLSign` when a CRL is included. Invalid CA material is rejected before any trust-list write. | Done; tests cover non-CA certificates and missing keyCertSign. | [x] |
+| SEC-11 | — | Sessions must not remain usable after a client certificate is removed from the trust list | N/A | Trustpoint is the push client; session invalidation is a server-side policy. Trustpoint reconnects after each update and does not assume stored trust changes terminate existing sessions. | Document that trust removal is not a revocation mechanism for live sessions. | [x] |
 
 ### 3.6 Testing and operational robustness
 
@@ -166,9 +171,11 @@ The main gaps are:
 | OPS-01 | P1 | Unit tests cover real protocol strictness | Implemented | Tests now cover nonce length, group/type filtering, partial results, trust-list limits, SAN/CN identity, policy selection, apply-once and status-code hints. Stack interactions are still mocked; OPS-03 covers real-stack interop. | Done for unit-level strictness. | [x] |
 | OPS-02 | P1 | Integration server behaves like a strict server | Implemented | The test server now rejects a missing/short nonce when key rollover is requested and rejects non-application certificate types. Group filtering is covered by discovery tests. | Done; negative tests added. | [x] |
 | OPS-03 | P1 | Real-stack conformance | Missing | No test against open62541, a commercial GDS, or an AES/ECC-only server. | Add one real-stack interoperability test before claiming conformance. | [ ] |
-| OPS-04 | P2 | Timeouts, retries, concurrency | Implemented | Channel/session timeouts are configurable via `GDS_PUSH_CHANNEL_TIMEOUT_MS` / `GDS_PUSH_SESSION_TIMEOUT_MS`; all tasks share a per-device cache lock; the combined workflow retries once on transaction-pending, timeout, communication/connection/secure-channel errors. | Done. | [x] |
+| OPS-04 | P2 | Timeouts, retries, concurrency | Implemented | Channel/session timeouts are configurable via `GDS_PUSH_CHANNEL_TIMEOUT_MS` / `GDS_PUSH_SESSION_TIMEOUT_MS`; all tasks share a per-device cache lock (cross-process limitation in OPS-07); the combined workflow retries once on transaction-pending, timeout, communication/connection/secure-channel errors unless `ApplyChanges` may already have run (WF-11). | Done. | [x] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Implemented | Discovery now captures the endpoint certificate and exposes it for truststore import; the user guide documents policy negotiation, identity validation, trust-list merge and reconnect verification. | Done. | [x] |
 | OPS-06 | P2 | Preserve OPC UA status codes and distinguish auth/trust/config failures | Implemented | `_status_error` keeps the symbolic name and hex code and adds actionable hints for access denied, insufficient security, untrusted/invalid/revocation-unknown certificates, hostname mismatch, signature failure, security-check failure and pending transactions. | Done; status-code test added. | [x] |
+| OPS-07 | P1 | Per-device operation lock must work across worker processes | Partial | The lock uses `cache.add`, but Trustpoint has no `CACHES` override, so the default locmem cache is per process while `Q_CLUSTER.workers` is 2. Two workers can therefore run operations for the same device concurrently (Mantis 9852). | Use a database/advisory lock or a shared cache; add a two-worker concurrency test. | [ ] |
+| OPS-08 | P2 | Diagnose `BadSecurityChecksFailed` and related Siemens failures | Implemented | The hint now names clock skew, signature chain, issuer trust and ApplicationUri; `BadNotSupported` points at key-format support and `BadInvalidArgument` at group/type selection. | Done; hints are covered by the status-code test path. | [x] |
 
 ### 3.7 Reference implementation cross-check (.NET GDS samples)
 
@@ -229,6 +236,14 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **SEC-06** Verify the replacement domain credential before revoking the previous one.
 - [x] **METH-13** Verify that key rollover actually changed the public key (or fail/warn).
 - [x] **OPS-06** Preserve OPC UA status codes and separate auth/trust/configuration failures.
+- [x] **SEC-10** Validate CA BasicConstraints, keyCertSign and cRLSign before deployment.
+- [x] **METH-14** Reduce chained DER server certificates to the leaf during discovery and validation.
+- [x] **METH-15** Treat `GetRejectedList` as global and never attribute it to a selected group.
+- [x] **OPS-08** Diagnose clock, signature, issuer, URI, key-format and group/type failures.
+- [x] **WF-11** Do not retry after `ApplyChanges` may already have been applied.
+- [ ] **OPS-07** Make the per-device operation lock effective across worker processes.
+- [ ] **TL-09** Decide prune/replace behavior for stale CA certificates and CRLs.
+- [ ] **WF-12** Warn about hardware-configuration vs runtime-managed certificate conflicts.
 - [x] **OPS-04** Add configurable timeouts, bounded retries and a per-device operation lock.
 - [ ] **OPS-03** Run one real-stack interoperability test against a third independent stack (node-opcua).
 - [ ] **GDS-07** Add LDS/GDS scan-and-stage discovery with `DiscoveryAdmin` approval (conditional).
@@ -274,7 +289,7 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] Trust-list entry count and per-element DER size are checked against the configured device limits before writing.
 - [x] Aggregate serialized size is checked against `MaxTrustListSize` before writing.
 - [x] No CA certificate is duplicated between trusted and issuer lists.
-- [ ] Only one `ApplyChanges` is sent per transaction; repeated apply is tested against open62541.
+- [x] Only one `ApplyChanges` is sent per transaction; a timeout after the apply is not retried as a new issuance (WF-11). Repeated apply against open62541 remains part of OPS-03.
 - [x] The standalone certificate update applies the trust list first.
 - [ ] `UpdateCertificate` succeeds with strict revocation checking when the trust list with CRLs was applied first.
 - [x] The issued certificate is preflighted against the configured key-size/SHA-1 policy (the device policy itself remains out-of-band).
@@ -284,6 +299,12 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] Advertised endpoint URLs preserve host and resource path, and the connection address is configurable separately.
 - [x] Certificate inventory is read from the device (`GetCertificates`) and shown in the help page.
 - [x] A replacement domain credential is verified before the previous credential is revoked.
+- [x] A chained DER endpoint certificate is reduced to its leaf before storing or parsing it.
+- [x] CA material is rejected unless it is a CA and permits certificate and CRL signing.
+- [x] A timeout after `ApplyChanges` does not trigger a second certificate issuance or apply.
+- [ ] Two worker processes cannot run GDS Push for the same device concurrently (OPS-07).
+- [ ] CA removal/rollover does not leave stale CA certificates or CRLs on the device (TL-09).
+- [ ] A hardware-configuration vs runtime-managed certificate conflict is detected and reported (WF-12).
 
 ## 7. File and line map (current code, 2026-11-27)
 
@@ -521,23 +542,123 @@ The following is the consolidated backlog suggested by the vendor/IOP sources. I
 
 | Priority | Topic | Mapped items | Status |
 |---|---|---|---|
-| P0 | Secure initial trust establishment | SEC-03, GDS-07 | Open |
-| P0 | CSR and issued-certificate validation | SEC-09 | Open |
-| P0 | ApplicationUri and SAN preservation | SEC-09 | Open |
-| P0 | Transaction lifecycle and failure recovery | WF-04, WF-10, METH-09 | Partial |
-| P0 | Certificate-chain construction and validation | TL-02 (done), SEC-02 | Partial |
+| P0 | Secure initial trust establishment | SEC-03, GDS-07 | Partial (SEC-03 done; GDS-07 conditional) |
+| P0 | CSR and issued-certificate validation | SEC-09 | Done |
+| P0 | ApplicationUri and SAN preservation | SEC-09 | Done |
+| P0 | Transaction lifecycle and failure recovery | WF-04, WF-10, METH-09, WF-11 | Done |
+| P0 | Certificate-chain construction and validation | TL-02, SEC-02, SEC-10 | Done |
 | P0 | TrustList merging and preservation | TL-07, TL-04 | Done |
-| P0 | Certificate activation verification after `ApplyChanges` | WF-10 | Partial |
+| P0 | Certificate activation verification after `ApplyChanges` | WF-10 | Done |
 | P1 | Dynamic certificate-group/type discovery | WF-03, METH-02 | Done |
 | P1 | Independent certificate/trust-list/CRL scheduling | WF-02 | Open |
-| P1 | Idempotent operations and retry handling | OPS-04, METH-09 | Open |
+| P1 | Idempotent operations and retry handling | OPS-04, METH-09, WF-11 | Done |
 | P1 | Server-side vs externally generated keys | METH-04, WF-06, METH-12 | Done |
-| P1 | Concurrent certificate-management operations | OPS-04 | Open |
+| P1 | Concurrent certificate-management operations | OPS-04, OPS-07 | Partial |
 | P1 | Vendor-specific resource limitations | TL-08, TL-06 | Done |
 | P1 | Support for older Part 12 implementations | — | Not yet specified; add if older servers are in scope |
 | P2 | `CertificateExpirationAlarm` integration | WF-02 | Open |
-| P2 | `TransactionDiagnostics` integration | METH-08 | Open |
+| P2 | `TransactionDiagnostics` integration | METH-08 | Done |
 | P2 | `ApplicationConfiguration` proxy support | METH-10 | Open |
 | P2 | Part 21 automated provisioning | — | Out of scope for certificate push |
 
 **Reading rule:** sources explain failures and vendor behavior; they do not override the normative specification. Keep vendor limits and workarounds in configuration, not in the generic GDS protocol layer.
+
+## 9. Additional defect validation (2026-11-27)
+
+This pass validated the defect catalogue below against the current implementation.
+`Covered` means existing code/tests already handle the case, `Fixed` means this
+pass added a guard or test, `Open` maps to a new finding above, and `N/A` means
+the defect is server-side or outside a CertificateManager client. Upstream
+issue states are as reported by the catalogue and were not independently
+re-checked.
+
+### 9.1 Certificate issuance and validation
+
+| Reported defect | Source | Result | Trustpoint evidence / action |
+|---|---|---|---|
+| Strict revocation checking prevents activation when the CRL is missing | .NET #2552 | Covered | WF-01 builds the trust list with CRLs before the certificate and applies both in one transaction; TL-05 requires CRLs by default. |
+| `UpdateCertificate` ignores the configured security policy | .NET #3931 / PR #3936 | Covered | SEC-08 preflights key size and SHA-1; the server's own policy is not readable and remains an out-of-band alignment item. |
+| Insufficient CA `KeyUsage` validation | .NET PR #3948 | Fixed | SEC-10 validates `BasicConstraints.ca`, `keyCertSign` and `cRLSign` before a trust-list write. |
+| Application-certificate renewal ignores configured trust stores | .NET PR #4678 | Covered | Renewal uses the same `opc_trust_store`; CA mode validates the current server certificate against that store. |
+| Incorrect certificate-store resolution in scoped operations | .NET PR #4726 | N/A | Trustpoint addresses discovered `ServerConfiguration/CertificateGroups`, not Windows certificate stores; WF-03/METH-02 select the group/type. |
+| Windows certificate-store private keys are not exportable | .NET Samples #644 | Covered | METH-12/WF-06 reuse the server key and use CSR-based issuance; no export of a device-private key is required. |
+
+### 9.2 Transactions, concurrency and state management
+
+| Reported defect | Source | Result | Trustpoint evidence / action |
+|---|---|---|---|
+| Ambiguous TrustList transaction start around `Open`/`CloseAndUpdate` | Mantis #9850 | Partial | WF-04/METH-09 use one session and one `ApplyChanges`; add a strict-server test for the Open → Write → CloseAndUpdate → Apply boundary. |
+| Specification references a nonexistent status code | Mantis #9851 | Partial | Status codes are preserved and `BadInvalidState`/`BadBusy`/timeouts are retryable; the exact `CloseAndUpdate` code expected by each stack is still vendor-checked at runtime. |
+| Concurrent TrustList operations can deadlock | Mantis #9852 | Open | OPS-07: the per-device lock is process-local under the default locmem cache with two Q workers. Use a shared/DB lock and add a two-worker test. |
+| Concurrent reads / file-handle cleanup | Mantis #9853 | Covered | `_read_trustlist` always closes the handle in `finally` and retries transient file-API errors with backoff. Concurrency still depends on OPS-07. |
+| `RemoveCertificate` can leave an inconsistent TrustList | Mantis #9854 | N/A | Trustpoint does not call `RemoveCertificate`; `UpdateCertificate` replaces the active slot. Revisit if removal is added. |
+| Repeated `ApplyChanges` causes a server memory-management failure | open62541 #8093 | Fixed | WF-11 records that `ApplyChanges` was attempted and stops the retry wrapper from issuing/applying a second certificate. |
+| Failed keep-alive causes a GDS client deadlock | .NET PR #4623 | Partial | Channel/session timeouts are configurable and reconnect verification is performed, but there is no real-stack keep-alive interruption test (OPS-03). |
+
+### 9.3 CSR, ApplicationUri and endpoint handling
+
+| Reported defect | Source | Result | Trustpoint evidence / action |
+|---|---|---|---|
+| `CreateSigningRequest` omits DNS/IP SANs | node-opcua IOP | Covered | SEC-09 validates and preserves URI/DNS/IP SANs; the locally generated CSR fallback includes ApplicationUri, IP and DNS. |
+| A CA-issued certificate chain breaks `ActivateSession` | node-opcua IOP / asyncua | Fixed | METH-14 peels the leading certificate from concatenated DER in discovery and CA validation; the client chain is built separately. |
+| Containerized server advertises an unreachable hostname | node-opcua IOP | Covered | WF-08: `opc_server_url` overrides the connection address while certificate identity remains verified. |
+| Advertised endpoint loses its resource path | node-opcua IOP | Covered | WF-08 preserves full endpoint URLs including `/application/server`. |
+| Connection failure hides the actual status code | node-opcua IOP | Covered | OPS-06 keeps the symbolic name and hex code and adds operation-stage hints. |
+| TrustList operations return incorrect status codes | node-opcua IOP | Partial | Method-specific errors are preserved and classified; Mantis 9851 is not independently resolved for every stack. |
+| Incomplete certificate chains are accepted into the TrustList | node-opcua IOP | Fixed | SEC-10 rejects CA material that cannot sign certificates; TL-03 builds the full chain from the issuing CA to the root. |
+| CRLs are not cleaned up after CA removal/rollover | node-opcua IOP | Open | TL-09: merge keeps CRLs for issuers not in the incoming list, so removed CAs can remain. Decide prune/replace semantics. |
+| `GetRejectedList` returns certificates outside the intended scope | node-opcua IOP | Covered | METH-15 reads it globally, labels it as global and never attributes entries to the selected group. |
+| Concatenated DER causes an `ExtraData` parse error | asyncua | Fixed | METH-14 applies leaf extraction to discovery and CA validation. |
+
+### 9.4 User-reported symptoms
+
+| Reported problem | Source | Result | Trustpoint evidence / action |
+|---|---|---|---|
+| No communication after apparently successful enrollment | OPC Foundation forum, 2022 | Covered | WF-10 reconnects with the new truststore and reports verification failure without marking an applied update as failed. |
+| Private key missing after an upgrade; key generation exception | OPC Foundation forum, 2024 | Covered | WF-06/METH-12 use CSR-based issuance and key reuse; the server key is never assumed to be exportable. |
+| Null-value exception when registering an application | .NET Samples #702 | N/A | Trustpoint does not register applications (GDS-02 is conditional). Validate metadata if a GDS client is added. |
+
+### 9.5 Siemens S7-1500 validation failures
+
+Source: Siemens *Dynamic certificate management with SIMATIC S7-1500: OPC UA GDS Push, V1.1* (March 2026).
+
+| Symptom | Status | Trustpoint evidence / action |
+|---|---|---|
+| Incorrect CPU/client clock | Partial | OPS-08 names clock skew in the `BadSecurityChecksFailed` hint; Trustpoint does not synchronize the device clock. Document NTP/time-sync as an installation prerequisite. |
+| Invalid certificate signature | Covered | OPS-08 hint; SEC-09/`_validate_csr_identity` reject changed identity before signing. |
+| Missing issuer certificate | Covered | WF-01/TL-03 push the full issuer chain and CRLs before the certificate. |
+| ApplicationUri mismatch | Covered | SEC-09 compares the CSR ApplicationUri with the current certificate; OPS-08 hints the cause. |
+| Unsupported private-key format | Covered | WF-06 selects an advertised format (PFX, PEM, PKCS#8) and OPS-08 hints `BadNotSupported`. |
+| Incorrect certificate group or type | Covered | WF-03/METH-02 filter by `Purpose`/`CertificateTypes`; OPS-08 hints `BadInvalidArgument`. |
+| Insufficient permissions | Covered | GDS-06 maps `BadUserAccessDenied` to the SecurityAdmin/certificate-management role. |
+| Hardware-config download does not activate while runtime GDS certificates exist | Open | WF-12: inventory shows the actual slots, but no conflict warning or automatic reset; recovery remains manual. |
+
+### 9.6 Additional implementation defects
+
+| Reported defect | Source | Result | Trustpoint evidence / action |
+|---|---|---|---|
+| TrustList writes append instead of replacing the masked lists | node-opcua #1761 / #1776 | Covered by design | TL-07 intentionally merges with existing entries; `SpecifiedLists=All`. Add a read-back assertion to verify the resulting contents against the mask. |
+| Sessions remain active after the client certificate is removed from the TrustList | node-opcua | N/A | SEC-11: session invalidation is server policy; Trustpoint reconnects after updates and does not treat trust removal as live-session revocation. |
+| CA-signed client certificate rejected despite permissive provisioning | .NET #2020 | N/A | Trustpoint does not assume provisioning/auto-accept modes trust arbitrary CA hierarchies; the server must trust the domain CA explicitly. |
+| Certificates pushed by Unified Automation UaGDS are not accepted by open62541 | open62541 #5831 | Conditional | Verify actual Push capabilities with `GetCertificates`/`SupportsTransactions` before pushing; root cause is unconfirmed. Inventory helps diagnose. |
+| Incorrect `ServerConfiguration` URI values | .NET PR #4592 | Partial | Discovery captures endpoint URLs and metadata but does not validate the server's ApplicationUri/ProductUri. Add validation if configuration management is in scope. |
+
+### 9.7 Sources added by this pass
+
+| Source | Relevance |
+|---|---|
+| [.NET #3936](https://github.com/OPCFoundation/UA-.NETStandard/pull/3936) / [PR #3948](https://github.com/OPCFoundation/UA-.NETStandard/pull/3948) | Server policy handling and CA `KeyUsage` validation (SEC-08, SEC-10). |
+| [.NET #4678](https://github.com/OPCFoundation/UA-.NETStandard/pull/4678) / [PR #4726](https://github.com/OPCFoundation/UA-.NETStandard/pull/4726) | Renewal trust stores and scoped certificate-store resolution (WF-08, METH-02). |
+| [.NET #4623](https://github.com/OPCFoundation/UA-.NETStandard/pull/4623) | Keep-alive failure handling (OPS-04, OPS-07). |
+| [.NET #4592](https://github.com/OPCFoundation/UA-.NETStandard/pull/4592) | `ServerConfiguration` metadata correctness (METH-07). |
+| [.NET #2020](https://github.com/OPCFoundation/UA-.NETStandard/issues/2020) | Permissive provisioning does not imply CA-hierarchy trust (N/A). |
+| [.NET Samples #644](https://github.com/OPCFoundation/UA-.NETStandard-Samples/issues/644) / [#702](https://github.com/OPCFoundation/UA-.NETStandard-Samples/issues/702) | Non-exportable keys and registration metadata (WF-06, N/A). |
+| [node-opcua #1761](https://github.com/node-opcua/node-opcua/issues/1761) / [#1776](https://github.com/node-opcua/node-opcua/pull/1776) / [#1779](https://github.com/node-opcua/node-opcua/pull/1779) | Trust-list mask/append behavior, status codes, chain completeness and CRL cleanup (TL-07/TL-09/METH-05). |
+| [open62541 #5831](https://github.com/open62541/open62541/issues/5831) | Cross-vendor Push capability mismatch (OPS-03). |
+| Siemens *Dynamic certificate management with SIMATIC S7-1500: OPC UA GDS Push, V1.1* (March 2026) | Clock, signature, issuer, URI, key-format, group/type and permission failures (OPS-08, SEC-09, WF-03, GDS-06). |
+| STEP 7 V21 readme | Hardware-configuration vs runtime-managed certificate conflict (WF-12). |
+
+**Rule:** these are field reports and regression-test leads, not normative
+requirements. Confirm each against the target firmware and Part 12 before
+changing the generic protocol layer; keep vendor-specific workarounds in
+configuration.

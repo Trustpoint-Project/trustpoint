@@ -148,6 +148,7 @@ class GdsPushService(LoggerMixin):
         self.device = device
         self._capabilities: dict[str, Any] = {}
         self._apply_changes_required = False
+        self._apply_changes_attempted = False
         self._validate_device_config()
 
         configured_url = (getattr(device.opc_ua_gds_push_config, 'opc_server_url', '') or '').strip()
@@ -275,6 +276,35 @@ class GdsPushService(LoggerMixin):
 
         return await sync_to_async(issuing_ca.get_ca_chain_from_truststore)()
 
+    @staticmethod
+    def _validate_ca_material(
+        certificate: x509.Certificate,
+        ca_name: str,
+        *,
+        has_crl: bool,
+    ) -> None:
+        """Reject CA certificates that cannot sign certificates or CRLs."""
+        try:
+            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
+        except x509.ExtensionNotFound as e:
+            msg = f'CA "{ca_name}" has no BasicConstraints extension.'
+            raise GdsPushError(msg) from e
+        if not basic_constraints.ca:
+            msg = f'CA "{ca_name}" is not marked as a CA in BasicConstraints.'
+            raise GdsPushError(msg)
+
+        try:
+            key_usage: x509.KeyUsage | None = certificate.extensions.get_extension_for_class(x509.KeyUsage).value
+        except x509.ExtensionNotFound:
+            key_usage = None
+        if key_usage is not None:
+            if not key_usage.key_cert_sign:
+                msg = f'CA "{ca_name}" does not permit certificate signing (keyCertSign).'
+                raise GdsPushError(msg)
+            if has_crl and not key_usage.crl_sign:
+                msg = f'CA "{ca_name}" does not permit CRL signing (cRLSign) but a CRL is included.'
+                raise GdsPushError(msg)
+
     async def _build_trustlist_for_server(self) -> ua.TrustListDataType:
         """Build OPC UA TrustList to push to server.
 
@@ -318,6 +348,7 @@ class GdsPushService(LoggerMixin):
                     'CA "%s" has no CRL; continuing because CRLs are optional for this device',
                     ca.unique_name,
                 )
+                self._validate_ca_material(ca_cert_crypto, ca.unique_name, has_crl=False)
                 chain_material.append((ca_cert_der, None))
                 continue
 
@@ -336,6 +367,7 @@ class GdsPushService(LoggerMixin):
                 )
                 raise GdsPushError(msg)
 
+            self._validate_ca_material(ca_cert_crypto, ca.unique_name, has_crl=True)
             crl_der = crl_crypto.public_bytes(encoding=serialization.Encoding.DER)
             chain_material.append((ca_cert_der, crl_der))
 
@@ -1144,6 +1176,11 @@ class GdsPushService(LoggerMixin):
         for endpoint in endpoints:
             certificate = endpoint.ServerCertificate
             has_certificate = isinstance(certificate, (bytes, bytearray)) and bool(certificate)
+            if has_certificate:
+                try:
+                    certificate = self._first_der_certificate(bytes(certificate))
+                except GdsPushError:
+                    has_certificate = False
             endpoint_info = {
                 'url': endpoint.EndpointUrl,
                 'security_policy': endpoint.SecurityPolicyUri,
@@ -1171,6 +1208,7 @@ class GdsPushService(LoggerMixin):
         Returns:
             Tuple of (success: bool, message: str).
         """
+        self._apply_changes_attempted = False
         client = None
         try:
             trustlist = await self._build_trustlist_for_server()
@@ -1354,7 +1392,9 @@ class GdsPushService(LoggerMixin):
         StatusCodes.BadUserAccessDenied: 'the identity lacks the required SecurityAdmin/certificate-management role',
         StatusCodes.BadIdentityTokenInvalid: 'the configured OPC UA user token is invalid',
         StatusCodes.BadIdentityTokenRejected: 'the server rejected the configured OPC UA user token',
-        StatusCodes.BadUserSignatureInvalid: 'the client certificate signature was rejected; check the key match and clock',
+        StatusCodes.BadUserSignatureInvalid: (
+            'the client certificate signature was rejected; check the key match and clock'
+        ),
         StatusCodes.BadSecurityPolicyRejected: 'the server rejected the negotiated security policy',
         StatusCodes.BadSecurityModeInsufficient: 'the channel is not encrypted/authenticated; use SignAndEncrypt',
         StatusCodes.BadCertificateUntrusted: 'the server does not trust the client certificate chain',
@@ -1364,7 +1404,12 @@ class GdsPushService(LoggerMixin):
         StatusCodes.BadCertificateUriInvalid: 'the certificate ApplicationUri does not match the server',
         StatusCodes.BadCertificateUseNotAllowed: 'the certificate key usage/extended key usage is not suitable',
         StatusCodes.BadApplicationSignatureInvalid: 'the application signature or certificate chain was rejected',
-        StatusCodes.BadSecurityChecksFailed: 'the certificate failed the server security checks',
+        StatusCodes.BadSecurityChecksFailed: (
+            'the certificate failed the server security checks (check clock skew, signature chain, '
+            'issuer trust and ApplicationUri)'
+        ),
+        StatusCodes.BadNotSupported: 'the server does not support this key format or operation',
+        StatusCodes.BadInvalidArgument: 'check the certificate group/type and request parameters',
         StatusCodes.BadCertificatePolicyCheckFailed: (
             'the server rejected the certificate against its configured key/signature policy'
         ),
@@ -1679,6 +1724,7 @@ class GdsPushService(LoggerMixin):
         server_node = client.get_node('ns=0;i=2253')
         server_config = await server_node.get_child('ServerConfiguration')
         method = await server_config.get_child('ApplyChanges')
+        self._apply_changes_attempted = True
         try:
             await server_config.call_method(method.nodeid)
         except Exception as e:
@@ -1791,6 +1837,7 @@ class GdsPushService(LoggerMixin):
         Returns:
             Tuple of (success: bool, message: str, certificate: bytes | None).
         """
+        self._apply_changes_attempted = False
         client = None
         try:
             client = await self._create_secure_client()
@@ -1870,6 +1917,7 @@ class GdsPushService(LoggerMixin):
         issued_cert: bytes | None = None
         issuer_chain: list[bytes] | None = None
         messages: list[str] = []
+        self._apply_changes_attempted = False
 
         try:
             client = await self._create_secure_client()

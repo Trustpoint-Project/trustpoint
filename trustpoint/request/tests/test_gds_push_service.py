@@ -1545,6 +1545,82 @@ class TestGdsPushServiceAdditionalCoverage:
         with pytest.raises(GdsPushError, match='does not chain'):
             service._validate_server_certificate_chain(leaf, [])
 
+    def test_ca_material_requires_basic_constraints_ca(self, mock_opc_device):
+        """Reject a CA entry that is not marked as a CA."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Not a CA')])
+        now = datetime.datetime.now(datetime.UTC)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now)
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .sign(key, hashes.SHA256())
+        )
+
+        with pytest.raises(GdsPushError, match='not marked as a CA'):
+            service._validate_ca_material(cert, 'not-a-ca', has_crl=False)
+
+    def test_ca_material_requires_key_cert_sign(self, mock_opc_device):
+        """Reject a CA that cannot sign certificates."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Bad CA')])
+        now = datetime.datetime.now(datetime.UTC)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now)
+            .not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=False,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=False,
+                    crl_sign=True,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .sign(key, hashes.SHA256())
+        )
+
+        with pytest.raises(GdsPushError, match='keyCertSign'):
+            service._validate_ca_material(cert, 'bad-ca', has_crl=False)
+
+    @pytest.mark.asyncio
+    async def test_gather_server_info_stores_leaf_from_chained_der(self, mock_opc_device):
+        """Store only the leaf when the server advertises a concatenated chain."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        root, leaf = _make_ca_chain()
+        chained = leaf.public_bytes(serialization.Encoding.DER) + root.public_bytes(serialization.Encoding.DER)
+        endpoint = Mock(
+            ServerCertificate=chained,
+            EndpointUrl='opc.tcp://test:4840',
+            SecurityMode=ua.MessageSecurityMode.None_,
+            SecurityPolicyUri='http://opcfoundation.org/UA/SecurityPolicy#None',
+        )
+        client = Mock()
+        client.connect_and_get_server_endpoints = AsyncMock(return_value=[endpoint])
+        client.find_servers = AsyncMock(return_value=[])
+
+        server_info = await service._gather_server_info(client)
+
+        assert base64.b64decode(server_info['server_certificate']) == leaf.public_bytes(serialization.Encoding.DER)
+
     @pytest.mark.asyncio
     async def test_ca_mode_returns_discovered_leaf_certificate(self, mock_opc_device):
         """Use the discovered certificate when CA validation is selected."""
@@ -2045,6 +2121,21 @@ class TestGdsPushServiceAdditionalCoverage:
             .serial_number(x509.random_serial_number())
             .not_valid_before(now)
             .not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=False,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
             .sign(key, hashes.SHA256())
         )
         crl = (

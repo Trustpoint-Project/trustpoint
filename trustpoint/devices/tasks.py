@@ -71,6 +71,9 @@ def _run_combined_update(service: GdsPushService, attempts: int = 2) -> tuple[bo
             'BadServerNotConnected',
             'BadSecureChannelClosed',
         )
+        if getattr(service, '_apply_changes_attempted', False) is True:
+            logger.warning('ApplyChanges may already have been applied; not retrying the whole workflow')
+            break
         if success or not any(name in message for name in retryable):
             break
         logger.warning('Transaction pending; retrying GDS Push update (%d/%d)', attempt + 1, attempts)

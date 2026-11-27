@@ -102,6 +102,32 @@ class TestPerformGdsPushUpdate:
         assert mock_service.update_trustlist_and_certificate.await_count == 2
         sleep.assert_called_once_with(2)
 
+    def test_apply_attempted_is_not_retried(self, mock_models):
+        """Do not issue and apply a second certificate after ApplyChanges may have run."""
+        device = mock_models['device']
+        config, _ = OpcUaGdsPushConfig.objects.get_or_create(device=device)
+        device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = True
+        device.save()
+        device.opc_ua_gds_push_config.save()
+
+        mock_service = Mock()
+        mock_service.server_certificate_needs_renewal = Mock(return_value=True)
+        mock_service._apply_changes_attempted = True
+        mock_service.update_trustlist_and_certificate = AsyncMock(
+            return_value=(False, 'ApplyChanges failed: BadTimeout', None)
+        )
+
+        with (
+            patch('devices.tasks.GdsPushService', return_value=mock_service),
+            patch('devices.tasks.time.sleep') as sleep,
+            patch.object(device, 'refresh_from_db'),
+            patch.object(device.opc_ua_gds_push_config, 'schedule_next_gds_push_update'),
+        ):
+            perform_gds_push_update(device.pk)
+
+        assert mock_service.update_trustlist_and_certificate.await_count == 1
+        sleep.assert_not_called()
+
     def test_periodic_update_skips_certificate_when_not_due(self, mock_models):
         """Refresh only the trust list when the certificate is outside the threshold."""
         device = mock_models['device']
