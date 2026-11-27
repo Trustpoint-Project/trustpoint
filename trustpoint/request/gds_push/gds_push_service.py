@@ -1746,7 +1746,11 @@ class GdsPushService(LoggerMixin):
                 read_method = await trustlist_node.get_child('Read')
                 chunks = []
                 while True:
-                    chunk = await trustlist_node.call_method(read_method.nodeid, file_handle, 8192)
+                    chunk = await trustlist_node.call_method(
+                        read_method.nodeid,
+                        ua.Variant(file_handle, ua.VariantType.UInt32),
+                        ua.Variant(8192, ua.VariantType.Int32),
+                    )
                     if not chunk:
                         break
                     chunks.append(bytes(chunk))
@@ -1765,7 +1769,10 @@ class GdsPushService(LoggerMixin):
                 if file_handle is not None:
                     with contextlib.suppress(Exception):
                         close_method = await trustlist_node.get_child('Close')
-                        await trustlist_node.call_method(close_method.nodeid, file_handle)
+                        await trustlist_node.call_method(
+                            close_method.nodeid,
+                            ua.Variant(file_handle, ua.VariantType.UInt32),
+                        )
         return None
 
     async def verify_connection(self) -> tuple[bool, str]:
@@ -2169,7 +2176,11 @@ class GdsPushService(LoggerMixin):
 
             while offset < len(serialized_trustlist):
                 chunk = serialized_trustlist[offset : offset + max_chunk_size]
-                await trustlist_node.call_method(write_method.nodeid, file_handle, chunk)
+                await trustlist_node.call_method(
+                    write_method.nodeid,
+                    ua.Variant(file_handle, ua.VariantType.UInt32),
+                    ua.Variant(chunk, ua.VariantType.ByteString),
+                )
                 offset += len(chunk)
                 chunk_count += 1
 
@@ -2177,7 +2188,10 @@ class GdsPushService(LoggerMixin):
 
             # Step 3: CloseAndUpdate
             close_and_update_method = await trustlist_node.get_child('CloseAndUpdate')
-            apply_changes_required = await trustlist_node.call_method(close_and_update_method.nodeid, file_handle)
+            apply_changes_required = await trustlist_node.call_method(
+                close_and_update_method.nodeid,
+                ua.Variant(file_handle, ua.VariantType.UInt32),
+            )
             self.logger.debug('Closed TrustList, ApplyChanges required: %s', apply_changes_required)
 
             # Step 4: ApplyChanges if required

@@ -71,13 +71,12 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 6 (all done)**, **P1 = 15**, **P2 = 25**, **P3 = 9**, **already implemented/N/A = 7** — 52 of 62 items are done.
+Findings by priority: **P0 = 6 (all done)**, **P1 = 15**, **P2 = 25**, **P3 = 9**, **already implemented/N/A = 7** — 53 of 62 items are done.
 
 The main remaining gaps are:
 
 1. conditional §6 GDS directory/discovery and `ManagedApplications` features,
 2. no warning for hardware-configuration vs runtime-managed certificate conflicts (WF-12),
-3. real-stack interoperability and CTT-style conformance runs (OPS-03),
 4. optional `CreateSelfSignedCertificate` and Create Endpoint workflows
    (WF-05/WF-07).
 
@@ -168,7 +167,7 @@ The main remaining gaps are:
 |---|---|---|---|---|---|---|
 | OPS-01 | P1 | Unit tests cover real protocol strictness | Implemented | Tests now cover nonce length, group/type filtering, partial results, trust-list limits, SAN/CN identity, policy selection, apply-once and status-code hints. Stack interactions are still mocked; OPS-03 covers real-stack interop. | Done for unit-level strictness. | [x] |
 | OPS-02 | P1 | Integration server behaves like a strict server | Implemented | The test server now rejects a missing/short nonce when key rollover is requested and rejects non-application certificate types. Group filtering is covered by discovery tests. | Done; negative tests added. | [x] |
-| OPS-03 | P1 | Real-stack conformance | Missing | No test against open62541, a commercial GDS, or an ECC-only server. Policy selection is now unit-tested against configured and advertised endpoints, but not against a real stack. | Add one real-stack interoperability test, including a server that advertises only legacy or ECC policies. | [ ] |
+| OPS-03 | P1 | Real-stack conformance | Implemented | The `GDS Push / open62541 conformance` workflow builds open62541 with the GDS receiver driver and runs Trustpoint against it: policy negotiation, secure connection, TrustList read/write/apply, post-deployment verification and idempotent reconciliation. Certificate renewal and ECC-only endpoints remain outside this job. | Done for the open62541 TrustList/policy path; extend the job when certificate renewal or ECC endpoints are in scope. | [x] |
 | OPS-04 | P2 | Timeouts, retries, concurrency | Implemented | Channel/session timeouts are configurable via `GDS_PUSH_CHANNEL_TIMEOUT_MS` / `GDS_PUSH_SESSION_TIMEOUT_MS`; all tasks share a per-device cache lock (cross-process limitation in OPS-07); the combined workflow retries once on transaction-pending, timeout, communication/connection/secure-channel errors unless `ApplyChanges` may already have run (WF-11). | Done. | [x] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Implemented | Discovery now captures the endpoint certificate and exposes it for truststore import; the user guide documents policy negotiation, identity validation, trust-list merge and reconnect verification. | Done. | [x] |
 | OPS-06 | P2 | Preserve OPC UA status codes and distinguish auth/trust/config failures | Implemented | `_status_error` keeps the symbolic name and hex code and adds actionable hints for access denied, insufficient security, untrusted/invalid/revocation-unknown certificates, hostname mismatch, signature failure, security-check failure and pending transactions. | Done; status-code test added. | [x] |
@@ -243,7 +242,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **TL-09** Prune stale Trustpoint-managed CA certificates and CRLs during reconciliation.
 - [ ] **WF-12** Warn about hardware-configuration vs runtime-managed certificate conflicts.
 - [x] **OPS-04** Add configurable timeouts, bounded retries and a per-device operation lock.
-- [ ] **OPS-03** Run one real-stack interoperability test against a third independent stack (node-opcua).
+- [x] **OPS-03** Run the open62541 GDS receiver conformance workflow against the PushManagement client.
 - [ ] **GDS-07** Add LDS/GDS scan-and-stage discovery with `DiscoveryAdmin` approval (conditional).
 
 **Exit criteria:** a fresh server can be onboarded from discovery without manual certificate export; failures show the server's transaction diagnosis and the rejected-certificate list.
@@ -288,7 +287,7 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] Trust-list entry count and per-element DER size are checked against the configured device limits before writing.
 - [x] Aggregate serialized size is checked against `MaxTrustListSize` before writing.
 - [x] No CA certificate is duplicated between trusted and issuer lists.
-- [x] Only one `ApplyChanges` is sent per transaction; a timeout after the apply is not retried as a new issuance (WF-11). Repeated apply against open62541 remains part of OPS-03.
+- [x] Only one `ApplyChanges` is sent per transaction; a timeout after the apply is not retried as a new issuance (WF-11). Repeated apply is exercised by the open62541 conformance workflow.
 - [x] The standalone certificate update applies the trust list first.
 - [ ] `UpdateCertificate` succeeds with strict revocation checking when the trust list with CRLs was applied first.
 - [x] The issued certificate is preflighted against the configured key-size/SHA-1 policy (the device policy itself remains out-of-band).
@@ -349,6 +348,8 @@ Before closing the core conformance work, verify each item against a strict serv
 | Security policy allow-list and mode defaults | `trustpoint/management/models/security.py` |
 | Policy negotiation | `trustpoint/request/gds_push/gds_push_service.py` (`_select_security_policy`) |
 | Policy-aware key/type selection | `trustpoint/request/gds_push/gds_push_service.py` (`_generate_server_key_and_csr`, `_select_application_certificate_type`) |
+| open62541 conformance harness | `tests/scripts/gds_push_open62541_conformance.py` |
+| open62541 GitHub workflow | `.github/workflows/gds-push-open62541.yml` |
 | User documentation | `docs/source/features/devices/opc_ua_gds.md` |
 
 ## 8. Sources and research entry points

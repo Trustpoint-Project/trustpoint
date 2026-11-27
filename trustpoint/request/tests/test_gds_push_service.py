@@ -2140,9 +2140,9 @@ class TestGdsPushServiceAdditionalCoverage:
         with patch('request.gds_push.gds_push_service.struct_to_binary', return_value=b'abcdef'):
             assert await service._update_single_trustlist(node, Mock(), max_chunk_size=2) is True
 
-        assert node.call_method.await_args_list[4].args[2] == b'ab'
-        assert node.call_method.await_args_list[5].args[2] == b'cd'
-        assert node.call_method.await_args_list[6].args[2] == b'ef'
+        assert node.call_method.await_args_list[4].args[2].Value == b'ab'
+        assert node.call_method.await_args_list[5].args[2].Value == b'cd'
+        assert node.call_method.await_args_list[6].args[2].Value == b'ef'
         config_node.call_method.assert_awaited_once_with(apply_method.nodeid)
 
     @pytest.mark.asyncio
@@ -2166,7 +2166,10 @@ class TestGdsPushServiceAdditionalCoverage:
 
         assert result is not None
         assert result.TrustedCertificates == [b'one']
-        assert node.call_method.await_args_list[-1].args == (methods['Close'].nodeid, 42)
+        close_args = node.call_method.await_args_list[-1].args
+        assert close_args[0] == methods['Close'].nodeid
+        assert close_args[1].Value == 42
+        assert close_args[1].VariantType == ua.VariantType.UInt32
 
     def test_merge_trustlists_preserves_entries_and_replaces_crls(self, mock_opc_device):
         """Merge certificates and replace only CRLs for the same issuer."""

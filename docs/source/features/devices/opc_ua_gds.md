@@ -186,3 +186,12 @@ and the availability of CRLs for trustlist updates.
 
 See [Onboarding Mechanisms](onboarding.md) for other device enrollment options
 and [Domains](../pki/domains.md) for domain configuration.
+
+## Conformance Testing
+
+The `GDS Push / open62541 conformance` GitHub workflow builds open62541 with
+its GDS receiver driver and runs Trustpoint against the real stack. It exercises
+security-policy negotiation, a SignAndEncrypt secure channel, TrustList
+read/write/apply, post-deployment verification and idempotent reconciliation.
+The harness is `tests/scripts/gds_push_open62541_conformance.py` and can be run
+locally by setting `OPEN62541_CI_SERVER` to a built `ci_server` binary.
