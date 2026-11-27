@@ -143,7 +143,7 @@ The main remaining gaps are:
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Implemented | `_read_server_capabilities` reads `MaxTrustListSize`; `_validate_trustlist_limits` rejects a serialized trust list above it before writing. Device entry/element limits are separate (TL-08). | Done. | [x] |
 | TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; managed mode merges after pruning only known-owned entries, authoritative mode uses the desired list. The resulting list is verified after deployment before the per-group ownership snapshot is persisted. `GetRejectedList` is read and counted. | Done; normalized comparison, verification and per-group state tests added. | [x] |
 | TL-08 | P1 | Device trust-list capacity and element-size preflight | Implemented | Configurable `opc_gds_push_max_trustlist_entries` and `opc_gds_push_max_trustlist_element_size` (0 = no limit) preflight the merged list, counting unique DER objects across all four lists (shared certificates count once) and checking each element size. UI fields and the combined migration 0003_tp_v1_0_2 added. | Done; tests cover shared entries, excess count and oversized elements. Aggregate size remains in TL-06. | [x] |
-| TL-09 | P2 | Remove stale CA certificates and CRLs after CA removal/rollover | Implemented | `opc_gds_push_managed_trustlist_state` records ownership per certificate group and list type. Managed reconciliation prunes only obsolete owned entries; authoritative mode removes everything outside the desired state. State is persisted only after a successful post-deployment TrustList verification. | Done; per-group prune/authoritative tests added. | [x] |
+| TL-09 | P2 | Remove stale CA certificates and CRLs after CA removal/rollover | Implemented | `opc_gds_push_managed_trustlist_state` records ownership per certificate group and list type. Managed reconciliation prunes only obsolete owned entries; authoritative mode removes everything outside the desired state. During CA rollover, old and new CA chains/CRLs are both deployed first; per-device deployment is recorded only after verification and rollover completion waits for every GDS Push device. | Done; prune, authoritative and rollover-gate tests added. | [x] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -306,6 +306,7 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] Stale Trustpoint-managed CA certificates/CRLs are pruned while external entries are preserved.
 - [x] Two worker processes cannot run GDS Push for the same device concurrently (OPS-07).
 - [x] CA removal/rollover does not leave stale Trustpoint-managed CA certificates or CRLs on the device (TL-09).
+- [x] CA rollover deploys both old and new TrustLists before certificate replacement and before finalization.
 - [ ] A hardware-configuration vs runtime-managed certificate conflict is detected and reported (WF-12).
 
 ## 7. File and line map (current code, 2026-11-27)
@@ -337,6 +338,7 @@ Before closing the core conformance work, verify each item against a strict serv
 | Per-device database lock | `trustpoint/devices/models.py` (`GdsPushOperationLock`), `trustpoint/devices/tasks.py` |
 | Trust-list mode, ownership state and additional material | `trustpoint/devices/models.py` (`OpcUaGdsPushConfig`), `trustpoint/request/gds_push/gds_push_service.py` |
 | Managed trust-list pruning | `trustpoint/request/gds_push/gds_push_service.py` (`_effective_trustlist`) |
+| Rollover TrustList deployment tracking | `trustpoint/pki/models/ca_rollover.py` (`CaRolloverTrustlistDeployment`) |
 | Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1735` |
 | CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1820` |
 | Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1932` |

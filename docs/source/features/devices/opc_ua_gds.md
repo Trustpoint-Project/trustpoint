@@ -76,6 +76,15 @@ material** truststore in both modes. After deployment Trustpoint reconnects,
 verifies the resulting lists and only then records the per-group managed-state
 snapshot. Untargeted certificate groups (HTTPS, UserToken) are never modified.
 
+### CA Rollover
+
+During an active Issuing CA rollover, the desired TrustList contains the complete
+old and new CA chains and CRLs. Trustpoint records a per-device deployment only
+after both TrustLists have been verified on the device. Server certificate
+replacement is deferred until that confirmation exists, and the replacement
+certificate is then issued by the new Issuing CA. Rollover completion is blocked
+until every GDS Push device in the old CA's domains has received both TrustLists.
+
 Before signing the server's CSR, Trustpoint verifies that it keeps the current
 Common Name, ApplicationUri and DNS/IP SANs, and that a requested key rollover
 actually produced a new key. A server that changes these values is rejected with

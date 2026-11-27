@@ -50,6 +50,11 @@ def default_security_config(monkeypatch: pytest.MonkeyPatch) -> SecurityConfig:
         return service._security_config or config
 
     monkeypatch.setattr(GdsPushService, '_get_security_config', get_config)
+
+    async def no_rollover(_service: GdsPushService) -> None:
+        return None
+
+    monkeypatch.setattr(GdsPushService, '_get_active_rollover', no_rollover)
     return config
 
 
@@ -1761,6 +1766,78 @@ class TestGdsPushServiceAdditionalCoverage:
         write.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_rollover_defers_certificate_until_both_trustlists_deployed(self, mock_opc_device):
+        """Push both TrustLists first; do not replace the server certificate in that run."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        mock_opc_device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 1000
+        _root, leaf = _make_ca_chain()
+        type_id = ua.NodeId.from_string('ns=0;i=12560')
+        desired = ua.TrustListDataType(
+            SpecifiedLists=int(ua.TrustListMasks.All),
+            TrustedCertificates=[leaf.public_bytes(serialization.Encoding.DER)],
+        )
+        current = ua.TrustListDataType(SpecifiedLists=int(ua.TrustListMasks.All))
+        group = {
+            'name': 'Server',
+            'node_id': ua.NodeId.from_string('ns=0;i=1'),
+            'certificate_type_id': type_id,
+            'current_certificates': {type_id: leaf.public_bytes(serialization.Encoding.DER)},
+        }
+        node_info = {'group_name': 'Server', 'trustlist_node': Mock()}
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+        rollover = Mock()
+
+        async def write_trustlist(*_args, **_kwargs):
+            service._apply_changes_required = True
+            return True
+
+        with (
+            patch.object(service, '_get_active_rollover', new_callable=AsyncMock, return_value=rollover),
+            patch.object(service, '_device_has_rollover_trustlists', new_callable=AsyncMock, return_value=False),
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_read_server_capabilities', new_callable=AsyncMock, return_value={}),
+            patch.object(service, '_discover_certificate_groups', new_callable=AsyncMock, return_value=[group]),
+            patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=[node_info]),
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=desired),
+            patch.object(service, '_read_trustlist', new_callable=AsyncMock, return_value=current),
+            patch.object(service, '_write_trustlist', side_effect=write_trustlist) as write,
+            patch.object(service, '_update_single_certificate', new_callable=AsyncMock) as update_cert,
+            patch.object(service, '_apply_changes', new_callable=AsyncMock),
+            patch.object(service, '_record_managed_trustlist_state', new_callable=AsyncMock),
+            patch.object(
+                service,
+                '_record_rollover_trustlist_deployment',
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch.object(service, '_verify_server_connection', new_callable=AsyncMock, return_value=(True, '')),
+            patch.object(service, '_verify_trustlist_deployment', new_callable=AsyncMock, return_value=(True, '')),
+        ):
+            success, message, certificate = await service.reconcile()
+
+        assert success, message
+        write.assert_awaited_once()
+        update_cert.assert_not_called()
+        assert certificate is None
+
+    @pytest.mark.asyncio
+    async def test_rollover_issues_from_new_ca_only_after_both_trustlists(self, mock_opc_device):
+        """Use the replacement CA for issuance only after its TrustLists are confirmed."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        new_ca = Mock()
+        rollover = Mock(new_issuing_ca=new_ca)
+
+        with (
+            patch.object(service, '_get_active_rollover', new_callable=AsyncMock, return_value=rollover),
+            patch.object(service, '_device_has_rollover_trustlists', new_callable=AsyncMock, return_value=True),
+        ):
+            issuing_ca = await service._issuing_ca_for_certificate()
+
+        assert issuing_ca is new_ca
+
+    @pytest.mark.asyncio
     async def test_reconcile_skips_unchanged_state(self, mock_opc_device):
         """Do not write or apply when both trust lists and certificates are current."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -3317,8 +3394,9 @@ class TestGdsPushServiceAdditionalCoverage:
         ):
             trustlist = await service._build_trustlist_for_server()
 
-        assert len(trustlist.TrustedCertificates) == 1
+        assert trustlist.TrustedCertificates == []
         assert trustlist.TrustedCrls == []
+        assert len(trustlist.IssuerCertificates) == 1
         assert trustlist.IssuerCrls == []
 
     @pytest.mark.asyncio

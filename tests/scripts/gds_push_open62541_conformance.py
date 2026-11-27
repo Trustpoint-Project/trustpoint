@@ -331,6 +331,11 @@ def main() -> int:
                 ca = _CA(pki['ca_cert'], pki['crl_pem'])
                 device = _Device(port, _Domain(ca))
                 service: Any = GdsPushService(cast('Any', device), insecure=True)
+
+                async def no_active_rollover() -> None:
+                    return None
+
+                service._get_active_rollover = no_active_rollover
                 service.domain_credential = _IssuedCredential(_Credential(pki['client_cert'], pki['client_key']))
                 service.server_truststore = _Truststore(pki['server_cert'])
                 service._security_config = SecurityConfig(

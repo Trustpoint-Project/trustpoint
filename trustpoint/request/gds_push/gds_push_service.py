@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import copy
 import datetime as dt
 import hashlib
 import io
@@ -35,6 +36,11 @@ from trustpoint_core.oid import NamedCurve
 
 from management.models.security import SecurityConfig
 from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
+from pki.models.ca_rollover import (
+    CaRolloverModel,
+    CaRolloverState,
+    CaRolloverTrustlistDeployment,
+)
 from pki.models.certificate import RevokedCertificateModel
 from pki.opc_ua_security_policy import (
     OPC_UA_SECURITY_POLICIES,
@@ -58,6 +64,8 @@ from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from asyncua.common.node import Node
 
     from devices.models import DeviceModel
@@ -216,6 +224,97 @@ class GdsPushService(LoggerMixin):
         config = await self._get_security_config()
         return config, CryptographicPolicy.from_config(config)
 
+    async def _get_active_rollover(self) -> CaRolloverModel | None:
+        """Return the active rollover for the device's current issuing CA."""
+        device = await sync_to_async(lambda: self.device)()
+        domain = await sync_to_async(lambda: device.domain)()
+        issuing_ca = await sync_to_async(lambda: domain.issuing_ca)() if domain is not None else None
+        if issuing_ca is None:
+            return None
+        return await sync_to_async(
+            lambda: (
+                CaRolloverModel.objects.filter(
+                    old_issuing_ca=issuing_ca,
+                    state__in=[CaRolloverState.PREPARATION, CaRolloverState.TRANSITION],
+                )
+                .select_related('new_issuing_ca')
+                .first()
+            )
+        )()
+
+    async def _device_has_rollover_trustlists(self, rollover: CaRolloverModel) -> bool:
+        """Return whether this device has a verified deployment of both rollover TrustLists."""
+        return await sync_to_async(
+            lambda: CaRolloverTrustlistDeployment.objects.filter(
+                rollover=rollover,
+                device=self.device,
+            ).exists()
+        )()
+
+    async def _ca_material_fingerprints(self, ca: Any) -> set[str]:
+        """Return SHA-256 fingerprints of a CA certificate and its CRL."""
+        ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
+        certificate = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
+        fingerprints = {hashlib.sha256(certificate.public_bytes(serialization.Encoding.DER)).hexdigest()}
+        crl_pem = await sync_to_async(lambda ca=ca: ca.crl_pem)()
+        if crl_pem:
+            crl = x509.load_pem_x509_crl(crl_pem.encode())
+            fingerprints.add(hashlib.sha256(crl.public_bytes(serialization.Encoding.DER)).hexdigest())
+        return fingerprints
+
+    async def _rollover_required_fingerprints(self, rollover: CaRolloverModel) -> set[str]:
+        """Return the old and new CA certificate/CRL fingerprints required for a rollover."""
+        old_ca = await sync_to_async(lambda: rollover.old_issuing_ca)()
+        new_ca = await sync_to_async(lambda: rollover.new_issuing_ca)()
+        required = await self._ca_material_fingerprints(old_ca)
+        if new_ca is not None:
+            required |= await self._ca_material_fingerprints(new_ca)
+        return required
+
+    @staticmethod
+    def _trustlist_fingerprint_union(trustlists: Mapping[str, ua.TrustListDataType | None]) -> set[str]:
+        """Return all fingerprints present in a set of TrustLists."""
+        return {
+            hashlib.sha256(der).hexdigest()
+            for trustlist in trustlists.values()
+            if trustlist is not None
+            for attribute in GdsPushService._TRUSTLIST_ATTRIBUTES
+            for der in (getattr(trustlist, attribute, None) or [])
+        }
+
+    async def _issuing_ca_for_certificate(self) -> Any:
+        """Use the replacement CA only after both rollover TrustLists are deployed."""
+        device = await sync_to_async(lambda: self.device)()
+        domain = await sync_to_async(lambda: device.domain)()
+        if domain is None:
+            msg = f'Device "{device.common_name}" has no domain configured'
+            raise GdsPushError(msg)
+        rollover = await self._get_active_rollover()
+        if rollover is not None:
+            new_ca = await sync_to_async(lambda: rollover.new_issuing_ca)()
+            if new_ca is not None and await self._device_has_rollover_trustlists(rollover):
+                return new_ca
+        issuing_ca = await sync_to_async(lambda: domain.issuing_ca)()
+        if issuing_ca is None:
+            msg = f'Domain "{domain.unique_name}" has no issuing CA configured'
+            raise GdsPushError(msg)
+        return issuing_ca
+
+    async def _record_rollover_trustlist_deployment(
+        self,
+        rollover: CaRolloverModel,
+        trustlists: Mapping[str, ua.TrustListDataType | None],
+    ) -> bool:
+        """Persist that this device received both old and new TrustLists."""
+        required = await self._rollover_required_fingerprints(rollover)
+        if not required.issubset(self._trustlist_fingerprint_union(trustlists)):
+            return False
+        await sync_to_async(CaRolloverTrustlistDeployment.objects.update_or_create)(
+            rollover=rollover,
+            device=self.device,
+        )
+        return True
+
     def _setup_secure_mode(self) -> None:
         """Setup credentials and truststore for secure operations.
 
@@ -312,7 +411,17 @@ class GdsPushService(LoggerMixin):
             msg = f'Domain "{domain.unique_name}" has no issuing CA configured'
             raise GdsPushError(msg)
 
-        return await sync_to_async(issuing_ca.get_ca_chain_from_truststore)()
+        chain = list(await sync_to_async(issuing_ca.get_ca_chain_from_truststore)())
+        rollover = await self._get_active_rollover()
+        new_ca = await sync_to_async(lambda: rollover.new_issuing_ca)() if rollover is not None else None
+        if new_ca is not None:
+            new_chain = await sync_to_async(new_ca.get_ca_chain_from_truststore)()
+            seen = {ca.pk for ca in chain if ca.pk is not None}
+            for ca in new_chain:
+                if ca.pk not in seen:
+                    chain.append(ca)
+                    seen.add(ca.pk)
+        return chain
 
     @staticmethod
     def _validate_ca_material(
@@ -364,7 +473,7 @@ class GdsPushService(LoggerMixin):
                 issuers.append(certificate_der)
         return trusted, issuers
 
-    async def _build_trustlist_for_server(self) -> ua.TrustListDataType:
+    async def _build_trustlist_for_server(self) -> ua.TrustListDataType:  # noqa: C901, PLR0915
         """Build OPC UA TrustList to push to server.
 
         The TrustList tells the OPC UA server which CAs to trust for client
@@ -389,7 +498,7 @@ class GdsPushService(LoggerMixin):
         require_crls = bool(getattr(config, 'opc_gds_push_require_crls', True))
 
         # get_ca_chain_from_truststore returns issuing CA -> root.
-        chain_material: list[tuple[bytes, bytes | None]] = []
+        chain_material: list[tuple[bytes, bytes | None, x509.Certificate]] = []
         for ca in ca_chain:
             ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
 
@@ -408,7 +517,7 @@ class GdsPushService(LoggerMixin):
                     ca.unique_name,
                 )
                 self._validate_ca_material(ca_cert_crypto, ca.unique_name, has_crl=False)
-                chain_material.append((ca_cert_der, None))
+                chain_material.append((ca_cert_der, None, ca_cert_crypto))
                 continue
 
             try:
@@ -428,23 +537,33 @@ class GdsPushService(LoggerMixin):
 
             self._validate_ca_material(ca_cert_crypto, ca.unique_name, has_crl=True)
             crl_der = crl_crypto.public_bytes(encoding=serialization.Encoding.DER)
-            chain_material.append((ca_cert_der, crl_der))
+            chain_material.append((ca_cert_der, crl_der, ca_cert_crypto))
 
-        root_cert, root_crl = chain_material[-1]
-        issuers = chain_material[:-1]
         additional_trusted, additional_issuers = await self._build_additional_trust_material()
 
-        trusted_certificates = list(dict.fromkeys([root_cert, *additional_trusted]))
-        issuer_certificates = [cert for cert, _crl in issuers]
+        trusted_certificates: list[bytes] = []
+        trusted_crls: list[bytes] = []
+        issuer_certificates: list[bytes] = []
+        issuer_crls: list[bytes] = []
+        for certificate_der, entry_crl_der, certificate in chain_material:
+            if certificate.subject == certificate.issuer:
+                trusted_certificates.append(certificate_der)
+                if entry_crl_der is not None:
+                    trusted_crls.append(entry_crl_der)
+            else:
+                issuer_certificates.append(certificate_der)
+                if entry_crl_der is not None:
+                    issuer_crls.append(entry_crl_der)
+        trusted_certificates.extend(additional_trusted)
         issuer_certificates.extend(additional_issuers)
 
         trustlist = ua.TrustListDataType()
         trustlist.SpecifiedLists = ua.TrustListMasks.All
-        trustlist.TrustedCertificates = trusted_certificates
-        trustlist.TrustedCrls = [root_crl] if root_crl else []
-        trusted_set = set(trusted_certificates)
+        trustlist.TrustedCertificates = list(dict.fromkeys(trusted_certificates))
+        trustlist.TrustedCrls = list(dict.fromkeys(trusted_crls))
+        trusted_set = set(trustlist.TrustedCertificates)
         trustlist.IssuerCertificates = [cert for cert in dict.fromkeys(issuer_certificates) if cert not in trusted_set]
-        trustlist.IssuerCrls = [crl for _cert, crl in issuers if crl]
+        trustlist.IssuerCrls = list(dict.fromkeys(issuer_crls))
 
         return trustlist
 
@@ -1351,6 +1470,7 @@ class GdsPushService(LoggerMixin):
             Tuple of (success: bool, message: str).
         """
         self._apply_changes_attempted = False
+        rollover = await self._get_active_rollover()
         client = None
         try:
             trustlist = await self._build_trustlist_for_server()
@@ -1434,6 +1554,8 @@ class GdsPushService(LoggerMixin):
                 trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
                 state_note = ''
                 if trustlist_verified:
+                    if rollover is not None:
+                        await self._record_rollover_trustlist_deployment(rollover, effective_by_group)
                     state_by_group = self._compute_managed_state(
                         current_by_group,
                         dict.fromkeys(effective_by_group, trustlist),
@@ -2234,6 +2356,16 @@ class GdsPushService(LoggerMixin):
             Tuple of (success: bool, message: str, certificate: bytes | None).
         """
         self._apply_changes_attempted = False
+        rollover = await self._get_active_rollover()
+        if rollover is not None and not await self._device_has_rollover_trustlists(rollover):
+            return (
+                False,
+                (
+                    'Cannot replace the server certificate until this device has received both the old '
+                    'and new CA TrustLists.'
+                ),
+                None,
+            )
         client = None
         try:
             client = await self._create_secure_client()
@@ -2308,12 +2440,15 @@ class GdsPushService(LoggerMixin):
         else:
             return False, 'Failed to update any certificate', None
 
-    async def update_trustlist_and_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0915
+    async def update_trustlist_and_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0912, PLR0915
         """Apply the trust list and server certificate in one transaction (Section 7.7.2)."""
         issued_cert: bytes | None = None
         issuer_chain: list[bytes] | None = None
         messages: list[str] = []
         self._apply_changes_attempted = False
+        rollover = await self._get_active_rollover()
+        rollover_ready = rollover is None or await self._device_has_rollover_trustlists(rollover)
+        deferred_certificate = False
 
         try:
             client = await self._create_secure_client()
@@ -2351,24 +2486,28 @@ class GdsPushService(LoggerMixin):
                 config = getattr(self.device, 'opc_ua_gds_push_config', None)
                 regenerate_private_key = bool(getattr(config, 'opc_gds_push_regenerate_server_key', False))
 
-                certificate_success = 0
-                for group in cert_groups:
-                    group_name = group['name']
-                    success, cert_bytes, chain_bytes = await self._update_single_certificate(
-                        client=client,
-                        certificate_group_id=group['node_id'],
-                        certificate_type_id=group.get('certificate_type_id'),
-                        regenerate_private_key=regenerate_private_key,
-                        defer_apply=True,
-                    )
-                    certificate_success += int(success)
-                    messages.append(f'{"✓" if success else "✗"} certificate {group_name}')
-                    if success and issued_cert is None:
-                        issued_cert = cert_bytes
-                        issuer_chain = chain_bytes
-                if certificate_success != len(cert_groups):
-                    await self._cancel_changes(client)
-                    return False, f'Certificate update failed: {", ".join(messages)}', None
+                if rollover is not None and not rollover_ready:
+                    deferred_certificate = True
+                    messages.append('certificate replacement deferred until both TrustLists are verified')
+                else:
+                    certificate_success = 0
+                    for group in cert_groups:
+                        group_name = group['name']
+                        success, cert_bytes, chain_bytes = await self._update_single_certificate(
+                            client=client,
+                            certificate_group_id=group['node_id'],
+                            certificate_type_id=group.get('certificate_type_id'),
+                            regenerate_private_key=regenerate_private_key,
+                            defer_apply=True,
+                        )
+                        certificate_success += int(success)
+                        messages.append(f'{"✓" if success else "✗"} certificate {group_name}')
+                        if success and issued_cert is None:
+                            issued_cert = cert_bytes
+                            issuer_chain = chain_bytes
+                    if certificate_success != len(cert_groups):
+                        await self._cancel_changes(client)
+                        return False, f'Certificate update failed: {", ".join(messages)}', None
 
                 if self._apply_changes_required:
                     await self._apply_changes(client)
@@ -2386,6 +2525,8 @@ class GdsPushService(LoggerMixin):
         trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
         state_note = ''
         if trustlist_verified:
+            if rollover is not None:
+                await self._record_rollover_trustlist_deployment(rollover, effective_by_group)
             state_by_group = self._compute_managed_state(
                 current_by_group,
                 dict.fromkeys(effective_by_group, trustlist),
@@ -2393,6 +2534,8 @@ class GdsPushService(LoggerMixin):
             )
             await self._record_managed_trustlist_state(state_by_group)
             state_note = '; trust lists verified'
+            if deferred_certificate:
+                state_note += '; certificate replacement deferred until the next reconciliation'
         else:
             state_note = f'; trust list verification failed: {trustlist_error}'
             self.logger.warning('Trust list verification failed for device %s: %s', self.device.pk, trustlist_error)
@@ -2445,6 +2588,36 @@ class GdsPushService(LoggerMixin):
         total = sum(len(entries) for groups in removals.values() for entries in groups.values())
         return True, f'{total} trust-list entr{"y" if total == 1 else "ies"} would be removed', removals
 
+    async def _certificate_group_issued_by_new_ca(
+        self,
+        group: dict[str, Any],
+        rollover: CaRolloverModel,
+    ) -> bool:
+        """Return whether the group's current certificate was issued by the replacement CA."""
+        current = group.get('current_certificates') or {}
+        if not current:
+            return True
+        type_id = group.get('certificate_type_id')
+        certificate_der = current.get(type_id) if type_id is not None else None
+        if certificate_der is None:
+            certificate_der = next(iter(current.values()))
+        new_ca = await sync_to_async(lambda: rollover.new_issuing_ca)()
+        if new_ca is None:
+            return True
+        new_ca_model = await sync_to_async(lambda: new_ca.ca_certificate_model)()
+        if new_ca_model is None:
+            return True
+        new_ca_certificate = await sync_to_async(new_ca_model.get_certificate_serializer().as_crypto)()
+        try:
+            current_certificate = x509.load_der_x509_certificate(bytes(certificate_der))
+        except Exception:  # noqa: BLE001
+            return False
+        try:
+            current_certificate.verify_directly_issued_by(new_ca_certificate)
+        except (InvalidSignature, ValueError, TypeError):
+            return False
+        return True
+
     def _certificate_group_due(
         self,
         group: dict[str, Any],
@@ -2483,6 +2656,8 @@ class GdsPushService(LoggerMixin):
         issued_cert: bytes | None = None
         issuer_chain: list[bytes] | None = None
         messages: list[str] = []
+        rollover = await self._get_active_rollover()
+        rollover_ready = rollover is None or await self._device_has_rollover_trustlists(rollover)
 
         try:
             client = await self._create_secure_client()
@@ -2504,13 +2679,28 @@ class GdsPushService(LoggerMixin):
                     for node_info in trustlist_nodes:
                         current = await self._read_trustlist(node_info['trustlist_node'])
                         group_name = node_info['group_name']
+                        current_by_group[group_name] = current
                         effective = self._effective_trustlist(current, desired, group_name)
                         if not self._trustlists_equal(current, effective):
                             trustlist_writes.append((node_info, effective))
                             effective_by_group[group_name] = effective
-                            current_by_group[group_name] = current
 
-                due_groups = [group for group in cert_groups if self._certificate_group_due(group, threshold_days, now)]
+                if rollover is not None and not rollover_ready:
+                    rollover_ready = await self._record_rollover_trustlist_deployment(rollover, current_by_group)
+
+                if rollover is not None:
+                    if not rollover_ready:
+                        due_groups = []
+                    else:
+                        due_groups = [
+                            group
+                            for group in cert_groups
+                            if not await self._certificate_group_issued_by_new_ca(group, rollover)
+                        ]
+                else:
+                    due_groups = [
+                        group for group in cert_groups if self._certificate_group_due(group, threshold_days, now)
+                    ]
 
                 if not trustlist_writes and not due_groups:
                     return True, 'No certificate or trust list update required', None
@@ -2567,6 +2757,8 @@ class GdsPushService(LoggerMixin):
         if effective_by_group:
             trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
             if trustlist_verified and desired is not None:
+                if rollover is not None:
+                    await self._record_rollover_trustlist_deployment(rollover, effective_by_group)
                 state_by_group = self._compute_managed_state(
                     current_by_group,
                     dict.fromkeys(effective_by_group, desired),
@@ -2958,10 +3150,16 @@ class GdsPushService(LoggerMixin):
 
             device = await sync_to_async(lambda: self.device)()
             domain = await sync_to_async(lambda: device.domain)()
+            if domain is None:
+                msg = 'Device has no domain configured'
+                self._raise_gds_push_error(msg)
+            issuing_ca = await self._issuing_ca_for_certificate()
+            issuance_domain = copy.copy(domain)
+            issuance_domain.issuing_ca = issuing_ca
 
             context = await sync_to_async(BaseCertificateRequestContext)(
                 device=device,
-                domain=domain,
+                domain=issuance_domain,
                 cert_requested=csr,
                 cert_profile_str='opc_ua',
                 protocol='opc_gds_push',

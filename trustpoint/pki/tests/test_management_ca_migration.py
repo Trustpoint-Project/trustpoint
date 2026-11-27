@@ -28,12 +28,17 @@ pytestmark = pytest.mark.django_db(
 OLD = [('pki', '0002_initial')]
 
 
-def test_pki_has_one_upgrade_from_initial_to_v1_0_1() -> None:
+def test_pki_has_one_upgrade_from_initial_to_current_release() -> None:
     """Keep the release upgrade independent of intermediate development migrations."""
     loader = MigrationLoader(None)
-    target = ('pki', '0003_tp_v1_0_1')
+    target = ('pki', '0004_tp_v1_0_2')
     pki_steps = [node for node in loader.graph.forwards_plan(target) if node[0] == 'pki']
-    assert pki_steps == [('pki', '0001_initial'), ('pki', '0002_initial'), target]
+    assert pki_steps == [
+        ('pki', '0001_initial'),
+        ('pki', '0002_initial'),
+        ('pki', '0003_tp_v1_0_1'),
+        target,
+    ]
     assert loader.graph.leaf_nodes('pki') == [target]
 
 

@@ -240,6 +240,14 @@ class CaRolloverService:
             CaRolloverStrategyType(rollover.strategy_type),
         )
 
+        missing_devices = rollover.missing_trustlist_devices()
+        if missing_devices:
+            msg = (
+                'Cannot finalize rollover until every GDS Push device received both the old and new '
+                f'CA TrustLists. Missing: {", ".join(missing_devices)}.'
+            )
+            raise CaRolloverError(msg)
+
         try:
             rollover.complete()
         except ValueError as exc:
