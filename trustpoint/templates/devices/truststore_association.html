@@ -22,6 +22,15 @@
                     <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
                         {% trans 'Import new Truststore' %}
                     </button>
+                    {% if discovered_certificate_available %}
+                        <a class="btn btn-secondary ms-2"
+                           href="{% url 'devices:devices_discovered_server_certificate' pk=device.pk %}">
+                            {% trans 'Download Discovered Server Certificate' %}
+                        </a>
+                        <p class="text-muted mt-2">
+                            {% trans 'Import the downloaded certificate as an OPC UA GDS Push truststore if the server is not trusted yet.' %}
+                        </p>
+                    {% endif %}
                 </div>
 
             </div>

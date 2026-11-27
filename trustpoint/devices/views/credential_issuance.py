@@ -5,6 +5,7 @@
 
 import abc
 import asyncio
+import base64
 from typing import Any, cast
 
 from django import forms
@@ -584,6 +585,7 @@ class OpcUaGdsPushDiscoverServerView(UserPermissionRequiredMixin, PageContextMix
             if success and server_info:
                 messages.success(request, message)
 
+                server_info['device_id'] = self.object.pk
                 request.session['opc_ua_server_info'] = server_info
 
                 if server_info.get('server_certificate_available'):
@@ -603,6 +605,33 @@ class OpcUaGdsPushDiscoverServerView(UserPermissionRequiredMixin, PageContextMix
                 f'devices:{self.page_name}_onboarding_truststore_associated_help', kwargs={'pk': self.object.pk}
             )
         )
+
+
+class OpcUaGdsPushDiscoveredCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Download the server certificate captured during discovery."""
+
+    http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Return the discovered DER certificate from the session."""
+        self.object = self.get_object()
+        server_info = request.session.get('opc_ua_server_info') or {}
+        encoded = server_info.get('server_certificate')
+        if server_info.get('device_id') != self.object.pk or not encoded:
+            msg = 'No discovered server certificate is available. Run discovery again.'
+            raise Http404(msg)
+        try:
+            certificate = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError) as e:
+            msg = 'The discovered server certificate is invalid. Run discovery again.'
+            raise Http404(msg) from e
+
+        response = HttpResponse(certificate, content_type='application/pkix-cert')
+        response['Content-Disposition'] = 'attachment; filename="opc-ua-server.der"'
+        return response
 
 
 class OpcUaGdsPushTruststoreAssociationView(
@@ -646,6 +675,10 @@ class OpcUaGdsPushTruststoreAssociationView(
         context = super().get_context_data(**kwargs)
         context['device'] = self.get_device()
         context['import_form'] = TruststoreAddForm()
+        server_info = self.request.session.get('opc_ua_server_info') or {}
+        context['discovered_certificate_available'] = bool(
+            server_info.get('server_certificate') and server_info.get('device_id') == self.get_device().pk
+        )
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:

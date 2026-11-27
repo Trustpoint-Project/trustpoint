@@ -20,6 +20,8 @@ Before configuring a device, prepare:
 
 For certificate-based authentication, the server must trust Trustpoint's client
 certificate and grant it the permissions required for certificate management.
+Trustpoint negotiates the strongest `SignAndEncrypt` security policy the server
+advertises (AES policies first, then `Basic256Sha256`).
 
 ## Register and Configure a Server
 
@@ -31,7 +33,9 @@ certificate and grant it the permissions required for certificate management.
    authentication.
 5. Configure the domain to use the **OPC UA Domain Credential** profile and issue
    the device's domain credential.
-6. Associate a truststore with the device to verify the OPC UA server.
+6. Associate a truststore with the device to verify the OPC UA server. If the
+   server certificate is not trusted yet, run **Discover Server** and download
+   the discovered certificate, then import it as an OPC UA GDS Push truststore.
 
 Use the device's certificate lifecycle management and help pages to access the
 available GDS Push operations.
@@ -51,6 +55,13 @@ into it, so existing trust entries are preserved. The root CA is installed as
 the trust anchor; issuing and intermediate CAs are installed as issuers. The
 server's rejected certificates are read and logged; they are not trusted
 automatically. A certificate renewal applies the trustlist first.
+
+Before signing the server's CSR, Trustpoint verifies that it keeps the current
+Common Name, ApplicationUri and DNS/IP SANs, and that a requested key rollover
+actually produced a new key. A server that changes these values or ignores the
+rollover is rejected with an explanatory error. After `ApplyChanges`, Trustpoint
+reconnects and reports whether the new certificate/trustlist is usable; a
+reconnect failure does not mark an already-applied update as failed.
 
 For devices with fixed trustlist capacity, configure **Maximum entries** and
 **Maximum element size** in the renewal settings. Limits count unique

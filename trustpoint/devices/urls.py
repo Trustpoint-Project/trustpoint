@@ -212,6 +212,11 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_discover_server',
     ),
     path(
+        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/discovered-certificate/',
+        views.OpcUaGdsPushDiscoveredCertificateView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_discovered_server_certificate',
+    ),
+    path(
         'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/truststore-association/',
         views.OpcUaGdsPushTruststoreAssociationView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_truststore_association',
