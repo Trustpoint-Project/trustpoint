@@ -28,6 +28,7 @@ from asyncua.crypto.truststore import TrustStore
 from asyncua.crypto.validator import CertificateValidator, CertificateValidatorOptions
 from asyncua.server.server import Server
 from asyncua.server.user_managers import CertificateUserManager, UserManager
+from asyncua.ua.object_ids import ObjectIds
 from asyncua.ua.status_codes import StatusCodes
 from asyncua.ua.ua_binary import struct_from_binary
 from asyncua.ua.uaerrors import UaStatusCodeError
@@ -48,6 +49,7 @@ HOST = os.environ.get('GDS_HOSTNAME', socket.gethostname())
 APP_URI = os.environ.get('GDS_APPLICATION_URI', f'urn:{HOST}:trustpoint-gds-push-test')
 USERNAME = os.environ.get('GDS_ADMIN_USERNAME', 'admin')
 PASSWORD = os.environ.get('GDS_ADMIN_PASSWORD', 'password')
+MIN_NONCE_LENGTH = 32
 
 
 def value(arg: Any) -> Any:
@@ -165,9 +167,9 @@ class PushState:
         self.check_group(value(group))
         certificate_type = value(cert_type)
         application_type_ids = {
-            int(ua.ObjectIds.ApplicationCertificateType),
-            int(ua.ObjectIds.RsaMinApplicationCertificateType),
-            int(ua.ObjectIds.RsaSha256ApplicationCertificateType),
+            int(ObjectIds.ApplicationCertificateType),
+            int(ObjectIds.RsaMinApplicationCertificateType),
+            int(ObjectIds.RsaSha256ApplicationCertificateType),
             23537,
             23538,
             23539,
@@ -181,7 +183,7 @@ class PushState:
 
         if bool(value(regenerate)):
             nonce_value = value(nonce)
-            if not isinstance(nonce_value, (bytes, bytearray)) or len(nonce_value) < 32:
+            if not isinstance(nonce_value, (bytes, bytearray)) or len(nonce_value) < MIN_NONCE_LENGTH:
                 raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
 
         if not bool(value(regenerate)):
