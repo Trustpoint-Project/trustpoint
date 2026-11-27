@@ -343,6 +343,27 @@ class GdsPushService(LoggerMixin):
                 msg = f'CA "{ca_name}" does not permit CRL signing (cRLSign) but a CRL is included.'
                 raise GdsPushError(msg)
 
+    async def _build_additional_trust_material(self) -> tuple[list[bytes], list[bytes]]:
+        """Load explicitly configured additional trust certificates."""
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        truststore = getattr(config, 'opc_gds_push_additional_trust_store', None) if config is not None else None
+        if truststore is None:
+            return [], []
+        orders = await sync_to_async(
+            lambda: list(truststore.truststoreordermodel_set.order_by('order').select_related('certificate'))
+        )()
+        trusted: list[bytes] = []
+        issuers: list[bytes] = []
+        for order in orders:
+            cert_model = order.certificate
+            certificate = await sync_to_async(lambda model=cert_model: model.get_certificate_serializer().as_crypto())()
+            certificate_der = certificate.public_bytes(serialization.Encoding.DER)
+            if certificate.subject == certificate.issuer:
+                trusted.append(certificate_der)
+            else:
+                issuers.append(certificate_der)
+        return trusted, issuers
+
     async def _build_trustlist_for_server(self) -> ua.TrustListDataType:
         """Build OPC UA TrustList to push to server.
 
@@ -411,12 +432,18 @@ class GdsPushService(LoggerMixin):
 
         root_cert, root_crl = chain_material[-1]
         issuers = chain_material[:-1]
+        additional_trusted, additional_issuers = await self._build_additional_trust_material()
+
+        trusted_certificates = list(dict.fromkeys([root_cert, *additional_trusted]))
+        issuer_certificates = [cert for cert, _crl in issuers]
+        issuer_certificates.extend(additional_issuers)
 
         trustlist = ua.TrustListDataType()
         trustlist.SpecifiedLists = ua.TrustListMasks.All
-        trustlist.TrustedCertificates = [root_cert]
+        trustlist.TrustedCertificates = trusted_certificates
         trustlist.TrustedCrls = [root_crl] if root_crl else []
-        trustlist.IssuerCertificates = [cert for cert, _crl in issuers]
+        trusted_set = set(trusted_certificates)
+        trustlist.IssuerCertificates = [cert for cert in dict.fromkeys(issuer_certificates) if cert not in trusted_set]
         trustlist.IssuerCrls = [crl for _cert, crl in issuers if crl]
 
         return trustlist
@@ -1315,7 +1342,7 @@ class GdsPushService(LoggerMixin):
     # Public API - Update TrustList
     # ========================================================================
 
-    async def update_trustlist(self) -> tuple[bool, str]:  # noqa: C901
+    async def update_trustlist(self) -> tuple[bool, str]:  # noqa: C901, PLR0912, PLR0915
         """Update server trustlist with CA chain and CRLs.
 
         Implements OPC UA Part 12 Section 7.7.3 UpdateTrustList workflow.
@@ -1347,16 +1374,23 @@ class GdsPushService(LoggerMixin):
 
                     success_count = 0
                     messages = []
+                    effective_by_group: dict[str, ua.TrustListDataType] = {}
+                    current_by_group: dict[str, ua.TrustListDataType | None] = {}
 
                     for node_info in trustlist_nodes:
                         group_name = node_info['group_name']
                         trustlist_node = node_info['trustlist_node']
+                        current = await self._read_trustlist(trustlist_node)
+                        current_by_group[group_name] = current
+                        effective = self._effective_trustlist(current, trustlist, group_name)
+                        effective_by_group[group_name] = effective
+                        summary = self._trustlist_change_summary(current, effective)
 
-                        success = await self._update_single_trustlist(trustlist_node, trustlist, defer_apply=True)
+                        success = await self._write_trustlist(trustlist_node, effective, defer_apply=True)
 
                         if success:
                             success_count += 1
-                            messages.append(f'✓ {group_name}')
+                            messages.append(f'✓ {group_name} ({summary})')
                         else:
                             messages.append(f'✗ {group_name}')
 
@@ -1392,15 +1426,29 @@ class GdsPushService(LoggerMixin):
                 raise
 
             if success_count == len(trustlist_nodes):
-                await self._record_managed_trustlist(trustlist)
                 rejected_note = f'; {len(rejected)} rejected certificate(s) on server' if rejected else ''
                 verified, verification_error = await self._verify_server_connection()
                 verification_note = (
                     '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
                 )
+                trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
+                state_note = ''
+                if trustlist_verified:
+                    state_by_group = self._compute_managed_state(
+                        current_by_group,
+                        dict.fromkeys(effective_by_group, trustlist),
+                        adopt_all=self._trustlist_mode() == 'authoritative',
+                    )
+                    await self._record_managed_trustlist_state(state_by_group)
+                    state_note = '; trust lists verified'
+                else:
+                    state_note = f'; trust list verification failed: {trustlist_error}'
+                    self.logger.warning(
+                        'Trust list verification failed for device %s: %s', self.device.pk, trustlist_error
+                    )
                 msg = (
                     f'Successfully updated {success_count}/{len(trustlist_nodes)} trustlist(s): '
-                    f'{", ".join(messages)}{rejected_note}{verification_note}'
+                    f'{", ".join(messages)}{rejected_note}{verification_note}{state_note}'
                 )
                 return True, msg
 
@@ -1892,23 +1940,43 @@ class GdsPushService(LoggerMixin):
             for der in (getattr(trustlist, attribute, None) or [])
         }
 
+    _TRUSTLIST_ATTRIBUTES: ClassVar[tuple[str, ...]] = (
+        'TrustedCertificates',
+        'TrustedCrls',
+        'IssuerCertificates',
+        'IssuerCrls',
+    )
+
+    def _managed_state_for_group(self, group_name: str) -> dict[str, set[str]]:
+        """Return the previously deployed managed fingerprints for one certificate group."""
+        device = getattr(self, 'device', None)
+        config = getattr(device, 'opc_ua_gds_push_config', None)
+        state = getattr(config, 'opc_gds_push_managed_trustlist_state', None) or {}
+        if not isinstance(state, dict):
+            return {}
+        group_state = state.get(group_name)
+        if not isinstance(group_state, dict):
+            return {}
+        return {attribute: set(group_state.get(attribute) or []) for attribute in self._TRUSTLIST_ATTRIBUTES}
+
     def _prune_stale_managed_entries(
         self,
         current: ua.TrustListDataType,
         desired: ua.TrustListDataType,
+        group_name: str,
     ) -> ua.TrustListDataType:
         """Remove previously managed entries that are no longer in the desired list."""
-        config = getattr(self.device, 'opc_ua_gds_push_config', None)
-        managed = set(getattr(config, 'opc_gds_push_managed_trustlist_fingerprints', None) or [])
-        if not managed:
-            return current
-        stale = managed - self._trustlist_fingerprints(desired)
-        if not stale:
+        owned = self._managed_state_for_group(group_name)
+        if not any(owned.values()):
             return current
 
         pruned = ua.TrustListDataType()
         pruned.SpecifiedLists = current.SpecifiedLists
-        for attribute in ('TrustedCertificates', 'TrustedCrls', 'IssuerCertificates', 'IssuerCrls'):
+        for attribute in self._TRUSTLIST_ATTRIBUTES:
+            desired_fingerprints = {
+                hashlib.sha256(der).hexdigest() for der in (getattr(desired, attribute, None) or [])
+            }
+            stale = owned.get(attribute, set()) - desired_fingerprints
             setattr(
                 pruned,
                 attribute,
@@ -1920,15 +1988,27 @@ class GdsPushService(LoggerMixin):
             )
         return pruned
 
+    def _trustlist_mode(self) -> str:
+        """Return the configured TrustList management mode."""
+        device = getattr(self, 'device', None)
+        config = getattr(device, 'opc_ua_gds_push_config', None)
+        return getattr(config, 'opc_gds_push_trustlist_mode', None) or 'managed'
+
     def _effective_trustlist(
         self,
         current: ua.TrustListDataType | None,
         desired: ua.TrustListDataType,
+        group_name: str,
     ) -> ua.TrustListDataType:
-        """Merge the desired trust list with the current one after pruning stale managed entries."""
+        """Build the deployed list for the selected mode and group."""
+        if self._trustlist_mode() == 'authoritative':
+            return desired
         if current is None:
             return desired
-        return self._merge_trustlists(self._prune_stale_managed_entries(current, desired), desired)
+        return self._merge_trustlists(
+            self._prune_stale_managed_entries(current, desired, group_name),
+            desired,
+        )
 
     @staticmethod
     def _trustlists_equal(current: ua.TrustListDataType | None, desired: ua.TrustListDataType) -> bool:
@@ -1942,22 +2022,95 @@ class GdsPushService(LoggerMixin):
             for attribute in ('TrustedCertificates', 'TrustedCrls', 'IssuerCertificates', 'IssuerCrls')
         )
 
-    async def _record_managed_trustlist(self, desired: ua.TrustListDataType) -> None:
-        """Remember which trust-list entries Trustpoint manages so removed CAs can be pruned."""
+    def _compute_managed_state(
+        self,
+        current_by_group: dict[str, ua.TrustListDataType | None],
+        desired_by_group: dict[str, ua.TrustListDataType],
+        *,
+        adopt_all: bool,
+    ) -> dict[str, dict[str, list[str]]]:
+        """Compute ownership without claiming entries that pre-existed unless authoritative adopt-all applies."""
+        state: dict[str, dict[str, list[str]]] = {}
+        for group_name, desired in desired_by_group.items():
+            current = current_by_group.get(group_name)
+            previous = self._managed_state_for_group(group_name)
+            group_state: dict[str, list[str]] = {}
+            for attribute in self._TRUSTLIST_ATTRIBUTES:
+                desired_fps = {hashlib.sha256(der).hexdigest() for der in (getattr(desired, attribute, None) or [])}
+                if adopt_all:
+                    owned = desired_fps
+                else:
+                    current_fps = {
+                        hashlib.sha256(der).hexdigest()
+                        for der in (getattr(current, attribute, None) or [])
+                        if current is not None
+                    }
+                    # Retain earlier ownership and claim only newly added desired entries.
+                    owned = (previous.get(attribute, set()) & desired_fps) | (desired_fps - current_fps)
+                group_state[attribute] = sorted(owned)
+            state[group_name] = group_state
+        return state
+
+    async def _record_managed_trustlist_state(
+        self,
+        state_by_group: dict[str, dict[str, list[str]]],
+    ) -> None:
+        """Persist per-group ownership only after the deployed list has been verified."""
         config = getattr(self.device, 'opc_ua_gds_push_config', None)
         if config is None:
             return
-        fingerprints = sorted(self._trustlist_fingerprints(desired))
         try:
             await sync_to_async(
                 lambda: (
                     type(config)
                     .objects.filter(pk=config.pk)
-                    .update(opc_gds_push_managed_trustlist_fingerprints=fingerprints)
+                    .update(opc_gds_push_managed_trustlist_state=state_by_group)
                 )
             )()
         except Exception as e:  # noqa: BLE001
-            self.logger.warning('Could not persist managed trust-list fingerprints: %s', e)
+            self.logger.warning('Could not persist managed trust-list state: %s', e)
+
+    @classmethod
+    def _trustlist_change_summary(
+        cls,
+        current: ua.TrustListDataType | None,
+        effective: ua.TrustListDataType,
+    ) -> str:
+        """Summarize added and removed entries for audit messages."""
+        if current is None:
+            added = sum(len(getattr(effective, attribute, None) or []) for attribute in cls._TRUSTLIST_ATTRIBUTES)
+            return f'{added} added, 0 removed'
+        added = 0
+        removed = 0
+        for attribute in cls._TRUSTLIST_ATTRIBUTES:
+            current_set = set(getattr(current, attribute, None) or [])
+            effective_set = set(getattr(effective, attribute, None) or [])
+            added += len(effective_set - current_set)
+            removed += len(current_set - effective_set)
+        return f'{added} added, {removed} removed'
+
+    async def _verify_trustlist_deployment(
+        self,
+        expected_by_group: dict[str, ua.TrustListDataType],
+    ) -> tuple[bool, str]:
+        """Reconnect and verify the deployed TrustLists match the expected normalized state."""
+        if not expected_by_group:
+            return True, ''
+        try:
+            client = await self._create_secure_client()
+            async with client:
+                nodes = await self._discover_trustlist_nodes(client)
+                by_name = {node['group_name']: node for node in nodes}
+                for group_name, expected in expected_by_group.items():
+                    node = by_name.get(group_name)
+                    if node is None:
+                        return False, f'TrustList group "{group_name}" is missing after deployment'
+                    actual = await self._read_trustlist(node['trustlist_node'])
+                    if not self._trustlists_equal(actual, expected):
+                        return False, f'TrustList group "{group_name}" does not match the deployed state'
+        except Exception as e:  # noqa: BLE001
+            return False, str(e)
+        return True, ''
 
     async def _update_single_trustlist(
         self,
@@ -1966,6 +2119,7 @@ class GdsPushService(LoggerMixin):
         max_chunk_size: int = 1024,
         *,
         defer_apply: bool = False,
+        group_name: str = '',
     ) -> bool:
         """Update a single TrustList node.
 
@@ -1974,13 +2128,19 @@ class GdsPushService(LoggerMixin):
             trustlist_data: TrustListDataType containing certificates and CRLs.
             max_chunk_size: Maximum size of each write chunk.
             defer_apply: Mark the transaction for a single ApplyChanges by the caller.
+            group_name: Certificate group name used to scope the managed-state snapshot.
 
         Returns:
             True if successful, False otherwise.
         """
         current_trustlist = await self._read_trustlist(trustlist_node)
-        effective_trustlist = self._effective_trustlist(current_trustlist, trustlist_data)
-        return await self._write_trustlist(trustlist_node, effective_trustlist, max_chunk_size, defer_apply=defer_apply)
+        effective_trustlist = self._effective_trustlist(current_trustlist, trustlist_data, group_name)
+        return await self._write_trustlist(
+            trustlist_node,
+            effective_trustlist,
+            max_chunk_size,
+            defer_apply=defer_apply,
+        )
 
     async def _write_trustlist(
         self,
@@ -2134,7 +2294,7 @@ class GdsPushService(LoggerMixin):
         else:
             return False, 'Failed to update any certificate', None
 
-    async def update_trustlist_and_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901
+    async def update_trustlist_and_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0915
         """Apply the trust list and server certificate in one transaction (Section 7.7.2)."""
         issued_cert: bytes | None = None
         issuer_chain: list[bytes] | None = None
@@ -2158,13 +2318,18 @@ class GdsPushService(LoggerMixin):
                 rejected = await self._read_rejected_certificates(client)
 
                 trustlist_success = 0
+                effective_by_group: dict[str, ua.TrustListDataType] = {}
+                current_by_group: dict[str, ua.TrustListDataType | None] = {}
                 for node_info in trustlist_nodes:
                     group_name = node_info['group_name']
-                    success = await self._update_single_trustlist(
-                        node_info['trustlist_node'], trustlist, defer_apply=True
-                    )
+                    current = await self._read_trustlist(node_info['trustlist_node'])
+                    current_by_group[group_name] = current
+                    effective = self._effective_trustlist(current, trustlist, group_name)
+                    effective_by_group[group_name] = effective
+                    summary = self._trustlist_change_summary(current, effective)
+                    success = await self._write_trustlist(node_info['trustlist_node'], effective, defer_apply=True)
                     trustlist_success += int(success)
-                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name}')
+                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name} ({summary})')
                 if trustlist_success != len(trustlist_nodes):
                     await self._cancel_changes(client)
                     return False, f'Trustlist update failed before certificate update: {", ".join(messages)}', None
@@ -2197,7 +2362,6 @@ class GdsPushService(LoggerMixin):
             self.logger.exception('Failed to update trustlist and certificate')
             return False, self._status_error(e, 'Combined GDS Push update'), None
 
-        await self._record_managed_trustlist(trustlist)
         if issued_cert and issuer_chain:
             await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
 
@@ -2205,12 +2369,67 @@ class GdsPushService(LoggerMixin):
         verification_note = (
             '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
         )
+        trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
+        state_note = ''
+        if trustlist_verified:
+            state_by_group = self._compute_managed_state(
+                current_by_group,
+                dict.fromkeys(effective_by_group, trustlist),
+                adopt_all=self._trustlist_mode() == 'authoritative',
+            )
+            await self._record_managed_trustlist_state(state_by_group)
+            state_note = '; trust lists verified'
+        else:
+            state_note = f'; trust list verification failed: {trustlist_error}'
+            self.logger.warning('Trust list verification failed for device %s: %s', self.device.pk, trustlist_error)
         rejected_note = f'; {len(rejected)} rejected certificate(s) on server' if rejected else ''
-        return (
-            True,
-            f'Successfully updated trustlist and certificate: {", ".join(messages)}{rejected_note}{verification_note}',
-            issued_cert,
+        result_message = (
+            f'Successfully updated trustlist and certificate: {", ".join(messages)}'
+            f'{rejected_note}{verification_note}{state_note}'
         )
+        return True, result_message, issued_cert
+
+    @staticmethod
+    def _describe_trust_entry(der: bytes, attribute: str) -> dict[str, Any]:
+        """Return a JSON-safe description of a certificate or CRL entry."""
+        if attribute.endswith('Crls'):
+            try:
+                crl = x509.load_der_x509_crl(der)
+            except Exception:  # noqa: BLE001
+                return {'sha256': hashlib.sha256(der).hexdigest()}
+            return {
+                'sha256': hashlib.sha256(der).hexdigest(),
+                'issuer': crl.issuer.rfc4514_string(),
+                'next_update': crl.next_update_utc.isoformat() if crl.next_update_utc else None,
+            }
+        return GdsPushService._describe_certificate(der)
+
+    async def preview_authoritative_trustlist(self) -> tuple[bool, str, dict[str, Any]]:
+        """Read the current targeted TrustLists and list entries authoritative mode would remove."""
+        removals: dict[str, dict[str, list[dict[str, Any]]]] = {}
+        try:
+            client = await self._create_secure_client()
+            async with client:
+                nodes = await self._discover_trustlist_nodes(client)
+                desired = await self._build_trustlist_for_server()
+                for node_info in nodes:
+                    current = await self._read_trustlist(node_info['trustlist_node'])
+                    if current is None:
+                        continue
+                    group_removals: dict[str, list[dict[str, Any]]] = {}
+                    for attribute in self._TRUSTLIST_ATTRIBUTES:
+                        desired_set = set(getattr(desired, attribute, None) or [])
+                        removed = [der for der in (getattr(current, attribute, None) or []) if der not in desired_set]
+                        if removed:
+                            group_removals[attribute] = [self._describe_trust_entry(der, attribute) for der in removed]
+                    if group_removals:
+                        removals[node_info['group_name']] = group_removals
+        except Exception as e:
+            self.logger.exception('Could not preview authoritative trust-list changes')
+            return False, self._status_error(e, 'Authoritative TrustList preview'), {}
+
+        total = sum(len(entries) for groups in removals.values() for entries in groups.values())
+        return True, f'{total} trust-list entr{"y" if total == 1 else "ies"} would be removed', removals
 
     def _certificate_group_due(
         self,
@@ -2264,19 +2483,22 @@ class GdsPushService(LoggerMixin):
 
                 desired: ua.TrustListDataType | None = None
                 trustlist_writes: list[tuple[dict[str, Any], ua.TrustListDataType]] = []
+                effective_by_group: dict[str, ua.TrustListDataType] = {}
+                current_by_group: dict[str, ua.TrustListDataType | None] = {}
                 if trustlist_nodes:
                     desired = await self._build_trustlist_for_server()
                     for node_info in trustlist_nodes:
                         current = await self._read_trustlist(node_info['trustlist_node'])
-                        effective = self._effective_trustlist(current, desired)
+                        group_name = node_info['group_name']
+                        effective = self._effective_trustlist(current, desired, group_name)
                         if not self._trustlists_equal(current, effective):
                             trustlist_writes.append((node_info, effective))
+                            effective_by_group[group_name] = effective
+                            current_by_group[group_name] = current
 
                 due_groups = [group for group in cert_groups if self._certificate_group_due(group, threshold_days, now)]
 
                 if not trustlist_writes and not due_groups:
-                    if desired is not None:
-                        await self._record_managed_trustlist(desired)
                     return True, 'No certificate or trust list update required', None
 
                 if due_groups and not trustlist_nodes:
@@ -2288,8 +2510,10 @@ class GdsPushService(LoggerMixin):
 
                 for node_info, effective in trustlist_writes:
                     group_name = node_info['group_name']
+                    current = await self._read_trustlist(node_info['trustlist_node'])
+                    summary = self._trustlist_change_summary(current, effective)
                     success = await self._write_trustlist(node_info['trustlist_node'], effective, defer_apply=True)
-                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name}')
+                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name} ({summary})')
                     if not success:
                         await self._cancel_changes(client)
                         return False, f'Trust list update failed: {", ".join(messages)}', None
@@ -2314,8 +2538,6 @@ class GdsPushService(LoggerMixin):
 
                 if self._apply_changes_required:
                     await self._apply_changes(client)
-                if desired is not None:
-                    await self._record_managed_trustlist(desired)
         except Exception as e:
             self.logger.exception('GDS Push reconciliation failed')
             return False, self._status_error(e, 'GDS Push reconciliation'), None
@@ -2327,8 +2549,22 @@ class GdsPushService(LoggerMixin):
         verification_note = (
             '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
         )
-        summary = ', '.join(messages) if messages else 'trust list and certificates already current'
-        return True, f'Reconciliation complete: {summary}{verification_note}', issued_cert
+        state_note = ''
+        if effective_by_group:
+            trustlist_verified, trustlist_error = await self._verify_trustlist_deployment(effective_by_group)
+            if trustlist_verified and desired is not None:
+                state_by_group = self._compute_managed_state(
+                    current_by_group,
+                    dict.fromkeys(effective_by_group, desired),
+                    adopt_all=self._trustlist_mode() == 'authoritative',
+                )
+                await self._record_managed_trustlist_state(state_by_group)
+                state_note = '; trust lists verified'
+            else:
+                state_note = f'; trust list verification failed: {trustlist_error}'
+                self.logger.warning('Trust list verification failed for device %s: %s', self.device.pk, trustlist_error)
+        summary = ', '.join(messages) if messages else 'trust lists and certificates already current'
+        return True, f'Reconciliation complete: {summary}{verification_note}{state_note}', issued_cert
 
     async def _discover_certificate_groups(self, client: Client) -> list[dict[str, Any]]:
         """Discover application certificate groups and the permitted certificate type.

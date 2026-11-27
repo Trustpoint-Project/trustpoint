@@ -118,12 +118,39 @@ class Migration(migrations.Migration):
         ),
         migrations.AddField(
             model_name='opcuagdspushconfig',
-            name='opc_gds_push_managed_trustlist_fingerprints',
+            name='opc_gds_push_trustlist_mode',
+            field=models.CharField(
+                choices=[
+                    ('managed', 'Managed (preserve external entries)'),
+                    ('authoritative', 'Authoritative (replace targeted lists)'),
+                ],
+                default='managed',
+                help_text='Managed preserves entries Trustpoint does not own and prunes only its own obsolete entries. Authoritative replaces the targeted TrustLists with the configured desired state.',
+                max_length=16,
+                verbose_name='Trust-List Management Mode',
+            ),
+        ),
+        migrations.AddField(
+            model_name='opcuagdspushconfig',
+            name='opc_gds_push_additional_trust_store',
+            field=models.ForeignKey(
+                blank=True,
+                help_text='Optional certificates added to the desired TrustList in both management modes.',
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='opc_ua_gds_push_additional_configs',
+                to='pki.truststoremodel',
+                verbose_name='Additional Trust Material',
+            ),
+        ),
+        migrations.AddField(
+            model_name='opcuagdspushconfig',
+            name='opc_gds_push_managed_trustlist_state',
             field=models.JSONField(
                 blank=True,
-                default=list,
-                help_text='SHA-256 fingerprints of the CA certificates and CRLs last managed by Trustpoint.',
-                verbose_name='Managed Trust-List Fingerprints',
+                default=dict,
+                help_text='Per certificate group SHA-256 fingerprints of Trustpoint-managed certificates and CRLs that were successfully deployed.',
+                verbose_name='Managed Trust-List State',
             ),
         ),
     ]

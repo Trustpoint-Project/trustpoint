@@ -53,11 +53,28 @@ Trustpoint provides operations to:
 - Request a certificate signing request from the server, issue a replacement
   server certificate, and push it to the server.
 
-Trustpoint reads the server's current trustlist and merges its CA chain and CRLs
-into it, so existing trust entries are preserved. The root CA is installed as
-the trust anchor; issuing and intermediate CAs are installed as issuers. The
-server's rejected certificates are read and logged; they are not trusted
-automatically. A certificate renewal applies the trustlist first.
+Trustpoint reads the server's current trustlist before every update. The root CA
+is installed as the trust anchor; issuing and intermediate CAs are installed as
+issuers. The server's rejected certificates are read and logged; they are not
+trusted automatically. A certificate renewal applies the trustlist first.
+
+Two TrustList management modes are available per device:
+
+- **Managed (default)** preserves entries Trustpoint does not own, adds or
+  updates Trustpoint-managed CA material and CRLs, and removes only previously
+  deployed managed entries that are no longer required. Pre-existing entries are
+  not claimed automatically, so ownership must be adopted explicitly by
+  deploying them through Trustpoint or by using authoritative mode.
+- **Authoritative** makes Trustpoint the sole authority for the targeted
+  application groups. It replaces the lists with the domain CA material, CRLs
+  and any configured **Additional trust material**. Enabling it requires a
+  preview of the entries that will be removed; entries outside the desired state
+  are deleted.
+
+The desired list includes certificates from the optional **Additional trust
+material** truststore in both modes. After deployment Trustpoint reconnects,
+verifies the resulting lists and only then records the per-group managed-state
+snapshot. Untargeted certificate groups (HTTPS, UserToken) are never modified.
 
 Before signing the server's CSR, Trustpoint verifies that it keeps the current
 Common Name, ApplicationUri and DNS/IP SANs, and that a requested key rollover

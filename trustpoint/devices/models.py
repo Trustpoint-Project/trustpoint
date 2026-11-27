@@ -203,6 +203,12 @@ class DeviceModel(CustomDeleteActionModel):
 class OpcUaGdsPushConfig(models.Model):
     """Connection, trust, and renewal settings belonging to one GDS Push device."""
 
+    class TrustListMode(models.TextChoices):
+        """How Trustpoint reconciles the targeted application TrustLists."""
+
+        MANAGED = 'managed', _('Managed (preserve external entries)')
+        AUTHORITATIVE = 'authoritative', _('Authoritative (replace targeted lists)')
+
     device = models.OneToOneField(
         DeviceModel,
         on_delete=models.CASCADE,
@@ -330,11 +336,33 @@ class OpcUaGdsPushConfig(models.Model):
         null=True,
         blank=True,
     )
-    opc_gds_push_managed_trustlist_fingerprints = models.JSONField(
-        _('Managed Trust-List Fingerprints'),
-        default=list,
+    opc_gds_push_trustlist_mode = models.CharField(
+        _('Trust-List Management Mode'),
+        max_length=16,
+        choices=TrustListMode.choices,
+        default=TrustListMode.MANAGED,
+        help_text=_(
+            'Managed preserves entries Trustpoint does not own and prunes only its own obsolete entries. '
+            'Authoritative replaces the targeted TrustLists with the configured desired state.'
+        ),
+    )
+    opc_gds_push_additional_trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('Additional Trust Material'),
+        null=True,
         blank=True,
-        help_text=_('SHA-256 fingerprints of the CA certificates and CRLs last managed by Trustpoint.'),
+        on_delete=models.SET_NULL,
+        related_name='opc_ua_gds_push_additional_configs',
+        help_text=_('Optional certificates added to the desired TrustList in both management modes.'),
+    )
+    opc_gds_push_managed_trustlist_state = models.JSONField(
+        _('Managed Trust-List State'),
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Per certificate group SHA-256 fingerprints of Trustpoint-managed certificates and CRLs '
+            'that were successfully deployed.'
+        ),
     )
 
     def __str__(self) -> str:
@@ -357,6 +385,12 @@ class OpcUaGdsPushConfig(models.Model):
             and self.opc_trust_store.intended_usage != TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
         ):
             errors['opc_trust_store'] = 'Truststore must be intended for OPC UA GDS Push.'
+        if self.opc_gds_push_additional_trust_store_id and (
+            self.opc_gds_push_additional_trust_store_id == self.opc_trust_store_id
+        ):
+            errors['opc_gds_push_additional_trust_store'] = (
+                'Additional trust material must use a different truststore than server authentication.'
+            )
         if errors:
             raise ValidationError(errors)
 

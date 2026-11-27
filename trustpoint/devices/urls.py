@@ -315,6 +315,16 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_refresh_inventory',
     ),
     path(
+        'opc-ua-gds-push/<int:pk>/trustlist-mode/',
+        views.OpcUaGdsPushTrustlistModeView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_trustlist_mode',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/trustlist-authoritative-preview/',
+        views.OpcUaGdsPushTrustlistAuthoritativePreviewView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_trustlist_authoritative_preview',
+    ),
+    path(
         'opc-ua-gds-push/<int:pk>/domain-credential-renewal-settings/',
         views.OpcUaGdsPushDomainCredentialRenewalSettingsView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_domain_credential_renewal_settings',

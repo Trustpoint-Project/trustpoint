@@ -61,7 +61,7 @@ from onboarding.models import (
     OnboardingStatus,
 )
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
-from pki.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel, TruststoreModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
@@ -1825,6 +1825,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             self._build_ca_hierarchy_section(device),
             self._build_download_section(device),
             self._build_actions_section(device),
+            self._build_trustlist_mode_section(device),
             self._build_inventory_section(device),
             self._build_renewal_settings_section(device, domain_credential=True),
         ]
@@ -2083,6 +2084,44 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_trustlist_mode_section(self, device: DeviceModel) -> HelpSection:
+        """Render the TrustList management mode and the switch/preview controls."""
+        config = device.opc_ua_gds_push_config
+        mode = config.opc_gds_push_trustlist_mode
+        mode_url = reverse('devices:devices_trustlist_mode', kwargs={'pk': device.pk})
+        if mode == 'authoritative':
+            action_html = (
+                '<form method="post" action="' + mode_url + '" class="d-inline">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<input type="hidden" name="mode" value="managed">'
+                '<button type="submit" class="btn btn-secondary">Switch to Managed Mode</button>'
+                '</form>'
+            )
+            description = (
+                'Authoritative mode replaces the targeted TrustLists with the desired state. '
+                'Entries outside that state are removed on the next update.'
+            )
+        else:
+            action_html = (
+                '<form method="post" action="' + mode_url + '" class="d-inline">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<input type="hidden" name="mode" value="authoritative">'
+                '<button type="submit" class="btn btn-warning">Preview Authoritative Mode</button>'
+                '</form>'
+            )
+            description = (
+                'Managed mode preserves entries Trustpoint does not own and removes only previously '
+                'deployed Trustpoint-managed entries that are no longer required.'
+            )
+        return HelpSection(
+            _non_lazy('Trust-List Management'),
+            [
+                HelpRow(_non_lazy('Current Mode'), mode.title(), ValueRenderType.PLAIN),
+                HelpRow(_non_lazy('Mode'), description, ValueRenderType.PLAIN),
+                HelpRow(_non_lazy('Change Mode'), action_html, ValueRenderType.HTML),
+            ],
+        )
+
     def _build_inventory_section(self, device: DeviceModel) -> HelpSection:
         """Render the last certificate inventory read from the device."""
         config = device.opc_ua_gds_push_config
@@ -2233,6 +2272,13 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             )
 
         limits_html = ''
+        additional_id = getattr(device.opc_ua_gds_push_config, 'opc_gds_push_additional_trust_store_id', None)
+        truststore_options = ''.join(
+            f'<option value="{store.pk}"'
+            + (' selected' if store.pk == additional_id else '')
+            + f'>{escape(store.unique_name)}</option>'
+            for store in TruststoreModel.objects.order_by('unique_name')
+        )
         if not domain_credential:
             pinned_selected = 'selected' if server_validation == 'pinned' else ''
             ca_selected = 'selected' if server_validation == 'ca' else ''
@@ -2247,6 +2293,13 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 '<div class="form-text text-muted">'
                 '  Use CA chain validation when the server certificate rotates; the current certificate '
                 'must chain to a CA in the truststore.'
+                '</div>'
+                '<label for="additionalTrustStore" class="form-label mt-3">Additional trust material</label>'
+                '<select class="form-select" id="additionalTrustStore" '
+                '        name="opc_gds_push_additional_trust_store">'
+                '<option value="">None</option>' + truststore_options + '</select>'
+                '<div class="form-text text-muted">'
+                '  Certificates in this truststore are added to the desired TrustList in both modes.'
                 '</div>'
                 '<h6 class="mt-3">Trust-list limits</h6>'
                 '<label for="maxTrustlistEntries" class="form-label">Maximum entries (0 = no limit)</label>'

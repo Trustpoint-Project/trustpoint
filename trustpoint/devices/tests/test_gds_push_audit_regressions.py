@@ -56,6 +56,44 @@ def gds_device(mock_models):
     return device
 
 
+def test_switching_to_authoritative_requires_preview(client, django_user_model, gds_device):
+    """Authoritative mode is entered through the preview flow, not the settings form."""
+    user = django_user_model.objects.create_user(username='gds-mode', password='test-password')
+    user.role.permissions.set(Permission.objects.filter(codename__in=['manage_devices', 'manage_gds_push']))
+    client.force_login(user)
+    url = reverse('devices:devices_trustlist_mode', kwargs={'pk': gds_device.pk})
+
+    response = client.post(url, {'mode': 'authoritative'})
+
+    assert response.status_code == 302
+    assert reverse('devices:devices_trustlist_authoritative_preview', kwargs={'pk': gds_device.pk}) in response.url
+    gds_device.opc_ua_gds_push_config.refresh_from_db()
+    assert gds_device.opc_ua_gds_push_config.opc_gds_push_trustlist_mode == 'managed'
+
+
+def test_authoritative_preview_lists_removals_and_confirms(admin_client, gds_device):
+    """Preview removals and persist authoritative mode only after confirmation."""
+    preview = (
+        True,
+        '1 trust-list entry would be removed',
+        {'Server': {'TrustedCertificates': [{'sha256': 'abc123', 'subject': 'CN=external'}]}},
+    )
+    service = Mock()
+    service.preview_authoritative_trustlist = AsyncMock(return_value=preview)
+    url = reverse('devices:devices_trustlist_authoritative_preview', kwargs={'pk': gds_device.pk})
+
+    with patch('devices.views.gds_push.GdsPushService', return_value=service):
+        response = admin_client.get(url)
+
+    assert response.status_code == 200
+    assert b'CN=external' in response.content
+
+    response = admin_client.post(url, {'confirm': 'yes'})
+    assert response.status_code == 302
+    gds_device.opc_ua_gds_push_config.refresh_from_db()
+    assert gds_device.opc_ua_gds_push_config.opc_gds_push_trustlist_mode == 'authoritative'
+
+
 def test_saving_settings_replaces_legacy_schedules_and_disable_cancels(gds_device):
     config = gds_device.opc_ua_gds_push_config
     task_name = f'gds_push_update_{gds_device.pk}'

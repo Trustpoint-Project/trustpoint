@@ -549,13 +549,14 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 6  # Includes the inventory and domain credential renewal settings.
+        assert len(sections) == 7  # Includes trust-list mode, inventory and renewal settings.
         assert sections[0].heading == 'Summary'
         assert sections[1].heading == 'CA Certificates'  # No CA configured
         assert sections[2].heading == 'Download Trust Bundle'
         assert sections[3].heading == 'Available Actions'
-        assert sections[4].heading == 'Certificate Inventory'
-        assert sections[5].heading == 'Periodic Domain Credential Renewal'
+        assert sections[4].heading == 'Trust-List Management'
+        assert sections[5].heading == 'Certificate Inventory'
+        assert sections[6].heading == 'Periodic Domain Credential Renewal'
         assert 'OPC UA GDS Push' in sections[0].rows[0].value
         assert heading == 'Help - OPC UA GDS Push Certificate Management'
 
@@ -584,10 +585,11 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 6
+        assert len(sections) == 7
         assert sections[3].heading == 'Available Actions'
-        assert sections[4].heading == 'Certificate Inventory'
-        assert sections[5].heading == 'Periodic Domain Credential Renewal'
+        assert sections[4].heading == 'Trust-List Management'
+        assert sections[5].heading == 'Certificate Inventory'
+        assert sections[6].heading == 'Periodic Domain Credential Renewal'
         # Should have domain credential required message
         assert 'Domain Credential Required' in sections[3].rows[1].key
 
