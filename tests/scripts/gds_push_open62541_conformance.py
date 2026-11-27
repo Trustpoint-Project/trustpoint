@@ -15,6 +15,7 @@ import asyncio
 import datetime as dt
 import ipaddress
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -296,7 +297,23 @@ def _wait_for_port(port: int, process: subprocess.Popen[str], timeout: float = 3
     raise TimeoutError(msg)
 
 
-def main() -> int:  # noqa: PLR0911, PLR0915
+_ALLOWED_OPEN62541_WARNINGS: tuple[str, ...] = (
+    'accesscontrol: unconfigured accesscontrol',
+    'accesscontrol: anonymous login is enabled',
+    'x509 certificate authentication configured, but no encrypting securitypolicy',
+    'username/password authentication configured, but no encrypting securitypolicy',
+    'rbac support enabled',
+    'rbac: allpermissionsforanonymous is enabled',
+    'no server profiles are declared',
+    'serverurls already set',
+    'zero revocation lists have been loaded',
+    # open62541 exposes ECC policies even when the configured server certificate is RSA.
+    # The client uses RSA policies; this is a server capability note, not a deployment failure.
+    'could not add securitypolicy#ecc',
+)
+
+
+def main() -> int:  # noqa: C901, PLR0911, PLR0915
     """Run the conformance test and return a process exit code."""
     binary = os.environ.get('OPEN62541_CI_SERVER')
     if not binary:
@@ -326,7 +343,6 @@ def main() -> int:  # noqa: PLR0911, PLR0915
                 stdout=log_file,
                 stderr=subprocess.STDOUT,
                 text=True,
-                env={**os.environ, 'UA_LOG_LEVEL': 'ERROR'},
             )
             try:
                 _wait_for_port(port, server)
@@ -354,32 +370,53 @@ def main() -> int:  # noqa: PLR0911, PLR0915
 
                 success, message = asyncio.run(service.update_trustlist())
                 print(f'TrustList update: {message}')
-                if not success or 'trust lists verified' not in message:
+                counts = re.search(r'updated (\d+)/(\d+) trustlist', message)
+                if (
+                    not success
+                    or counts is None
+                    or counts.group(1) != counts.group(2)
+                    or 'trust lists verified' not in message
+                    or 'verification failed' in message.lower()
+                    or '✗' in message
+                ):
                     print(raw_log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
                     return 1
 
                 success, message, certificate = asyncio.run(service.reconcile())
                 print(f'Idempotent reconciliation: {message}')
-                if not success or 'No certificate or trust list update required' not in message:
+                if (
+                    not success
+                    or 'No certificate or trust list update required' not in message
+                    or 'verification failed' in message.lower()
+                ):
                     print(raw_log_path.read_text(encoding='utf-8', errors='replace'), file=sys.stderr)
                     return 1
                 if certificate is not None:
                     print('Reconciliation unexpectedly renewed a certificate', file=sys.stderr)
                     return 1
 
-                # The ci_server example emits expected AccessControl/RBAC setup warnings.
-                # Keep only error/fatal lines in the uploaded artifact; real errors still fail.
+                # The ci_server example always emits a few AccessControl/RBAC setup warnings.
+                # Everything else, including security-policy/deployment warnings, fails the job.
                 server_log = raw_log_path.read_text(encoding='utf-8', errors='replace')
-                error_lines = [
-                    line for line in server_log.splitlines() if 'error/' in line.lower() or 'fatal/' in line.lower()
-                ]
-                if error_lines:
+                unexpected_lines = []
+                for line in server_log.splitlines():
+                    lowered = line.lower()
+                    if (
+                        'error/' in lowered
+                        or 'fatal/' in lowered
+                        or (
+                            'warn/' in lowered
+                            and not any(fragment in lowered for fragment in _ALLOWED_OPEN62541_WARNINGS)
+                        )
+                    ):
+                        unexpected_lines.append(line)
+                if unexpected_lines:
                     log_path.write_text(server_log, encoding='utf-8')
-                    print('\n'.join(error_lines), file=sys.stderr)
-                    print('open62541 logged an error during the conformance test', file=sys.stderr)
+                    print('\n'.join(unexpected_lines), file=sys.stderr)
+                    print('open62541 emitted an unexpected warning or error during deployment', file=sys.stderr)
                     return 1
                 log_path.write_text(
-                    'No open62541 error-level messages.\n',
+                    'No unexpected open62541 warnings or errors.\n',
                     encoding='utf-8',
                 )
             finally:
