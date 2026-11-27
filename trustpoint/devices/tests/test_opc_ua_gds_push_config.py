@@ -74,12 +74,26 @@ def test_trustlist_limits_default_to_disabled(opc_device):
     config = opc_device.opc_ua_gds_push_config
     assert config.opc_gds_push_max_trustlist_entries == 0
     assert config.opc_gds_push_max_trustlist_element_size == 0
+    assert config.opc_gds_push_require_crls is True
     config.opc_gds_push_max_trustlist_entries = 62
     config.opc_gds_push_max_trustlist_element_size = 4096
     config.save(update_fields=['opc_gds_push_max_trustlist_entries', 'opc_gds_push_max_trustlist_element_size'])
+    config.opc_gds_push_require_crls = False
+    config.save(update_fields=['opc_gds_push_require_crls'])
     config.refresh_from_db()
     assert config.opc_gds_push_max_trustlist_entries == 62
     assert config.opc_gds_push_max_trustlist_element_size == 4096
+    assert config.opc_gds_push_require_crls is False
+
+
+def test_server_url_defaults_empty_and_persists(opc_device):
+    config = opc_device.opc_ua_gds_push_config
+    assert config.opc_server_url == ''
+    config.opc_server_url = 'opc.tcp://public.example:4840/plant'
+    config.full_clean()
+    config.save(update_fields=['opc_server_url'])
+    config.refresh_from_db()
+    assert config.opc_server_url == 'opc.tcp://public.example:4840/plant'
 
 
 def test_server_key_rollover_defaults_to_reuse(opc_device):

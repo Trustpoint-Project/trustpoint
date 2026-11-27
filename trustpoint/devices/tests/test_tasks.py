@@ -9,6 +9,7 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from django.core.cache import cache
 
 from devices.models import DeviceModel, OpcUaGdsPushConfig
 from devices.tasks import (
@@ -438,6 +439,18 @@ class TestManualGdsPushTasks:
             update_gds_push_server_certificate(device.pk)
 
         assert calls == ['trustlist', 'certificate']
+
+    def test_manual_update_skips_when_device_locked(self, mock_models):
+        """Do not run a manual GDS Push operation while another one holds the lock."""
+        device = mock_models['device']
+        lock_key = f'gds_push_device_{device.pk}'
+        cache.add(lock_key, '1', timeout=60)
+        try:
+            with patch('devices.tasks.GdsPushService') as service:
+                update_gds_push_trustlist(device.pk)
+                service.assert_not_called()
+        finally:
+            cache.delete(lock_key)
 
     def test_update_server_certificate_continues_after_trustlist_failure(self, mock_models):
         """A failed trust-list update does not block the certificate attempt."""

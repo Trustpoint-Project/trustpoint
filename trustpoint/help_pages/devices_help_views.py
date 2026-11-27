@@ -2094,6 +2094,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Their settings and background tasks remain independent.
         """
         regenerate_key = False
+        require_crls = False
         max_trustlist_entries = 0
         max_trustlist_element_size = 0
         if domain_credential:
@@ -2116,6 +2117,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
             next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
             regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
+            require_crls = device.opc_ua_gds_push_config.opc_gds_push_require_crls
             max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
             max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
@@ -2182,6 +2184,12 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 '<div class="form-text text-muted">'
                 '  Counts unique certificates and CRLs. Example: S7-1500 devices may allow 62 entries '
                 'and 4,096 bytes per element; verify against the device documentation.'
+                '</div>'
+                '<div class="form-check form-switch mt-3">'
+                '  <input class="form-check-input" type="checkbox" role="switch" '
+                '         id="requireCrls" name="opc_gds_push_require_crls" '
+                f'         {"checked" if require_crls else ""}>'
+                '  <label class="form-check-label" for="requireCrls">Require CRLs in pushed trust lists</label>'
                 '</div>'
             )
 

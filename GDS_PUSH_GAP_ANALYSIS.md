@@ -71,7 +71,7 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 6 (all done)**, **P1 = 13**, **P2 = 21**, **P3 = 7**, **already implemented = 6** — 28 of 53 items are done.
+Findings by priority: **P0 = 6 (all done)**, **P1 = 13**, **P2 = 21**, **P3 = 7**, **already implemented = 6** — 31 of 53 items are done.
 
 The main gaps are:
 
@@ -110,7 +110,7 @@ The main gaps are:
 | WF-05 | P3 | Use `CreateSelfSignedCertificate` when no usable certificate exists (§7.7.4) | Missing | Method never called. | Optional. Implement only if servers without an existing certificate must be supported. | [ ] |
 | WF-06 | P2 | CertificateManager generates the private key when the server cannot (§7.7.4) | Missing | Always `RegeneratePrivateKey=True`; no fallback path. | Read `SupportedPrivateKeyFormats`; on `Bad_NotSupported`, generate key + CSR locally, sign, and upload key via `UpdateCertificate`. | [ ] |
 | WF-07 | P3 | Create Endpoint / Update Configuration workflows (§7.7.5/§7.7.6) | Missing | No `ConfigurationFile`, `UpdateTargets`, `ConfirmUpdate` usage. | Optional; separate feature. Not required for certificate replacement. | [ ] |
-| WF-08 | P2 | CertificateManager needs a `DiscoveryUrl`; NAT/hostnames supported (§7.7.2) | Missing | URL is built as `opc.tcp://{ip_address}:{port}` (`gds_push_service.py:101`). node-opcua's Erlangen IOP report found containerized servers advertising unreachable hostnames and advertised endpoints losing their resource path; OPC 10000-4 requires the server to answer with the URL the client used. | Add an optional discovery/endpoint URL field; keep the connection address separate from advertised URLs; preserve the complete URL including resource path; support NAT/Docker hostnames and fall back to IP:port. | [ ] |
+| WF-08 | P2 | CertificateManager needs a `DiscoveryUrl`; NAT/hostnames supported (§7.7.2) | Implemented | `opc_server_url` is an optional full endpoint URL (including resource path) that overrides IP/port; discovery returns advertised endpoint URLs unchanged. node-opcua's Erlangen IOP findings drove the separation of connection address and advertised URL. | Done; service/model/form tests added. | [x] |
 | WF-09 | P0 | Workflow consistency | Implemented | `update_trustlist` and `update_server_certificate` now require every targeted group to succeed; partial updates return `False` with a per-group message and do not replace the local truststore. | Done; partial-success tests added. | [x] |
 | WF-10 | P1 | `ApplyChanges` completion and session teardown (§7.10.9, §7.7.2) | Implemented | `BadServerHalted` is treated as success; after a trust-list or certificate update Trustpoint reconnects with the current truststore and reports `reconnect verified` or the verification error without failing the applied update. | Done; verification success/failure tests added. | [x] |
 
@@ -118,7 +118,7 @@ The main gaps are:
 
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
-| METH-01 | P0 | `CreateSigningRequest`: Nonce shall be at least 32 bytes when `RegeneratePrivateKey=TRUE` (§7.10.10) | Implemented | Passes `os.urandom(32)`; unit test asserts the nonce. | Done. Still recommended: make the test server reject a missing/short nonce (OPS-02). | [x] |
+| METH-01 | P0 | `CreateSigningRequest`: Nonce shall be at least 32 bytes when `RegeneratePrivateKey=TRUE` (§7.10.10) | Implemented | Passes `os.urandom(32)` when rollover is requested; unit test asserts the nonce and the test server rejects a missing/short nonce. | Done. | [x] |
 | METH-02 | P0 | `CertificateTypeId` must be one permitted by the group's `CertificateTypes` (§7.10.5, §7.8.3.1) | Implemented | `_select_application_certificate_type` reads `CertificateTypes` and prefers RsaSha256, then RsaMin, then named ECC types; groups with no application type are skipped. | Done; covered by discovery tests. Follow-up: prefer the currently assigned slot type discovered via `GetCertificates` (METH-08). | [x] |
 | METH-03 | — | `UpdateCertificate` arguments: group, type, DER cert, issuer list, key format/key (§7.10.5) | Implemented | Correct for the server-generated-key case (`:1135–1143`). `IssuerCertificates` is redundant for application certificates per the standard and is ignored by the server. | Keep; extend for METH-04. | [x] |
 | METH-04 | P2 | Upload an externally generated private key (PKCS#8/PKCS#12) (§7.7.4, §7.10.5) | Missing | `PrivateKeyFormat=''`, `PrivateKey=b''` always. | Add CM-side key generation and key upload, gated by `SupportedPrivateKeyFormats`. | [ ] |
@@ -140,7 +140,7 @@ The main gaps are:
 | TL-02 | P1 | List semantics: trusted anchors vs issuers (§7.8.2.8) | Implemented | The root CA and its CRL go to `TrustedCertificates`/`TrustedCrls`; issuing and intermediate CAs and their CRLs go to `IssuerCertificates`/`IssuerCrls`. Merge also removes a trusted certificate from the issuer list. | Done; tests assert root-only trust anchors and cross-list de-duplication. Verify against a strict server with a multi-level chain. | [x] |
 | TL-03 | — | Provide all issuers/CRLs needed for the new certificate (§7.7.2) | Implemented | Domain CA chain + CRLs. | Keep; include the server's new issuer after selection. | [x] |
 | TL-04 | P0 | Do not destroy unrelated trust entries | Implemented | Trust-list discovery now targets only application-purpose groups, so HTTPS/UserToken trust lists are no longer overwritten with the application CA chain. Full replacement within a targeted group remains the protocol-defined `Open(Write\|EraseExisting)` behaviour. | Done; document that the trust list is authoritative for the targeted application groups. Optional: read and display the current list before replacing it. | [x] |
-| TL-05 | P2 | CRLs | Partial (stricter than spec) | A CRL is mandatory for **every** CA (`:253–256`), including roots that commonly have none. Expiry is checked. .NET issue #2552 shows strict revocation checking failing after a certificate update when the CRL is missing. | Allow trust-list updates when a CA legitimately has no CRL (configurable policy), or document the restriction as a product requirement. | [ ] |
+| TL-05 | P2 | CRLs | Implemented | A CRL is required by default for every CA; `opc_gds_push_require_crls` (default true) can be disabled per device to continue without a CRL. Expired CRLs are still rejected. .NET issue #2552 remains the reason the default is strict. | Done; config/UI/tests added. | [x] |
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Implemented | `_read_server_capabilities` reads `MaxTrustListSize`; `_validate_trustlist_limits` rejects a serialized trust list above it before writing. Device entry/element limits are separate (TL-08). | Done. | [x] |
 | TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. Watch Mantis 9852/9853 (File-API deadlock/concurrent reads) when retrying reads. | [x] |
 | TL-08 | P1 | Device trust-list capacity and element-size preflight | Implemented | Configurable `opc_gds_push_max_trustlist_entries` and `opc_gds_push_max_trustlist_element_size` (0 = no limit) preflight the merged list, counting unique DER objects across all four lists (shared certificates count once) and checking each element size. UI fields and migration 0004_tp_v1_0_2 added. | Done; tests cover shared entries, excess count and oversized elements. Aggregate size remains in TL-06. | [x] |
@@ -164,9 +164,9 @@ The main gaps are:
 | ID | Priority | Aspect | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
 | OPS-01 | P1 | Unit tests cover real protocol strictness | Implemented | Tests now cover nonce length, group/type filtering, partial results, trust-list limits, SAN/CN identity, policy selection, apply-once and status-code hints. Stack interactions are still mocked; OPS-03 covers real-stack interop. | Done for unit-level strictness. | [x] |
-| OPS-02 | P1 | Integration server behaves like a strict server | Partial | `trustpoint/request/gds_push/asyncua-gds-push-test/server.py` ignores the nonce (`:162`) and uses a simplified address space. | Make the test server enforce the nonce, permitted certificate types and separate group purposes; add negative tests. | [ ] |
+| OPS-02 | P1 | Integration server behaves like a strict server | Implemented | The test server now rejects a missing/short nonce when key rollover is requested and rejects non-application certificate types. Group filtering is covered by discovery tests. | Done; negative tests added. | [x] |
 | OPS-03 | P1 | Real-stack conformance | Missing | No test against open62541, a commercial GDS, or an AES/ECC-only server. | Add one real-stack interoperability test before claiming conformance. | [ ] |
-| OPS-04 | P2 | Timeouts, retries, concurrency | Partial | Secure client now sets 10 s channel and 20 s session timeouts. No retry/backoff and no lock preventing a manual push from overlapping the scheduled push. | Remaining: bounded retries and a per-device operation lock. | [ ] |
+| OPS-04 | P2 | Timeouts, retries, concurrency | Partial | Secure client uses 10 s channel / 20 s session timeouts; all periodic/manual GDS Push tasks share a per-device cache lock and skip when another operation is running. No retry/backoff yet. | Remaining: bounded retries/backoff for transient contention. | [ ] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Implemented | Discovery now captures the endpoint certificate and exposes it for truststore import; the user guide documents policy negotiation, identity validation, trust-list merge and reconnect verification. | Done. | [x] |
 | OPS-06 | P2 | Preserve OPC UA status codes and distinguish auth/trust/config failures | Implemented | `_status_error` keeps the symbolic name and hex code and adds actionable hints for access denied, insufficient security, untrusted/invalid/revocation-unknown certificates, hostname mismatch, signature failure, security-check failure and pending transactions. | Done; status-code test added. | [x] |
 
@@ -197,7 +197,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **WF-01** Ensure every certificate update is preceded by the required trust-list update (or combine them in one workflow).
 - [x] **WF-09** Return structured per-group results; do not report partial success as success.
 - [x] **SEC-09** Validate and preserve CSR/issued-certificate SANs, ApplicationUri and CN before deployment.
-- [ ] **OPS-01 / OPS-02** Extend the test server and unit tests to catch these regressions. (Unit tests added; test server nonce/type enforcement still open.)
+- [x] **OPS-01 / OPS-02** Extend the test server and unit tests to catch these regressions.
 
 **Exit criteria:** the workflow succeeds against a strict test server that enforces a nonce, permits only `RsaSha256ApplicationCertificateType`, and exposes separate HTTPS/UserToken groups; a partial group failure is reported as failure.
 
@@ -237,7 +237,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [ ] **WF-05** `CreateSelfSignedCertificate` when no certificate exists.
 - [ ] **METH-10** `ManagedApplications` / `ApplicationConfigurationType`.
 - [ ] **WF-07** Create Endpoint / Update Configuration workflows.
-- [ ] **TL-05** Configurable CRL requirement (allow missing root CRL).
+- [x] **TL-05** Configurable CRL requirement (allow missing root CRL).
 - [ ] **WF-08** Configurable discovery/endpoint URL and hostname support.
 - [ ] **GDS-01 … GDS-04** §6 GDS role and registration (only for interpretation B).
 
@@ -278,7 +278,7 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] The issued server certificate has the ApplicationUri and DNS/IP SANs required by clients; the CN matches the vendor's rule.
 - [x] A requested key rollover is verified by comparing public keys; an ignored rollover is detected.
 - [x] Failure messages preserve the original OPC UA StatusCode and distinguish auth, trust, hostname and configuration errors.
-- [ ] Advertised endpoint URLs preserve host and resource path, and the connection address is configurable separately.
+- [x] Advertised endpoint URLs preserve host and resource path, and the connection address is configurable separately.
 - [ ] Certificate inventory is read from the device (`GetCertificates`) rather than inferred from the last deployment.
 
 ## 7. File and line map (current code, 2026-11-27)

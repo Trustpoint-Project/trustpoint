@@ -156,13 +156,34 @@ class PushState:
         self,
         _parent: ua.NodeId,
         group: ua.Variant,
-        _cert_type: ua.Variant,
+        cert_type: ua.Variant,
         subject: ua.Variant,
         regenerate: ua.Variant,
-        _nonce: ua.Variant,
+        nonce: ua.Variant,
     ) -> list[ua.Variant]:
         """Create a signing request, optionally staging a fresh private key."""
         self.check_group(value(group))
+        certificate_type = value(cert_type)
+        application_type_ids = {
+            int(ua.ObjectIds.ApplicationCertificateType),
+            int(ua.ObjectIds.RsaMinApplicationCertificateType),
+            int(ua.ObjectIds.RsaSha256ApplicationCertificateType),
+            23537,
+            23538,
+            23539,
+            23540,
+            23541,
+            23542,
+            23543,
+        }
+        if certificate_type is not None and certificate_type.Identifier not in application_type_ids:
+            raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
+
+        if bool(value(regenerate)):
+            nonce_value = value(nonce)
+            if not isinstance(nonce_value, (bytes, bytearray)) or len(nonce_value) < 32:
+                raise UaStatusCodeError(StatusCodes.BadInvalidArgument)  # type: ignore[no-untyped-call]
+
         if not bool(value(regenerate)):
             LOG.info('CSR requested without key regeneration; using existing key')
             key = serialization.load_pem_private_key(self.key.read_bytes(), password=None)

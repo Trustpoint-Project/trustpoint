@@ -157,6 +157,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
 
         enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
         regenerate_server_key = request.POST.get('opc_gds_push_regenerate_server_key') == 'on'
+        require_crls = request.POST.get('opc_gds_push_require_crls') == 'on'
         interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
         max_entries_raw = request.POST.get('opc_gds_push_max_trustlist_entries', '0')
         max_element_raw = request.POST.get('opc_gds_push_max_trustlist_element_size', '0')
@@ -180,6 +181,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
         self.object.opc_ua_gds_push_config.opc_gds_push_renewal_interval = interval
         self.object.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key = regenerate_server_key
+        self.object.opc_ua_gds_push_config.opc_gds_push_require_crls = require_crls
         self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries = max_entries
         self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size = max_element_size
         self.object.opc_ua_gds_push_config.save(
@@ -187,6 +189,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
                 'opc_gds_push_enable_periodic_update',
                 'opc_gds_push_renewal_interval',
                 'opc_gds_push_regenerate_server_key',
+                'opc_gds_push_require_crls',
                 'opc_gds_push_max_trustlist_entries',
                 'opc_gds_push_max_trustlist_element_size',
             ]

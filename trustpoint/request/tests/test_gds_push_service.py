@@ -205,6 +205,20 @@ class TestGdsPushService:
             assert entries == original_entries
             assert not revoked
 
+    def test_init_uses_configured_server_url(self, mock_opc_device):
+        """A configured endpoint URL overrides the IP/port-derived URL."""
+        mock_opc_device.opc_ua_gds_push_config.opc_server_url = 'opc.tcp://public.example:4840/plant/edge'
+        service = GdsPushService(mock_opc_device, insecure=True)
+        assert service.server_url == 'opc.tcp://public.example:4840/plant/edge'
+
+    def test_init_accepts_url_without_ip_or_port(self, mock_opc_device):
+        """A configured URL is sufficient even when IP and port are absent."""
+        mock_opc_device.ip_address = ''
+        mock_opc_device.opc_ua_gds_push_config.opc_server_port = 0
+        mock_opc_device.opc_ua_gds_push_config.opc_server_url = 'opc.tcp://server.example:4840'
+        service = GdsPushService(mock_opc_device, insecure=True)
+        assert service.server_url == 'opc.tcp://server.example:4840'
+
     def test_init_insecure_mode(self, mock_opc_device):
         """Test initialization in insecure mode."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -248,7 +262,7 @@ class TestGdsPushService:
         )
         device.save()
 
-        with pytest.raises(GdsPushError, match='must have IP address and OPC server port configured'):
+        with pytest.raises(GdsPushError, match='must have an IP address and OPC server port'):
             GdsPushService(device)
 
     def test_init_device_missing_port(self, mock_domain, mock_truststore):
@@ -269,7 +283,7 @@ class TestGdsPushService:
         device.save()
         device.opc_ua_gds_push_config.opc_server_port = 0
 
-        with pytest.raises(GdsPushError, match='must have IP address and OPC server port configured'):
+        with pytest.raises(GdsPushError, match='must have an IP address and OPC server port'):
             GdsPushService(device)
 
     def test_init_device_no_onboarding_config(self, mock_domain):
@@ -2318,6 +2332,22 @@ class TestGdsPushServiceAdditionalCoverage:
         ):
             with pytest.raises(GdsPushError, match='has no CRL configured'):
                 await service._build_trustlist_for_server()
+
+    @pytest.mark.asyncio
+    async def test_build_trustlist_allows_missing_crls_when_optional(self, mock_opc_device, mock_ca_with_crl):
+        """Continue without a CRL when the device explicitly permits it."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_require_crls = False
+
+        with (
+            patch.object(service, '_build_ca_chain', new_callable=AsyncMock, return_value=[mock_ca_with_crl]),
+            patch.object(CaModel, 'crl_pem', new_callable=PropertyMock, return_value=''),
+        ):
+            trustlist = await service._build_trustlist_for_server()
+
+        assert len(trustlist.TrustedCertificates) == 1
+        assert trustlist.TrustedCrls == []
+        assert trustlist.IssuerCrls == []
 
     @pytest.mark.asyncio
     async def test_get_client_credentials_wraps_private_key_failure(self, mock_opc_device, mock_domain_credential):

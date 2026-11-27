@@ -169,7 +169,12 @@ async def test_certificate_update_uses_discovered_group_and_persists_matching_ke
         assert exc.value.code == ua.StatusCodes.BadInvalidArgument
 
     csr_der = await config.call_method(
-        '0:CreateSigningRequest', group.nodeid, ua.NodeId(ua.ObjectIds.ApplicationCertificateType), None, True, None
+        '0:CreateSigningRequest',
+        group.nodeid,
+        ua.NodeId(ua.ObjectIds.ApplicationCertificateType),
+        None,
+        True,
+        b'0' * 32,
     )
     csr = x509.load_der_x509_csr(csr_der)
     assert csr.is_signature_valid
@@ -209,6 +214,40 @@ async def test_certificate_update_uses_discovered_group_and_persists_matching_ke
     assert (state.backup / 'previous-server.pem').read_bytes() == previous_key
     assert state.pending_key is None
     assert state.pending_cert is None
+
+
+@pytest.mark.asyncio
+async def test_test_server_rejects_short_nonce_and_non_application_type(tmp_path):
+    """The standalone server enforces the CreateSigningRequest argument rules."""
+    from asyncua import Server, ua
+
+    script = Path(__file__).resolve().parents[1] / 'gds_push' / 'asyncua-gds-push-test' / 'server.py'
+    namespace = runpy.run_path(str(script))
+    state = namespace['PushState'](tmp_path)
+    await state.setup()
+    server = Server()
+    await server.init()
+    await namespace['configure_push_methods'](server, state)
+
+    with pytest.raises(UaStatusCodeError):
+        await state.csr(
+            ua.NodeId(),
+            ua.Variant(state.application_group),
+            ua.Variant(ua.NodeId(ua.ObjectIds.ApplicationCertificateType)),
+            ua.Variant(''),
+            ua.Variant(True),
+            ua.Variant(b'short'),
+        )
+
+    with pytest.raises(UaStatusCodeError):
+        await state.csr(
+            ua.NodeId(),
+            ua.Variant(state.application_group),
+            ua.Variant(ua.NodeId(ua.ObjectIds.HttpsCertificateType)),
+            ua.Variant(''),
+            ua.Variant(True),
+            ua.Variant(b'0' * 32),
+        )
 
 
 @pytest.mark.asyncio

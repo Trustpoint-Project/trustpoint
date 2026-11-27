@@ -135,7 +135,10 @@ class GdsPushService(LoggerMixin):
         self._apply_changes_required = False
         self._validate_device_config()
 
-        self.server_url = f'opc.tcp://{device.ip_address}:{device.opc_ua_gds_push_config.opc_server_port}'
+        configured_url = (getattr(device.opc_ua_gds_push_config, 'opc_server_url', '') or '').strip()
+        self.server_url = configured_url or (
+            f'opc.tcp://{device.ip_address}:{device.opc_ua_gds_push_config.opc_server_port}'
+        )
 
         if insecure:
             self.domain_credential = None
@@ -150,12 +153,13 @@ class GdsPushService(LoggerMixin):
         Raises:
             GdsPushError: If device configuration is invalid.
         """
-        if (
-            not self.device.ip_address
-            or not hasattr(self.device, 'opc_ua_gds_push_config')
-            or not self.device.opc_ua_gds_push_config.opc_server_port
-        ):
-            msg = f'Device "{self.device.common_name}" must have IP address and OPC server port configured'
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        has_url = bool((getattr(config, 'opc_server_url', '') or '').strip())
+        if config is None or (not has_url and (not self.device.ip_address or not config.opc_server_port)):
+            msg = (
+                f'Device "{self.device.common_name}" must have an IP address and OPC server port, '
+                'or an OPC server URL configured'
+            )
             self._raise_gds_push_error(msg)
 
     def _setup_secure_mode(self) -> None:
@@ -277,8 +281,11 @@ class GdsPushService(LoggerMixin):
             msg = 'CA chain is empty; cannot build the OPC UA TrustList.'
             raise GdsPushError(msg)
 
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        require_crls = bool(getattr(config, 'opc_gds_push_require_crls', True))
+
         # get_ca_chain_from_truststore returns issuing CA -> root.
-        chain_material: list[tuple[bytes, bytes]] = []
+        chain_material: list[tuple[bytes, bytes | None]] = []
         for ca in ca_chain:
             ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
 
@@ -287,8 +294,17 @@ class GdsPushService(LoggerMixin):
 
             crl_pem = await sync_to_async(lambda ca=ca: ca.crl_pem)()
             if not crl_pem:
-                msg = f'CA "{ca.unique_name}" has no CRL configured. CRL is mandatory for OPC UA GDS Push trustlist.'
-                raise GdsPushError(msg)
+                if require_crls:
+                    msg = (
+                        f'CA "{ca.unique_name}" has no CRL configured. CRL is mandatory for OPC UA GDS Push trustlist.'
+                    )
+                    raise GdsPushError(msg)
+                self.logger.warning(
+                    'CA "%s" has no CRL; continuing because CRLs are optional for this device',
+                    ca.unique_name,
+                )
+                chain_material.append((ca_cert_der, None))
+                continue
 
             try:
                 crl_crypto = x509.load_pem_x509_crl(crl_pem.encode())
@@ -314,9 +330,9 @@ class GdsPushService(LoggerMixin):
         trustlist = ua.TrustListDataType()
         trustlist.SpecifiedLists = ua.TrustListMasks.All
         trustlist.TrustedCertificates = [root_cert]
-        trustlist.TrustedCrls = [root_crl]
+        trustlist.TrustedCrls = [root_crl] if root_crl else []
         trustlist.IssuerCertificates = [cert for cert, _crl in issuers]
-        trustlist.IssuerCrls = [crl for _cert, crl in issuers]
+        trustlist.IssuerCrls = [crl for _cert, crl in issuers if crl]
 
         return trustlist
 

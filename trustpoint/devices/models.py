@@ -213,6 +213,13 @@ class OpcUaGdsPushConfig(models.Model):
         default=4840,
         validators=[MinValueValidator(1), MaxValueValidator(65535)],
     )
+    opc_server_url = models.CharField(
+        _('OPC Server URL'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('Optional full endpoint URL (opc.tcp://host:port/path). Overrides the IP address and port.'),
+    )
     opc_user = models.CharField(_('OPC User'), max_length=128, blank=True, default='')
     opc_password = EncryptedCharField(_('OPC Password'), max_length=128, blank=True, default='')
     opc_trust_store = models.ForeignKey(
@@ -235,6 +242,11 @@ class OpcUaGdsPushConfig(models.Model):
         _('Maximum Trust-List Element Size (bytes)'),
         default=0,
         help_text=_('Maximum size of one DER-encoded certificate or CRL in a pushed trust list. 0 means no limit.'),
+    )
+    opc_gds_push_require_crls = models.BooleanField(
+        _('Require CRLs in Pushed Trust Lists'),
+        default=True,
+        help_text=_('Reject a trust-list update when a CA in the chain has no CRL.'),
     )
 
     opc_gds_push_enable_periodic_update = models.BooleanField(
@@ -295,6 +307,8 @@ class OpcUaGdsPushConfig(models.Model):
         errors: dict[str, str] = {}
         if self.device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
             errors['device'] = 'GDS Push configuration requires an OPC UA GDS Push device.'
+        if self.opc_server_url and not self.opc_server_url.startswith(('opc.tcp://', 'opc.https://', 'https://')):
+            errors['opc_server_url'] = 'Use an opc.tcp://, opc.https:// or https:// URL.'
         if self.opc_gds_push_renewal_interval < 1:
             errors['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
         if self.opc_gds_push_domain_credential_renewal_interval < 1:

@@ -27,6 +27,9 @@ advertises (AES policies first, then `Basic256Sha256`).
 
 1. Create an **OPC UA GDS Push** device.
 2. Enter its name, IP address, and OPC UA server port. The standard port is `4840`.
+   Alternatively, enter a full **OPC Server URL** such as
+   `opc.tcp://public.example:4840/plant/edge`; it overrides the IP and port and
+   preserves the resource path for NAT, Docker or reverse-proxy setups.
 3. Assign the device to the domain used for certificate issuance.
 4. If required by the server, enter an OPC UA username and password with the
    **SecurityAdmin** role. Leave both fields blank to use certificate-based
@@ -69,6 +72,10 @@ certificates and CRLs; `0` disables a limit. The server's advertised
 `MaxTrustListSize` is also enforced. For example, some S7-1500 firmware documents
 a limit of 62 entries and 4,096 bytes per element; verify the values for your
 device.
+
+**Require CRLs in pushed trustlists** is enabled by default. Disable it only for
+devices whose CA chain legitimately has no CRL; otherwise strict revocation
+checks can reject later certificate updates.
 
 Generate CRLs for the CAs included in the trustlist before performing a trustlist
 update. Trustpoint requires CRLs for GDS Push trustlist operations.
