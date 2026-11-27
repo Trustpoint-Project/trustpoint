@@ -25,6 +25,11 @@ from devices.tasks import perform_gds_push_update
             'issue_certificates',
             'devices.tasks.update_gds_push_server_certificate',
         ),
+        (
+            'devices_refresh_inventory',
+            'manage_devices',
+            'devices.tasks.refresh_gds_push_certificate_inventory',
+        ),
     ],
 )
 def test_gds_action_requires_permission(client, django_user_model, gds_device, action, permission, task):
@@ -36,6 +41,9 @@ def test_gds_action_requires_permission(client, django_user_model, gds_device, a
         assert client.post(url).status_code == 403
         enqueue.assert_not_called()
         user.role.permissions.add(Permission.objects.get(codename=permission))
+        # The dedicated push permission is required in addition to the view permission.
+        assert client.post(url).status_code == 403
+        user.role.permissions.add(Permission.objects.get(codename='manage_gds_push'))
         assert client.post(url).status_code == 302
         enqueue.assert_called_once_with(task, gds_device.pk, user.pk)
 

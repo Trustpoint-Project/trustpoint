@@ -85,8 +85,32 @@ minimum to match the device's validation policy; `0` disables the key-size
 check. The device's own policy is not readable over OPC UA and must be aligned
 out of band.
 
+**Server certificate validation** defaults to pinning the certificate at
+truststore order 0. Select **CA chain validation** when the server certificate
+rotates: Trustpoint then reads the current certificate from the server's
+discovery endpoint and accepts it only when it chains to a CA in the associated
+truststore. Pinning fails closed on any change; CA validation still rejects
+certificates that are expired, untrusted or not issued by the configured CAs.
+
 Generate CRLs for the CAs included in the trustlist before performing a trustlist
 update. Trustpoint requires CRLs for GDS Push trustlist operations.
+
+## Certificate Inventory
+
+**Refresh Certificate Inventory** reads the current certificate groups,
+certificate type slots, subjects, expiry dates and SHA-256 fingerprints from the
+device, together with trust-list entry counts and the server's rejected-
+certificate list. The snapshot is stored on the device and shown on the help
+page. Use it to confirm what the device actually holds rather than relying on the
+last successful deployment.
+
+## Permissions
+
+Every push, inventory refresh and renewal-settings action requires the
+`users.manage_gds_push` permission in addition to the action's own permission
+(`manage_devices` for trust lists and settings, `issue_certificates` for server
+certificates). Grant it only to roles that should be able to change the device's
+certificates. The built-in Device Operator and PKI Admin roles include it.
 
 ## Periodic Renewal
 

@@ -230,6 +230,20 @@ class OpcUaGdsPushConfig(models.Model):
         on_delete=models.SET_NULL,
         related_name='opc_ua_gds_push_configs',
     )
+    opc_gds_push_server_validation = models.CharField(
+        _('Server Certificate Validation'),
+        max_length=16,
+        choices=[
+            ('pinned', _('Pinned leaf certificate (truststore order 0)')),
+            ('ca', _('CA chain validation (truststore CA certificates)')),
+        ],
+        default='pinned',
+        help_text=_(
+            'Pinned validation requires the exact server certificate at truststore order 0. '
+            'CA validation reads the current server certificate and accepts it when it chains '
+            'to a CA in the truststore, which allows certificate rotation.'
+        ),
+    )
     opc_gds_push_max_trustlist_entries = models.PositiveIntegerField(
         _('Maximum Trust-List Entries'),
         default=0,
@@ -312,6 +326,17 @@ class OpcUaGdsPushConfig(models.Model):
     )
     opc_gds_push_domain_credential_next_renewal_at = models.DateTimeField(
         _('Next Domain Credential Renewal'),
+        null=True,
+        blank=True,
+    )
+    opc_gds_push_certificate_inventory = models.JSONField(
+        _('Last Certificate Inventory'),
+        default=dict,
+        blank=True,
+        help_text=_('Certificate groups, trust lists and rejected certificates read from the device.'),
+    )
+    opc_gds_push_certificate_inventory_updated_at = models.DateTimeField(
+        _('Certificate Inventory Updated At'),
         null=True,
         blank=True,
     )

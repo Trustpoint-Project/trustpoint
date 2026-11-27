@@ -78,6 +78,9 @@ def test_trustlist_limits_default_to_disabled(opc_device):
     assert config.opc_gds_push_renewal_threshold_days == 30
     assert config.opc_gds_push_minimum_key_size == 0
     assert config.opc_gds_push_reject_sha1 is True
+    assert config.opc_gds_push_server_validation == 'pinned'
+    assert config.opc_gds_push_certificate_inventory == {}
+    assert config.opc_gds_push_certificate_inventory_updated_at is None
     config.opc_gds_push_max_trustlist_entries = 62
     config.opc_gds_push_max_trustlist_element_size = 4096
     config.save(update_fields=['opc_gds_push_max_trustlist_entries', 'opc_gds_push_max_trustlist_element_size'])

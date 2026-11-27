@@ -160,6 +160,36 @@ def mock_domain_credential(mock_opc_device):
     return credential
 
 
+def _make_ca_chain() -> tuple[x509.Certificate, x509.Certificate]:
+    """Return a self-signed root CA and a leaf issued by it."""
+    root_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    root_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Root CA')])
+    now = datetime.datetime.now(datetime.UTC)
+    root = (
+        x509.CertificateBuilder()
+        .subject_name(root_name)
+        .issuer_name(root_name)
+        .public_key(root_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=365))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(root_key, hashes.SHA256())
+    )
+    leaf_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    leaf = (
+        x509.CertificateBuilder()
+        .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'opc-server')]))
+        .issuer_name(root.subject)
+        .public_key(leaf_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=365))
+        .sign(root_key, hashes.SHA256())
+    )
+    return root, leaf
+
+
 class TestGdsPushService:
     """Test cases for GdsPushService."""
 
@@ -1487,6 +1517,127 @@ class TestGdsPushServiceAdditionalCoverage:
                 await service._get_client_credentials()
 
         validate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_apply_and_cancel_skip_when_transactions_unsupported(self, mock_opc_device):
+        """Do not call ApplyChanges/CancelChanges when the server applies updates immediately."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service._capabilities = {'SupportsTransactions': False}
+        client = Mock()
+
+        await service._apply_changes(client)
+        await service._cancel_changes(client)
+
+        client.get_node.assert_not_called()
+
+    def test_ca_chain_validation_accepts_trusted_root(self, mock_opc_device):
+        """Accept a leaf that chains to a trusted root CA."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        root, leaf = _make_ca_chain()
+
+        service._validate_server_certificate_chain(leaf, [root])
+
+    def test_ca_chain_validation_rejects_untrusted_leaf(self, mock_opc_device):
+        """Reject a leaf that does not chain to the truststore."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+
+        with pytest.raises(GdsPushError, match='does not chain'):
+            service._validate_server_certificate_chain(leaf, [])
+
+    @pytest.mark.asyncio
+    async def test_ca_mode_returns_discovered_leaf_certificate(self, mock_opc_device):
+        """Use the discovered certificate when CA validation is selected."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        root, leaf = _make_ca_chain()
+        leaf_der = leaf.public_bytes(serialization.Encoding.DER)
+        endpoint = Mock(ServerCertificate=leaf_der)
+        discovery = Mock()
+        discovery.connect_and_get_server_endpoints = AsyncMock(return_value=[endpoint])
+        discovery.disconnect = AsyncMock()
+        mock_opc_device.opc_ua_gds_push_config.opc_gds_push_server_validation = 'ca'
+        service.server_truststore = mock_opc_device.opc_ua_gds_push_config.opc_trust_store
+
+        with (
+            patch.object(service, '_create_insecure_client', return_value=discovery),
+            patch.object(service, '_load_server_truststore_certificates', new_callable=AsyncMock, return_value=[root]),
+        ):
+            result = await service._get_server_certificate()
+
+        assert result == leaf_der
+
+    @pytest.mark.asyncio
+    async def test_refresh_certificate_inventory_returns_json_safe_summary(self, mock_opc_device):
+        """Summarize certificate groups, trust lists and rejected certificates."""
+        import json
+
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        leaf_der = leaf.public_bytes(serialization.Encoding.DER)
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(
+                service,
+                '_read_server_capabilities',
+                new_callable=AsyncMock,
+                return_value={'SupportsTransactions': True, 'MaxTrustListSize': 1024},
+            ),
+            patch.object(
+                service,
+                '_discover_certificate_groups',
+                new_callable=AsyncMock,
+                return_value=[
+                    {
+                        'name': 'Server',
+                        'certificate_type_id': ua.NodeId.from_string('ns=0;i=12560'),
+                        'current_certificates': {ua.NodeId.from_string('ns=0;i=12560'): leaf_der},
+                    }
+                ],
+            ),
+            patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=[]),
+            patch.object(
+                service,
+                '_read_rejected_certificates',
+                new_callable=AsyncMock,
+                return_value=[leaf_der],
+            ),
+        ):
+            success, message, inventory = await service.refresh_certificate_inventory()
+
+        assert success, message
+        assert inventory['certificate_groups'][0]['certificates'][0]['subject'] == 'CN=opc-server'
+        assert len(inventory['rejected']) == 1
+        json.dumps(inventory)
+
+    @pytest.mark.asyncio
+    async def test_read_trustlist_retries_transient_file_api_error(self, mock_opc_device):
+        """Retry a busy TrustList read with backoff."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        node = Mock()
+        methods = {'Open': Mock(), 'Read': Mock(), 'Close': Mock()}
+
+        async def get_child(name: str) -> Mock:
+            return methods[name]
+
+        payload = struct_to_binary(ua.TrustListDataType())
+        node.get_child = AsyncMock(side_effect=get_child)
+        node.call_method = AsyncMock(
+            side_effect=[
+                UaStatusCodeError(StatusCodes.BadInvalidState),
+                42,
+                payload,
+                b'',
+                None,
+            ]
+        )
+        with patch('request.gds_push.gds_push_service.asyncio.sleep', new_callable=AsyncMock):
+            result = await service._read_trustlist(node)
+
+        assert result is not None
 
     @pytest.mark.asyncio
     async def test_get_server_certificate_missing_order_zero(self, mock_opc_device):

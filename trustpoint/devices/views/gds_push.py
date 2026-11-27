@@ -45,7 +45,15 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
 
-class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class GdsPushOperationMixin(UserPermissionRequiredMixin):
+    """Require the dedicated GDS Push permission in addition to the view permission."""
+
+    def has_permission(self) -> bool:
+        """Require both the view permission and ``manage_gds_push``."""
+        return super().has_permission() and bool(self.request.user.has_perm(AppPermissions.MANAGE_GDS_PUSH))
+
+
+class OpcUaGdsPushUpdateTrustlistView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the trustlist on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -85,7 +93,29 @@ class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMi
         )
 
 
-class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushRefreshInventoryView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Queue a read of the certificate inventory from an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Queue the inventory read and return to the help page."""
+        self.object = self.get_object()
+        async_task('devices.tasks.refresh_gds_push_certificate_inventory', self.object.pk, request.user.pk)
+        messages.info(request, 'Certificate inventory refresh queued.')
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk},
+            )
+        )
+
+
+class OpcUaGdsPushUpdateServerCertificateView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -133,7 +163,7 @@ class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageC
         )
 
 
-class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushCertRenewalSettingsView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to save the periodic server certificate and trustlist renewal settings for an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -164,6 +194,9 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         threshold_raw = request.POST.get('opc_gds_push_renewal_threshold_days', '30')
         minimum_key_size_raw = request.POST.get('opc_gds_push_minimum_key_size', '0')
         reject_sha1 = request.POST.get('opc_gds_push_reject_sha1') == 'on'
+        server_validation = request.POST.get('opc_gds_push_server_validation', 'pinned')
+        if server_validation not in {'pinned', 'ca'}:
+            server_validation = 'pinned'
 
         try:
             interval = int(interval_raw)
@@ -192,6 +225,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         self.object.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = threshold_days
         self.object.opc_ua_gds_push_config.opc_gds_push_minimum_key_size = minimum_key_size
         self.object.opc_ua_gds_push_config.opc_gds_push_reject_sha1 = reject_sha1
+        self.object.opc_ua_gds_push_config.opc_gds_push_server_validation = server_validation
         self.object.opc_ua_gds_push_config.save(
             update_fields=[
                 'opc_gds_push_enable_periodic_update',
@@ -199,6 +233,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
                 'opc_gds_push_renewal_threshold_days',
                 'opc_gds_push_minimum_key_size',
                 'opc_gds_push_reject_sha1',
+                'opc_gds_push_server_validation',
                 'opc_gds_push_regenerate_server_key',
                 'opc_gds_push_require_crls',
                 'opc_gds_push_max_trustlist_entries',
@@ -231,7 +266,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
 
 
 class OpcUaGdsPushDomainCredentialRenewalSettingsView(
-    UserPermissionRequiredMixin,
+    GdsPushOperationMixin,
     PageContextMixin,
     DetailView[DeviceModel],
 ):

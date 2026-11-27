@@ -5,9 +5,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import contextlib
 import datetime as dt
+import hashlib
 import io
 import ipaddress
 import os
@@ -21,6 +23,7 @@ from asyncua.crypto import security_policies
 from asyncua.ua.status_codes import StatusCodes, get_name_and_doc
 from asyncua.ua.ua_binary import struct_from_binary, struct_to_binary
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -661,21 +664,27 @@ class GdsPushService(LoggerMixin):
         raise GdsPushError(msg)
 
     async def _get_server_certificate(self) -> bytes:
-        """Get OPC UA server certificate from truststore.
+        """Get the OPC UA server certificate used to authenticate the secure channel.
 
-        The truststore may contain multiple certificates (server cert + CA chain),
-        but python-opcua's set_security() expects only the server certificate.
-        The complete chain verification happens during the TLS handshake.
+        In pinned mode the certificate at truststore order 0 is used. In CA mode the
+        current server certificate is fetched from discovery and accepted only when it
+        chains to a certificate in the truststore, so server certificate rotation does
+        not require editing the truststore first.
 
         Returns:
-            Server certificate in DER format (first certificate with order=0).
+            Server certificate in DER format.
 
         Raises:
-            GdsPushError: If truststore is empty or misconfigured.
+            GdsPushError: If truststore is empty, misconfigured or the CA chain is invalid.
         """
         if self.server_truststore is None:
             msg = 'No server truststore configured'
             raise GdsPushError(msg)
+
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        mode = getattr(config, 'opc_gds_push_server_validation', 'pinned') or 'pinned'
+        if mode == 'ca':
+            return await self._get_server_certificate_via_ca()
 
         server_truststore = self.server_truststore
 
@@ -705,6 +714,117 @@ class GdsPushService(LoggerMixin):
         self.logger.info('Using server certificate: %s (%d bytes)', cert_crypto.subject.rfc4514_string(), len(cert_der))
 
         return cert_der
+
+    async def _load_server_truststore_certificates(self) -> list[x509.Certificate]:
+        """Load every certificate from the configured server truststore."""
+        truststore = self.server_truststore
+        if truststore is None:
+            msg = 'No server truststore configured'
+            raise GdsPushError(msg)
+        orders = await sync_to_async(
+            lambda: list(truststore.truststoreordermodel_set.order_by('order').select_related('certificate'))
+        )()
+        certificates: list[x509.Certificate] = []
+        for order in orders:
+            cert_model = order.certificate
+            certificates.append(
+                await sync_to_async(lambda model=cert_model: model.get_certificate_serializer().as_crypto())()
+            )
+        return certificates
+
+    @staticmethod
+    def _first_der_certificate(blob: bytes) -> bytes:
+        """Peel the leading certificate out of a possibly chained DER blob."""
+        if len(blob) < 4:  # noqa: PLR2004
+            msg = 'Server returned an empty certificate'
+            raise GdsPushError(msg)
+        length = int.from_bytes(blob[2:4], byteorder='big', signed=False) + 4
+        return blob[:length]
+
+    def _validate_server_certificate_chain(  # noqa: C901
+        self,
+        leaf: x509.Certificate,
+        trusted: list[x509.Certificate],
+    ) -> None:
+        """Verify that the server leaf chains to a certificate in the truststore."""
+        now = dt.datetime.now(dt.UTC)
+
+        def check_validity(certificate: x509.Certificate) -> None:
+            if not certificate.not_valid_before_utc <= now <= certificate.not_valid_after_utc:
+                msg = f'Certificate "{certificate.subject.rfc4514_string()}" is not currently valid.'
+                raise GdsPushError(msg)
+
+        def fingerprint(certificate: x509.Certificate) -> bytes:
+            return certificate.fingerprint(hashes.SHA256())
+
+        trusted_fingerprints = {fingerprint(cert) for cert in trusted}
+        check_validity(leaf)
+        if fingerprint(leaf) in trusted_fingerprints and leaf.subject == leaf.issuer:
+            return
+
+        current = leaf
+        seen = {fingerprint(leaf)}
+        for _ in range(len(trusted) + 1):
+            if current.subject == current.issuer:
+                if fingerprint(current) in trusted_fingerprints:
+                    return
+                break
+            issuer = None
+            for candidate in trusted:
+                if candidate.subject != current.issuer or fingerprint(candidate) in seen:
+                    continue
+                try:
+                    current.verify_directly_issued_by(candidate)
+                except (InvalidSignature, ValueError, TypeError):
+                    continue
+                issuer = candidate
+                break
+            if issuer is None:
+                break
+            check_validity(issuer)
+            seen.add(fingerprint(issuer))
+            if fingerprint(issuer) in trusted_fingerprints:
+                return
+            current = issuer
+
+        msg = 'Server certificate does not chain to a certificate in the configured truststore.'
+        raise GdsPushError(msg)
+
+    async def _get_server_certificate_via_ca(self) -> bytes:
+        """Fetch the current server certificate and validate it against the truststore CA chain."""
+        trusted = await self._load_server_truststore_certificates()
+        discovery = self._create_insecure_client()
+        try:
+            endpoints = await discovery.connect_and_get_server_endpoints()
+        except Exception as e:
+            msg = f'Could not discover the server certificate: {e}'
+            raise GdsPushError(msg) from e
+        finally:
+            with contextlib.suppress(Exception):
+                await discovery.disconnect()
+
+        errors: list[str] = []
+        for endpoint in endpoints:
+            blob = bytes(endpoint.ServerCertificate or b'')
+            if not blob:
+                continue
+            try:
+                leaf_der = self._first_der_certificate(blob)
+                leaf = x509.load_der_x509_certificate(leaf_der)
+                self._validate_server_certificate_chain(leaf, trusted)
+            except Exception as e:  # noqa: BLE001
+                errors.append(str(e))
+                continue
+            self.logger.info(
+                'Using CA-validated server certificate: %s (%d bytes)',
+                leaf.subject.rfc4514_string(),
+                len(leaf_der),
+            )
+            return leaf_der
+
+        detail = f': {errors[0]}' if errors else ''
+        msg = f'No server certificate advertised by the endpoint chains to the configured truststore{detail}'
+        raise GdsPushError(msg)
 
     _SECURITY_POLICIES: ClassVar[dict[str, type[security_policies.SecurityPolicy]]] = {
         'Aes256Sha256RsaPss': security_policies.SecurityPolicyAes256Sha256RsaPss,
@@ -1232,11 +1352,17 @@ class GdsPushService(LoggerMixin):
 
     _STATUS_HINTS: ClassVar[dict[int, str]] = {
         StatusCodes.BadUserAccessDenied: 'the identity lacks the required SecurityAdmin/certificate-management role',
+        StatusCodes.BadIdentityTokenInvalid: 'the configured OPC UA user token is invalid',
+        StatusCodes.BadIdentityTokenRejected: 'the server rejected the configured OPC UA user token',
+        StatusCodes.BadUserSignatureInvalid: 'the client certificate signature was rejected; check the key match and clock',
+        StatusCodes.BadSecurityPolicyRejected: 'the server rejected the negotiated security policy',
         StatusCodes.BadSecurityModeInsufficient: 'the channel is not encrypted/authenticated; use SignAndEncrypt',
         StatusCodes.BadCertificateUntrusted: 'the server does not trust the client certificate chain',
         StatusCodes.BadCertificateInvalid: 'the server rejected the certificate as invalid',
         StatusCodes.BadCertificateRevocationUnknown: 'the server cannot determine revocation; provide the CRL',
         StatusCodes.BadCertificateHostNameInvalid: 'the certificate lacks the host name/IP used to connect',
+        StatusCodes.BadCertificateUriInvalid: 'the certificate ApplicationUri does not match the server',
+        StatusCodes.BadCertificateUseNotAllowed: 'the certificate key usage/extended key usage is not suitable',
         StatusCodes.BadApplicationSignatureInvalid: 'the application signature or certificate chain was rejected',
         StatusCodes.BadSecurityChecksFailed: 'the certificate failed the server security checks',
         StatusCodes.BadCertificatePolicyCheckFailed: (
@@ -1349,33 +1475,45 @@ class GdsPushService(LoggerMixin):
             )
             self._raise_gds_push_error(msg)
 
+    @staticmethod
+    def _is_file_api_retryable(error: Exception) -> bool:
+        """Return whether a TrustList file operation is worth retrying after a short backoff."""
+        retryable = ('BadInvalidState', 'BadBusy', 'BadTimeout', 'BadTransactionPending', 'BadCommunicationError')
+        return any(name in str(error) for name in retryable)
+
     async def _read_trustlist(self, trustlist_node: Node) -> ua.TrustListDataType | None:
         """Read the server's current TrustList, returning None when it cannot be read."""
-        file_handle = None
-        try:
-            open_method = await trustlist_node.get_child('Open')
-            mode = ua.Variant(int(ua.OpenFileMode.Read), ua.VariantType.Byte)
-            file_handle = await trustlist_node.call_method(open_method.nodeid, mode)
+        for attempt in range(3):
+            file_handle = None
+            try:
+                open_method = await trustlist_node.get_child('Open')
+                mode = ua.Variant(int(ua.OpenFileMode.Read), ua.VariantType.Byte)
+                file_handle = await trustlist_node.call_method(open_method.nodeid, mode)
 
-            read_method = await trustlist_node.get_child('Read')
-            chunks = []
-            while True:
-                chunk = await trustlist_node.call_method(read_method.nodeid, file_handle, 8192)
-                if not chunk:
-                    break
-                chunks.append(bytes(chunk))
+                read_method = await trustlist_node.get_child('Read')
+                chunks = []
+                while True:
+                    chunk = await trustlist_node.call_method(read_method.nodeid, file_handle, 8192)
+                    if not chunk:
+                        break
+                    chunks.append(bytes(chunk))
 
-            if not chunks:
+                if not chunks:
+                    return None
+                return struct_from_binary(ua.TrustListDataType, io.BytesIO(b''.join(chunks)))
+            except Exception as e:  # noqa: BLE001
+                if attempt < 2 and self._is_file_api_retryable(e):  # noqa: PLR2004
+                    self.logger.warning('TrustList read busy (attempt %d/3); backing off: %s', attempt + 1, e)
+                    await asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+                self.logger.warning('Could not read the current TrustList; replacing it: %s', e)
                 return None
-            return struct_from_binary(ua.TrustListDataType, io.BytesIO(b''.join(chunks)))
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning('Could not read the current TrustList; replacing it: %s', e)
-            return None
-        finally:
-            if file_handle is not None:
-                with contextlib.suppress(Exception):
-                    close_method = await trustlist_node.get_child('Close')
-                    await trustlist_node.call_method(close_method.nodeid, file_handle)
+            finally:
+                if file_handle is not None:
+                    with contextlib.suppress(Exception):
+                        close_method = await trustlist_node.get_child('Close')
+                        await trustlist_node.call_method(close_method.nodeid, file_handle)
+        return None
 
     def server_certificate_needs_renewal(self) -> bool:
         """Decide whether the periodic task should replace the server certificate."""
@@ -1490,8 +1628,15 @@ class GdsPushService(LoggerMixin):
             return []
         return [bytes(cert) for cert in result if isinstance(cert, (bytes, bytearray))]
 
+    def _supports_transactions(self) -> bool:
+        """Return whether the server applies updates through an explicit transaction."""
+        return bool((getattr(self, '_capabilities', {}) or {}).get('SupportsTransactions', True))
+
     async def _cancel_changes(self, client: Client) -> None:
         """Discard any pending transaction changes."""
+        if not self._supports_transactions():
+            self.logger.info('Server does not support transactions; no pending changes to cancel')
+            return
         try:
             server_node = client.get_node('ns=0;i=2253')
             server_config = await server_node.get_child('ServerConfiguration')
@@ -1528,6 +1673,9 @@ class GdsPushService(LoggerMixin):
 
     async def _apply_changes(self, client: Client) -> None:
         """Apply the pending transaction once for the current workflow."""
+        if not self._supports_transactions():
+            self.logger.info('Server does not support transactions; updates apply immediately')
+            return
         server_node = client.get_node('ns=0;i=2253')
         server_config = await server_node.get_child('ServerConfiguration')
         method = await server_config.get_child('ApplyChanges')
@@ -1850,6 +1998,78 @@ class GdsPushService(LoggerMixin):
             self.logger.exception('Failed to discover certificate groups')
 
         return groups
+
+    @staticmethod
+    def _describe_certificate(certificate_der: bytes) -> dict[str, Any]:
+        """Return a JSON-safe summary of a DER certificate."""
+        summary: dict[str, Any] = {'sha256': hashlib.sha256(certificate_der).hexdigest()}
+        try:
+            certificate = x509.load_der_x509_certificate(certificate_der)
+        except Exception:  # noqa: BLE001
+            return summary
+        summary.update(
+            {
+                'subject': certificate.subject.rfc4514_string(),
+                'issuer': certificate.issuer.rfc4514_string(),
+                'serial': format(certificate.serial_number, 'x'),
+                'not_after': certificate.not_valid_after_utc.isoformat(),
+            }
+        )
+        return summary
+
+    async def refresh_certificate_inventory(self) -> tuple[bool, str, dict[str, Any]]:
+        """Read the server's certificate groups, trust lists and rejected certificates."""
+        inventory: dict[str, Any] = {
+            'certificate_groups': [],
+            'trust_lists': [],
+            'rejected': [],
+            'capabilities': {},
+        }
+        try:
+            client = await self._create_secure_client()
+            async with client:
+                capabilities = await self._read_server_capabilities(client)
+                inventory['capabilities'] = {name: str(value) for name, value in capabilities.items()}
+
+                for group in await self._discover_certificate_groups(client):
+                    inventory['certificate_groups'].append(
+                        {
+                            'name': group['name'],
+                            'certificate_type': str(group.get('certificate_type_id') or ''),
+                            'certificates': [
+                                {'type': str(type_id), **self._describe_certificate(der)}
+                                for type_id, der in (group.get('current_certificates') or {}).items()
+                            ],
+                        }
+                    )
+
+                for node_info in await self._discover_trustlist_nodes(client):
+                    trustlist = await self._read_trustlist(node_info['trustlist_node'])
+                    inventory['trust_lists'].append(
+                        {
+                            'group': node_info['group_name'],
+                            'certificates': (
+                                len(trustlist.TrustedCertificates or []) + len(trustlist.IssuerCertificates or [])
+                                if trustlist is not None
+                                else 0
+                            ),
+                            'crls': (
+                                len(trustlist.TrustedCrls or []) + len(trustlist.IssuerCrls or [])
+                                if trustlist is not None
+                                else 0
+                            ),
+                        }
+                    )
+
+                inventory['rejected'] = [
+                    self._describe_certificate(der) for der in await self._read_rejected_certificates(client)
+                ]
+        except Exception as e:
+            self.logger.exception('Failed to read certificate inventory')
+            return False, self._status_error(e, 'Certificate inventory'), {}
+
+        self.logger.info('Read certificate inventory from server')
+        return True, 'Certificate inventory read from server', inventory
 
     async def _generate_server_key_and_csr(  # noqa: C901, PLR0912
         self, certificate_type_id: ua.NodeId

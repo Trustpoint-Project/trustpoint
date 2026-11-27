@@ -20,7 +20,7 @@ from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import format_html, format_html_join, strip_tags
+from django.utils.html import escape, format_html, format_html_join, strip_tags
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
@@ -1825,6 +1825,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             self._build_ca_hierarchy_section(device),
             self._build_download_section(device),
             self._build_actions_section(device),
+            self._build_inventory_section(device),
             self._build_renewal_settings_section(device, domain_credential=True),
         ]
 
@@ -2082,6 +2083,66 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_inventory_section(self, device: DeviceModel) -> HelpSection:
+        """Render the last certificate inventory read from the device."""
+        config = device.opc_ua_gds_push_config
+        inventory = config.opc_gds_push_certificate_inventory
+        if not isinstance(inventory, dict):
+            inventory = {}
+        updated_at = config.opc_gds_push_certificate_inventory_updated_at
+        refresh_url = reverse('devices:devices_refresh_inventory', kwargs={'pk': device.pk})
+        refresh_html = (
+            '<form method="post" action="' + refresh_url + '" class="d-inline">'
+            'CSRF_TOKEN_PLACEHOLDER'
+            '<button type="submit" class="btn btn-info">Refresh Certificate Inventory</button>'
+            '</form>'
+        )
+
+        rows: list[str] = []
+        for group in inventory.get('certificate_groups', []):
+            certificates = group.get('certificates') or []
+            if not certificates:
+                rows.append(
+                    '<tr><td>' + escape(str(group.get('name', ''))) + '</td>'
+                    '<td colspan="4" class="text-muted">No certificate reported</td></tr>'
+                )
+            rows.extend(
+                '<tr>'
+                '<td>' + escape(str(group.get('name', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('type', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('subject', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('not_after', ''))) + '</td>'
+                '<td><code>' + escape(str(certificate.get('sha256', ''))[:16]) + '…</code></td>'
+                '</tr>'
+                for certificate in certificates
+            )
+
+        if rows:
+            table_html = (
+                '<div class="table-responsive"><table class="table table-sm">'
+                '<thead><tr><th>Group</th><th>Type</th><th>Subject</th><th>Not After</th><th>SHA-256</th></tr></thead>'
+                '<tbody>' + ''.join(rows) + '</tbody></table></div>'
+            )
+        else:
+            table_html = '<p class="text-muted">No certificate inventory has been read from this device yet.</p>'
+
+        trust_lists = inventory.get('trust_lists') or []
+        rejected = inventory.get('rejected') or []
+        summary = (
+            f'<p class="text-muted mt-2">Trust lists: {len(trust_lists)} · '
+            f'Rejected certificates: {len(rejected)}'
+            + (f' · Updated: {updated_at.strftime("%Y-%m-%d %H:%M UTC")}' if updated_at else '')
+            + '</p>'
+        )
+
+        return HelpSection(
+            _non_lazy('Certificate Inventory'),
+            [
+                HelpRow(_non_lazy('Device Inventory'), refresh_html, ValueRenderType.HTML),
+                HelpRow(_non_lazy('Last Read'), table_html + summary, ValueRenderType.HTML),
+            ],
+        )
+
     def _build_renewal_settings_section(  # noqa: PLR0915
         self,
         device: DeviceModel,
@@ -2098,6 +2159,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         renewal_threshold_days = 30
         minimum_key_size = 0
         reject_sha1 = True
+        server_validation = 'pinned'
         max_trustlist_entries = 0
         max_trustlist_element_size = 0
         if domain_credential:
@@ -2124,6 +2186,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             renewal_threshold_days = device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days
             minimum_key_size = device.opc_ua_gds_push_config.opc_gds_push_minimum_key_size
             reject_sha1 = device.opc_ua_gds_push_config.opc_gds_push_reject_sha1
+            server_validation = device.opc_ua_gds_push_config.opc_gds_push_server_validation
             max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
             max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
@@ -2175,8 +2238,20 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
 
         limits_html = ''
         if not domain_credential:
+            pinned_selected = 'selected' if server_validation == 'pinned' else ''
+            ca_selected = 'selected' if server_validation == 'ca' else ''
             limits_html = (
                 '<hr>'
+                '<h6 class="mt-3">Server certificate validation</h6>'
+                '<label for="serverValidation" class="form-label">Validation mode</label>'
+                '<select class="form-select" id="serverValidation" name="opc_gds_push_server_validation">'
+                f'  <option value="pinned" {pinned_selected}>Pinned leaf certificate (truststore order 0)</option>'
+                f'  <option value="ca" {ca_selected}>CA chain validation (truststore CA certificates)</option>'
+                '</select>'
+                '<div class="form-text text-muted">'
+                '  Use CA chain validation when the server certificate rotates; the current certificate '
+                'must chain to a CA in the truststore.'
+                '</div>'
                 '<h6 class="mt-3">Trust-list limits</h6>'
                 '<label for="maxTrustlistEntries" class="form-label">Maximum entries (0 = no limit)</label>'
                 '<input type="number" class="form-control tp-credential-number" id="maxTrustlistEntries" '

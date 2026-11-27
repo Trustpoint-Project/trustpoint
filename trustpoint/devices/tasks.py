@@ -209,6 +209,44 @@ def update_gds_push_server_certificate(device_id: int, initiated_by_id: int | No
         _release_device_lock(device_id)
 
 
+def refresh_gds_push_certificate_inventory(device_id: int, initiated_by_id: int | None = None) -> None:
+    """Read the current certificate inventory from one OPC UA GDS Push device."""
+    device = DeviceModel.objects.filter(pk=device_id).first()
+    if device is None:
+        logger.info('Device %s was deleted; skipping certificate inventory', device_id)
+        return
+    if not _acquire_device_lock(device_id):
+        logger.warning(
+            'GDS Push operation already running for device %s; skipping certificate inventory', device.common_name
+        )
+        return
+    try:
+        try:
+            success, message, inventory = asyncio.run(GdsPushService(device=device).refresh_certificate_inventory())
+        except Exception as e:
+            logger.exception('Certificate inventory failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
+            return
+        if success:
+            config = OpcUaGdsPushConfig.objects.filter(device=device).first()
+            if config is not None:
+                config.opc_gds_push_certificate_inventory = inventory
+                config.opc_gds_push_certificate_inventory_updated_at = timezone.now()
+                config.save(
+                    update_fields=[
+                        'opc_gds_push_certificate_inventory',
+                        'opc_gds_push_certificate_inventory_updated_at',
+                    ]
+                )
+            logger.info('Certificate inventory read for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'success', message)
+        else:
+            logger.warning('Certificate inventory rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
+    finally:
+        _release_device_lock(device_id)
+
+
 def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
     """Renew the local GDS identity and schedule its next independent renewal cycle."""
     with transaction.atomic():

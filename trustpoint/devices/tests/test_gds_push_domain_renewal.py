@@ -44,7 +44,9 @@ def renewal_device(device_instance_onboarding, admin_client):
     ActiveTrustpointTlsServerCredentialModel.objects.create(credential=credential)
 
     user = get_user_model().objects.get(pk=admin_client.session['_auth_user_id'])
-    user.role.permissions.add(*Permission.objects.filter(codename__in=['manage_devices', 'view_help_pages']))
+    user.role.permissions.add(
+        *Permission.objects.filter(codename__in=['manage_devices', 'view_help_pages', 'manage_gds_push'])
+    )
     device = device_instance_onboarding['device']
     device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
     device.ip_address = '127.0.0.1'

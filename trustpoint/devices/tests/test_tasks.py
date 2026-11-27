@@ -14,6 +14,7 @@ from django.core.cache import cache
 from devices.models import DeviceModel, OpcUaGdsPushConfig
 from devices.tasks import (
     perform_gds_push_update,
+    refresh_gds_push_certificate_inventory,
     update_gds_push_server_certificate,
     update_gds_push_trustlist,
 )
@@ -499,6 +500,21 @@ class TestManualGdsPushTasks:
                 service.assert_not_called()
         finally:
             cache.delete(lock_key)
+
+    def test_inventory_refresh_stores_snapshot(self, mock_models):
+        """Persist the inventory read from the device."""
+        device = mock_models['device']
+        service = Mock(spec=GdsPushService)
+        service.refresh_certificate_inventory = AsyncMock(
+            return_value=(True, 'ok', {'certificate_groups': [], 'trust_lists': [], 'rejected': []})
+        )
+
+        with patch('devices.tasks.GdsPushService', return_value=service):
+            refresh_gds_push_certificate_inventory(device.pk)
+
+        device.opc_ua_gds_push_config.refresh_from_db()
+        assert device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory['certificate_groups'] == []
+        assert device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory_updated_at is not None
 
     def test_update_server_certificate_reports_combined_failure(self, mock_models):
         """A combined workflow failure does not mark onboarding complete."""
