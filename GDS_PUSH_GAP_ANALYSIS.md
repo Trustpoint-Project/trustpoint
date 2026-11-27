@@ -71,17 +71,15 @@ It works with servers that:
 - expose a single application certificate group with `ApplicationCertificateType`,
 - already trust Trustpoint's issuing CA.
 
-Findings by priority: **P0 = 6 (all done)**, **P1 = 15**, **P2 = 25**, **P3 = 9**, **already implemented/N/A = 7** — 49 of 62 items are done.
+Findings by priority: **P0 = 6 (all done)**, **P1 = 15**, **P2 = 25**, **P3 = 9**, **already implemented/N/A = 7** — 52 of 62 items are done.
 
 The main remaining gaps are:
 
 1. conditional §6 GDS directory/discovery and `ManagedApplications` features,
-2. a per-device lock that is not yet shared across worker processes (OPS-07),
-3. stale CA certificates/CRLs retained when a CA is removed or rolled over (TL-09),
-4. no warning for hardware-configuration vs runtime-managed certificate conflicts (WF-12),
-5. real-stack interoperability and CTT-style conformance runs (OPS-03),
-6. optional `CreateSelfSignedCertificate`, Create Endpoint and independent
-   certificate/trust-list scheduling (WF-02/WF-05/WF-07).
+2. no warning for hardware-configuration vs runtime-managed certificate conflicts (WF-12),
+3. real-stack interoperability and CTT-style conformance runs (OPS-03),
+4. optional `CreateSelfSignedCertificate` and Create Endpoint workflows
+   (WF-05/WF-07).
 
 ## 3. Findings
 
@@ -102,7 +100,7 @@ The main remaining gaps are:
 | ID | Priority | Requirement | Status | Evidence / current behavior | Required change | Done |
 |---|---|---|---|---|---|---|
 | WF-01 | P1 | Update the TrustList before updating a certificate (§7.4, §7.7.2) | Implemented | Both the periodic task and the standalone certificate update now apply the trust list first; the standalone task continues to the certificate if the trust-list update fails. .NET issue #2552 confirms that strict revocation checking needs the CRL in the trust list before `UpdateCertificate`. | Done; task-order test added. | [x] |
-| WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Partial | The periodic task refreshes the trust list every cycle but replaces the certificate only when the pinned server certificate expires within `opc_gds_push_renewal_threshold_days` (default 30). CRL-change detection and independent schedules are not implemented. | Remaining: detect pending CRL changes and allow independent certificate/trust-list cadences. | [ ] |
+| WF-02 | P2 | For each CertificateType, determine whether an update is required (§7.7.2) | Implemented | One `reconcile()` task evaluates trust-list drift and per-group certificate expiry from `GetCertificates`; the configured interval schedules reconciliation, not forced renewal. Unchanged trust lists are skipped without `ApplyChanges`. Manual certificate update remains the forced path, and the periodic run is the fallback for missed events and offline devices. | Done; service tests cover no-op, trust-list-only and per-group due decisions. | [x] |
 | WF-03 | P0 | Only `ApplicationCertificateType` groups are considered (§7.7.2); use `CertificateTypes`/`Purpose` (§7.8.3.1) | Implemented | `_discover_certificate_groups` reads `Purpose`/`CertificateTypes`, skips HTTPS/UserToken/unknown non-application groups, and selects a permitted type. Name fallback only when both properties are unavailable. | Done; covered by discovery tests. | [x] |
 | WF-04 | P1 | `ApplyChanges` completes the workflow; handle forced renegotiation (§7.7.2, §7.10.9) | Implemented | New `update_trustlist_and_certificate` stages the trust list and certificate in one session, applies once after all groups succeed, updates the local truststore, and verifies the reconnect. The periodic and manual certificate-renewal tasks use it. | Done; combined-workflow and task tests added. Standalone methods remain for targeted operations. | [x] |
 | WF-05 | P3 | Use `CreateSelfSignedCertificate` when no usable certificate exists (§7.7.4) | Missing | Method never called. | Optional. Implement only if servers without an existing certificate must be supported. | [ ] |
@@ -146,7 +144,7 @@ The main remaining gaps are:
 | TL-06 | P2 | Respect `MaxTrustListSize` (§7.10.3) | Implemented | `_read_server_capabilities` reads `MaxTrustListSize`; `_validate_trustlist_limits` rejects a serialized trust list above it before writing. Device entry/element limits are separate (TL-08). | Done. | [x] |
 | TL-07 | P1 | Read the current TrustList and rejected list before pushing (§7.8.2.4, §7.10.12, §7.7.3) | Implemented | `_read_trustlist` reads the current list; `_merge_trustlists` merges certificates and replaces CRLs per issuer, preserving other trust entries. `GetRejectedList` is read and the count logged. Merge is the default; there is no UI replace/merge choice yet. | Done for read/merge; optional UI follow-up for explicit replace and displaying rejected certificates. Watch Mantis 9852/9853 (File-API deadlock/concurrent reads) when retrying reads. | [x] |
 | TL-08 | P1 | Device trust-list capacity and element-size preflight | Implemented | Configurable `opc_gds_push_max_trustlist_entries` and `opc_gds_push_max_trustlist_element_size` (0 = no limit) preflight the merged list, counting unique DER objects across all four lists (shared certificates count once) and checking each element size. UI fields and migration 0004_tp_v1_0_2 added. | Done; tests cover shared entries, excess count and oversized elements. Aggregate size remains in TL-06. | [x] |
-| TL-09 | P2 | Remove stale CA certificates and CRLs after CA removal/rollover | Partial | `_merge_trustlists` keeps existing certificates and keeps CRLs for issuers not present in the incoming list, so a CA removed from the domain can remain trusted on the device. This is deliberate merge behavior, but there is no prune/replace option or warning. | Decide the trust-list authority; optionally prune Trustpoint-managed entries or expose an explicit replace mode. Test CA removal and CA rollover. | [ ] |
+| TL-09 | P2 | Remove stale CA certificates and CRLs after CA removal/rollover | Implemented | `opc_gds_push_managed_trustlist_fingerprints` records the elements Trustpoint manages. Reconciliation prunes previously managed certificates/CRLs that are no longer in the desired list before merging; entries not managed by Trustpoint are preserved. | Done; prune test covers stale managed vs external entries. | [x] |
 
 ### 3.5 Security and certificate interoperability
 
@@ -174,7 +172,7 @@ The main remaining gaps are:
 | OPS-04 | P2 | Timeouts, retries, concurrency | Implemented | Channel/session timeouts are configurable via `GDS_PUSH_CHANNEL_TIMEOUT_MS` / `GDS_PUSH_SESSION_TIMEOUT_MS`; all tasks share a per-device cache lock (cross-process limitation in OPS-07); the combined workflow retries once on transaction-pending, timeout, communication/connection/secure-channel errors unless `ApplyChanges` may already have run (WF-11). | Done. | [x] |
 | OPS-05 | P3 | Discovery documentation matches behavior | Implemented | Discovery now captures the endpoint certificate and exposes it for truststore import; the user guide documents policy negotiation, identity validation, trust-list merge and reconnect verification. | Done. | [x] |
 | OPS-06 | P2 | Preserve OPC UA status codes and distinguish auth/trust/config failures | Implemented | `_status_error` keeps the symbolic name and hex code and adds actionable hints for access denied, insufficient security, untrusted/invalid/revocation-unknown certificates, hostname mismatch, signature failure, security-check failure and pending transactions. | Done; status-code test added. | [x] |
-| OPS-07 | P1 | Per-device operation lock must work across worker processes | Partial | The lock uses `cache.add`, but Trustpoint has no `CACHES` override, so the default locmem cache is per process while `Q_CLUSTER.workers` is 2. Two workers can therefore run operations for the same device concurrently (Mantis 9852). | Use a database/advisory lock or a shared cache; add a two-worker concurrency test. | [ ] |
+| OPS-07 | P1 | Per-device operation lock must work across worker processes | Implemented | `GdsPushOperationLock` is a database row acquired with `select_for_update().get_or_create()`; it is shared by all Q workers and expires after the configured timeout so a crashed worker does not block the device forever. | Done; exclusivity and expiry-takeover test added. | [x] |
 | OPS-08 | P2 | Diagnose `BadSecurityChecksFailed` and related Siemens failures | Implemented | The hint now names clock skew, signature chain, issuer trust and ApplicationUri; `BadNotSupported` points at key-format support and `BadInvalidArgument` at group/type selection. | Done; hints are covered by the status-code test path. | [x] |
 
 ### 3.7 Reference implementation cross-check (.NET GDS samples)
@@ -230,7 +228,7 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 
 - [x] **SEC-03** Capture the server certificate during discovery and offer it for truststore creation/import; fix or remove the dead `server_certificate_available` path.
 - [x] **METH-08** Add `GetCertificates` inventory, `GetRejectedList`, `TransactionDiagnostics` error reporting and an inventory UI.
-- [ ] **WF-02** Add an expiry/CRL-based "update required" decision. (Certificate expiry done; CRL-change detection remains.)
+- [x] **WF-02** Add a state-driven reconciliation task for trust-list drift and per-group certificate expiry.
 - [x] **METH-11** Add per-operation audit records and user attribution.
 - [x] **SEC-05** Add a dedicated `manage_gds_push` permission split; four-eyes approval remains a product decision.
 - [x] **SEC-06** Verify the replacement domain credential before revoking the previous one.
@@ -241,8 +239,8 @@ The sample implements v1.05.07 and exposes behavior that is easy to miss from th
 - [x] **METH-15** Treat `GetRejectedList` as global and never attribute it to a selected group.
 - [x] **OPS-08** Diagnose clock, signature, issuer, URI, key-format and group/type failures.
 - [x] **WF-11** Do not retry after `ApplyChanges` may already have been applied.
-- [ ] **OPS-07** Make the per-device operation lock effective across worker processes.
-- [ ] **TL-09** Decide prune/replace behavior for stale CA certificates and CRLs.
+- [x] **OPS-07** Make the per-device operation lock effective across worker processes.
+- [x] **TL-09** Prune stale Trustpoint-managed CA certificates and CRLs during reconciliation.
 - [ ] **WF-12** Warn about hardware-configuration vs runtime-managed certificate conflicts.
 - [x] **OPS-04** Add configurable timeouts, bounded retries and a per-device operation lock.
 - [ ] **OPS-03** Run one real-stack interoperability test against a third independent stack (node-opcua).
@@ -302,8 +300,12 @@ Before closing the core conformance work, verify each item against a strict serv
 - [x] A chained DER endpoint certificate is reduced to its leaf before storing or parsing it.
 - [x] CA material is rejected unless it is a CA and permits certificate and CRL signing.
 - [x] A timeout after `ApplyChanges` does not trigger a second certificate issuance or apply.
-- [ ] Two worker processes cannot run GDS Push for the same device concurrently (OPS-07).
-- [ ] CA removal/rollover does not leave stale CA certificates or CRLs on the device (TL-09).
+- [x] Reconciliation skips unchanged trust lists and makes no `ApplyChanges` call when nothing is due.
+- [x] Reconciliation renews only certificate groups whose actual inventory is within the expiry threshold.
+- [x] Trust-list changes are evaluated independently from certificate expiry.
+- [x] Stale Trustpoint-managed CA certificates/CRLs are pruned while external entries are preserved.
+- [x] Two worker processes cannot run GDS Push for the same device concurrently (OPS-07).
+- [x] CA removal/rollover does not leave stale Trustpoint-managed CA certificates or CRLs on the device (TL-09).
 - [ ] A hardware-configuration vs runtime-managed certificate conflict is detected and reported (WF-12).
 
 ## 7. File and line map (current code, 2026-11-27)
@@ -330,7 +332,10 @@ Before closing the core conformance work, verify each item against a strict serv
 | Write chunk clamp | `trustpoint/request/gds_push/gds_push_service.py:1440` |
 | Rejected list read | `trustpoint/request/gds_push/gds_push_service.py:1414` |
 | Combined trust-list + certificate workflow | `trustpoint/request/gds_push/gds_push_service.py:1612` |
-| Certificate renewal threshold | `trustpoint/request/gds_push/gds_push_service.py:1341` |
+| Per-group certificate due decision | `trustpoint/request/gds_push/gds_push_service.py` (`_certificate_group_due`) |
+| Reconciliation (trust-list drift + per-group expiry) | `trustpoint/request/gds_push/gds_push_service.py` (`reconcile`) |
+| Per-device database lock | `trustpoint/devices/models.py` (`GdsPushOperationLock`), `trustpoint/devices/tasks.py` |
+| Managed trust-list pruning | `trustpoint/request/gds_push/gds_push_service.py` (`_effective_trustlist`) |
 | Certificate update (CSR, nonce, type) | `trustpoint/request/gds_push/gds_push_service.py:1735` |
 | CSR signing / certificate issuance | `trustpoint/request/gds_push/gds_push_service.py:1820` |
 | Local truststore replacement | `trustpoint/request/gds_push/gds_push_service.py:1932` |
@@ -550,10 +555,10 @@ The following is the consolidated backlog suggested by the vendor/IOP sources. I
 | P0 | TrustList merging and preservation | TL-07, TL-04 | Done |
 | P0 | Certificate activation verification after `ApplyChanges` | WF-10 | Done |
 | P1 | Dynamic certificate-group/type discovery | WF-03, METH-02 | Done |
-| P1 | Independent certificate/trust-list/CRL scheduling | WF-02 | Open |
+| P1 | Independent certificate/trust-list/CRL scheduling | WF-02 | Done (single reconciliation task) |
 | P1 | Idempotent operations and retry handling | OPS-04, METH-09, WF-11 | Done |
 | P1 | Server-side vs externally generated keys | METH-04, WF-06, METH-12 | Done |
-| P1 | Concurrent certificate-management operations | OPS-04, OPS-07 | Partial |
+| P1 | Concurrent certificate-management operations | OPS-04, OPS-07 | Done |
 | P1 | Vendor-specific resource limitations | TL-08, TL-06 | Done |
 | P1 | Support for older Part 12 implementations | — | Not yet specified; add if older servers are in scope |
 | P2 | `CertificateExpirationAlarm` integration | WF-02 | Open |
@@ -589,8 +594,8 @@ re-checked.
 |---|---|---|---|
 | Ambiguous TrustList transaction start around `Open`/`CloseAndUpdate` | Mantis #9850 | Partial | WF-04/METH-09 use one session and one `ApplyChanges`; add a strict-server test for the Open → Write → CloseAndUpdate → Apply boundary. |
 | Specification references a nonexistent status code | Mantis #9851 | Partial | Status codes are preserved and `BadInvalidState`/`BadBusy`/timeouts are retryable; the exact `CloseAndUpdate` code expected by each stack is still vendor-checked at runtime. |
-| Concurrent TrustList operations can deadlock | Mantis #9852 | Open | OPS-07: the per-device lock is process-local under the default locmem cache with two Q workers. Use a shared/DB lock and add a two-worker test. |
-| Concurrent reads / file-handle cleanup | Mantis #9853 | Covered | `_read_trustlist` always closes the handle in `finally` and retries transient file-API errors with backoff. Concurrency still depends on OPS-07. |
+| Concurrent TrustList operations can deadlock | Mantis #9852 | Fixed | OPS-07: a database-backed lock now serializes operations across Q workers, with expiry takeover. |
+| Concurrent reads / file-handle cleanup | Mantis #9853 | Covered | `_read_trustlist` always closes the handle in `finally`, retries transient file-API errors, and the DB lock serializes same-device operations. |
 | `RemoveCertificate` can leave an inconsistent TrustList | Mantis #9854 | N/A | Trustpoint does not call `RemoveCertificate`; `UpdateCertificate` replaces the active slot. Revisit if removal is added. |
 | Repeated `ApplyChanges` causes a server memory-management failure | open62541 #8093 | Fixed | WF-11 records that `ApplyChanges` was attempted and stops the retry wrapper from issuing/applying a second certificate. |
 | Failed keep-alive causes a GDS client deadlock | .NET PR #4623 | Partial | Channel/session timeouts are configurable and reconnect verification is performed, but there is no real-stack keep-alive interruption test (OPS-03). |
@@ -606,7 +611,7 @@ re-checked.
 | Connection failure hides the actual status code | node-opcua IOP | Covered | OPS-06 keeps the symbolic name and hex code and adds operation-stage hints. |
 | TrustList operations return incorrect status codes | node-opcua IOP | Partial | Method-specific errors are preserved and classified; Mantis 9851 is not independently resolved for every stack. |
 | Incomplete certificate chains are accepted into the TrustList | node-opcua IOP | Fixed | SEC-10 rejects CA material that cannot sign certificates; TL-03 builds the full chain from the issuing CA to the root. |
-| CRLs are not cleaned up after CA removal/rollover | node-opcua IOP | Open | TL-09: merge keeps CRLs for issuers not in the incoming list, so removed CAs can remain. Decide prune/replace semantics. |
+| CRLs are not cleaned up after CA removal/rollover | node-opcua IOP | Fixed | TL-09: previous managed fingerprints are pruned before merge; external entries are preserved. |
 | `GetRejectedList` returns certificates outside the intended scope | node-opcua IOP | Covered | METH-15 reads it globally, labels it as global and never attributes entries to the selected group. |
 | Concatenated DER causes an `ExtraData` parse error | asyncua | Fixed | METH-14 applies leaf extraction to discovery and CA validation. |
 

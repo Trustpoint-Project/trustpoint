@@ -340,6 +340,12 @@ class OpcUaGdsPushConfig(models.Model):
         null=True,
         blank=True,
     )
+    opc_gds_push_managed_trustlist_fingerprints = models.JSONField(
+        _('Managed Trust-List Fingerprints'),
+        default=list,
+        blank=True,
+        help_text=_('SHA-256 fingerprints of the CA certificates and CRLs last managed by Trustpoint.'),
+    )
 
     def __str__(self) -> str:
         """Identify the device owning this configuration."""
@@ -405,6 +411,23 @@ class OpcUaGdsPushConfig(models.Model):
             )
         self.opc_gds_push_domain_credential_next_renewal_at = next_run
         type(self).objects.filter(pk=self.pk).update(opc_gds_push_domain_credential_next_renewal_at=next_run)
+
+
+class GdsPushOperationLock(models.Model):
+    """Database-backed per-device GDS Push operation lock shared by worker processes."""
+
+    device = models.OneToOneField(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='gds_push_operation_lock',
+    )
+    acquired_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+
+    def __str__(self) -> str:
+        """Identify the locked device."""
+        return f'GdsPushOperationLock(device={self.device_id})'
 
 
 class RemoteDeviceCredentialDownloadModel(models.Model):

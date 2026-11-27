@@ -1277,6 +1277,7 @@ class GdsPushService(LoggerMixin):
                 raise
 
             if success_count == len(trustlist_nodes):
+                await self._record_managed_trustlist(trustlist)
                 rejected_note = f'; {len(rejected)} rejected certificate(s) on server' if rejected else ''
                 verified, verification_error = await self._verify_server_connection()
                 verification_note = (
@@ -1560,27 +1561,6 @@ class GdsPushService(LoggerMixin):
                         await trustlist_node.call_method(close_method.nodeid, file_handle)
         return None
 
-    def server_certificate_needs_renewal(self) -> bool:
-        """Decide whether the periodic task should replace the server certificate."""
-        config = getattr(self.device, 'opc_ua_gds_push_config', None)
-        threshold_days = getattr(config, 'opc_gds_push_renewal_threshold_days', 30) or 0
-        if threshold_days <= 0:
-            return True
-
-        truststore = getattr(config, 'opc_trust_store', None) if config else None
-        if truststore is None:
-            return True
-        try:
-            order = truststore.truststoreordermodel_set.get(order=0)
-            not_after = order.certificate.not_valid_after
-        except Exception:  # noqa: BLE001
-            return True
-        if not_after is None:
-            return True
-        if not_after.tzinfo is None:
-            not_after = not_after.replace(tzinfo=dt.UTC)
-        return bool(not_after <= dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=threshold_days))
-
     async def verify_connection(self) -> tuple[bool, str]:
         """Public reconnect check used to validate a replacement client identity."""
         return await self._verify_server_connection()
@@ -1744,6 +1724,82 @@ class GdsPushService(LoggerMixin):
             return max(1, min(requested, int(limit)))
         return requested
 
+    @staticmethod
+    def _trustlist_fingerprints(trustlist: ua.TrustListDataType) -> set[str]:
+        """Return SHA-256 fingerprints for every element in a trust list."""
+        return {
+            hashlib.sha256(der).hexdigest()
+            for attribute in ('TrustedCertificates', 'TrustedCrls', 'IssuerCertificates', 'IssuerCrls')
+            for der in (getattr(trustlist, attribute, None) or [])
+        }
+
+    def _prune_stale_managed_entries(
+        self,
+        current: ua.TrustListDataType,
+        desired: ua.TrustListDataType,
+    ) -> ua.TrustListDataType:
+        """Remove previously managed entries that are no longer in the desired list."""
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        managed = set(getattr(config, 'opc_gds_push_managed_trustlist_fingerprints', None) or [])
+        if not managed:
+            return current
+        stale = managed - self._trustlist_fingerprints(desired)
+        if not stale:
+            return current
+
+        pruned = ua.TrustListDataType()
+        pruned.SpecifiedLists = current.SpecifiedLists
+        for attribute in ('TrustedCertificates', 'TrustedCrls', 'IssuerCertificates', 'IssuerCrls'):
+            setattr(
+                pruned,
+                attribute,
+                [
+                    der
+                    for der in (getattr(current, attribute, None) or [])
+                    if hashlib.sha256(der).hexdigest() not in stale
+                ],
+            )
+        return pruned
+
+    def _effective_trustlist(
+        self,
+        current: ua.TrustListDataType | None,
+        desired: ua.TrustListDataType,
+    ) -> ua.TrustListDataType:
+        """Merge the desired trust list with the current one after pruning stale managed entries."""
+        if current is None:
+            return desired
+        return self._merge_trustlists(self._prune_stale_managed_entries(current, desired), desired)
+
+    @staticmethod
+    def _trustlists_equal(current: ua.TrustListDataType | None, desired: ua.TrustListDataType) -> bool:
+        """Compare trust lists as sets, ignoring entry order."""
+        if current is None:
+            return False
+        if int(getattr(current, 'SpecifiedLists', 0)) != int(getattr(desired, 'SpecifiedLists', 0)):
+            return False
+        return all(
+            set(getattr(current, attribute, None) or []) == set(getattr(desired, attribute, None) or [])
+            for attribute in ('TrustedCertificates', 'TrustedCrls', 'IssuerCertificates', 'IssuerCrls')
+        )
+
+    async def _record_managed_trustlist(self, desired: ua.TrustListDataType) -> None:
+        """Remember which trust-list entries Trustpoint manages so removed CAs can be pruned."""
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        if config is None:
+            return
+        fingerprints = sorted(self._trustlist_fingerprints(desired))
+        try:
+            await sync_to_async(
+                lambda: (
+                    type(config)
+                    .objects.filter(pk=config.pk)
+                    .update(opc_gds_push_managed_trustlist_fingerprints=fingerprints)
+                )
+            )()
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Could not persist managed trust-list fingerprints: %s', e)
+
     async def _update_single_trustlist(
         self,
         trustlist_node: Node,
@@ -1763,13 +1819,20 @@ class GdsPushService(LoggerMixin):
         Returns:
             True if successful, False otherwise.
         """
+        current_trustlist = await self._read_trustlist(trustlist_node)
+        effective_trustlist = self._effective_trustlist(current_trustlist, trustlist_data)
+        return await self._write_trustlist(trustlist_node, effective_trustlist, max_chunk_size, defer_apply=defer_apply)
+
+    async def _write_trustlist(
+        self,
+        trustlist_node: Node,
+        effective_trustlist: ua.TrustListDataType,
+        max_chunk_size: int = 1024,
+        *,
+        defer_apply: bool = False,
+    ) -> bool:
+        """Write a prepared TrustList and optionally defer ApplyChanges."""
         try:
-            current_trustlist = await self._read_trustlist(trustlist_node)
-            effective_trustlist = (
-                self._merge_trustlists(current_trustlist, trustlist_data)
-                if current_trustlist is not None
-                else trustlist_data
-            )
             serialized_trustlist = struct_to_binary(effective_trustlist)
             self._validate_trustlist_limits(effective_trustlist, serialized_size=len(serialized_trustlist))
             max_chunk_size = self._effective_chunk_size(max_chunk_size)
@@ -1975,6 +2038,7 @@ class GdsPushService(LoggerMixin):
             self.logger.exception('Failed to update trustlist and certificate')
             return False, self._status_error(e, 'Combined GDS Push update'), None
 
+        await self._record_managed_trustlist(trustlist)
         if issued_cert and issuer_chain:
             await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
 
@@ -1988,6 +2052,124 @@ class GdsPushService(LoggerMixin):
             f'Successfully updated trustlist and certificate: {", ".join(messages)}{rejected_note}{verification_note}',
             issued_cert,
         )
+
+    def _certificate_group_due(
+        self,
+        group: dict[str, Any],
+        threshold_days: int,
+        now: dt.datetime,
+    ) -> bool:
+        """Decide from the device's actual certificate whether this group needs renewal."""
+        current = group.get('current_certificates') or {}
+        if not current:
+            return False
+        type_id = group.get('certificate_type_id')
+        certificate_der = current.get(type_id) if type_id is not None else None
+        if certificate_der is None:
+            certificate_der = next(iter(current.values()))
+        try:
+            certificate = x509.load_der_x509_certificate(bytes(certificate_der))
+        except Exception as e:  # noqa: BLE001
+            self.logger.warning('Could not parse the current certificate for group %s: %s', group.get('name'), e)
+            return True
+        if threshold_days <= 0:
+            return True
+        return certificate.not_valid_after_utc <= now + dt.timedelta(days=threshold_days)
+
+    async def reconcile(self) -> tuple[bool, str, bytes | None]:  # noqa: C901, PLR0911, PLR0912, PLR0915
+        """Reconcile the device trust lists and certificate groups with the desired state.
+
+        The periodic task uses this as its single entry point. Trust-list changes and
+        certificate renewals are evaluated independently from the device's actual
+        inventory; unchanged trust lists are not written and no ApplyChanges is sent
+        when neither side needs an update.
+        """
+        self._apply_changes_attempted = False
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        threshold_days = getattr(config, 'opc_gds_push_renewal_threshold_days', 30) or 0
+        now = dt.datetime.now(dt.UTC)
+        issued_cert: bytes | None = None
+        issuer_chain: list[bytes] | None = None
+        messages: list[str] = []
+
+        try:
+            client = await self._create_secure_client()
+            async with client:
+                await self._read_server_capabilities(client)
+                self._apply_changes_required = False
+
+                cert_groups = await self._discover_certificate_groups(client)
+                if not cert_groups:
+                    return False, 'No certificate groups found on server', None
+                trustlist_nodes = await self._discover_trustlist_nodes(client)
+
+                desired: ua.TrustListDataType | None = None
+                trustlist_writes: list[tuple[dict[str, Any], ua.TrustListDataType]] = []
+                if trustlist_nodes:
+                    desired = await self._build_trustlist_for_server()
+                    for node_info in trustlist_nodes:
+                        current = await self._read_trustlist(node_info['trustlist_node'])
+                        effective = self._effective_trustlist(current, desired)
+                        if not self._trustlists_equal(current, effective):
+                            trustlist_writes.append((node_info, effective))
+
+                due_groups = [group for group in cert_groups if self._certificate_group_due(group, threshold_days, now)]
+
+                if not trustlist_writes and not due_groups:
+                    if desired is not None:
+                        await self._record_managed_trustlist(desired)
+                    return True, 'No certificate or trust list update required', None
+
+                if due_groups and not trustlist_nodes:
+                    return (
+                        False,
+                        'No TrustList nodes found; cannot ensure issuer certificates and CRLs before renewal',
+                        None,
+                    )
+
+                for node_info, effective in trustlist_writes:
+                    group_name = node_info['group_name']
+                    success = await self._write_trustlist(node_info['trustlist_node'], effective, defer_apply=True)
+                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name}')
+                    if not success:
+                        await self._cancel_changes(client)
+                        return False, f'Trust list update failed: {", ".join(messages)}', None
+
+                regenerate_private_key = bool(getattr(config, 'opc_gds_push_regenerate_server_key', False))
+                for group in due_groups:
+                    group_name = group['name']
+                    success, cert_bytes, chain_bytes = await self._update_single_certificate(
+                        client=client,
+                        certificate_group_id=group['node_id'],
+                        certificate_type_id=group.get('certificate_type_id'),
+                        regenerate_private_key=regenerate_private_key,
+                        defer_apply=True,
+                    )
+                    messages.append(f'{"✓" if success else "✗"} certificate {group_name}')
+                    if not success:
+                        await self._cancel_changes(client)
+                        return False, f'Certificate renewal failed: {", ".join(messages)}', None
+                    if issued_cert is None:
+                        issued_cert = cert_bytes
+                        issuer_chain = chain_bytes
+
+                if self._apply_changes_required:
+                    await self._apply_changes(client)
+                if desired is not None:
+                    await self._record_managed_trustlist(desired)
+        except Exception as e:
+            self.logger.exception('GDS Push reconciliation failed')
+            return False, self._status_error(e, 'GDS Push reconciliation'), None
+
+        if issued_cert and issuer_chain:
+            await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
+
+        verified, verification_error = await self._verify_server_connection()
+        verification_note = (
+            '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
+        )
+        summary = ', '.join(messages) if messages else 'trust list and certificates already current'
+        return True, f'Reconciliation complete: {summary}{verification_note}', issued_cert
 
     async def _discover_certificate_groups(self, client: Client) -> list[dict[str, Any]]:
         """Discover application certificate groups and the permitted certificate type.

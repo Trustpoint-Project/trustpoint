@@ -112,13 +112,33 @@ Every push, inventory refresh and renewal-settings action requires the
 certificates). Grant it only to roles that should be able to change the device's
 certificates. The built-in Device Operator and PKI Admin roles include it.
 
-## Periodic Renewal
+## Periodic Reconciliation
 
-Periodic server certificate and trustlist renewal can be enabled for a device.
-Configure the renewal interval in hours; the minimum interval is one hour.
-Scheduled operations require a running Trustpoint task worker. The trust list is
-refreshed each cycle; the server certificate is only replaced when it expires
-within the configured **Certificate renewal threshold (days)** (default 30).
+Periodic reconciliation can be enabled for a device. Configure the interval in
+hours; the minimum interval is one hour. Scheduled operations require a running
+Trustpoint task worker. The interval controls how often the task reconciles
+state; it does not force a certificate renewal.
+
+Each cycle evaluates the two sides independently:
+
+- **Certificate groups** are checked against the device's actual inventory.
+  A group is renewed only when its current certificate expires within the
+  configured **Certificate renewal threshold (days)** (default 30).
+- **Trust lists** are compared with the desired contents. Unchanged lists are
+  skipped and no `ApplyChanges` is sent. Changes to CA certificates, CRLs or
+  managed trust relationships trigger a synchronisation.
+
+Trustpoint-managed CA certificates and CRLs that are no longer in the desired
+list are pruned; entries not managed by Trustpoint are preserved. If a
+certificate must be renewed, the trust list is brought up to date first so the
+issuer certificates and CRLs are present before activation.
+
+The periodic run is also the fallback for missed events, offline devices and
+configuration drift. To renew a certificate immediately, use **Update Server
+Certificate**; that action remains an explicit forced renewal independent of the
+expiry threshold. Device operations are serialised by a database-backed
+per-device lock, so multiple task workers do not push to the same device
+concurrently.
 
 By default the server's existing private key is reused for each renewal. Enable
 **Generate a new server private key on renewal** to roll the key; this is

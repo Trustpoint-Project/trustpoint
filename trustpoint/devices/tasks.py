@@ -11,12 +11,11 @@ import time
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 
 from devices.domain_credential_renewal import renew_gds_push_domain_credential
-from devices.models import DeviceModel, OpcUaGdsPushConfig
+from devices.models import DeviceModel, GdsPushOperationLock, OpcUaGdsPushConfig
 from management.models.audit_log import AuditLog
 from onboarding.enums import OnboardingStatus
 from request.gds_push import GdsPushError, GdsPushService
@@ -27,13 +26,27 @@ GDS_PUSH_LOCK_TIMEOUT_SECONDS = 900
 
 
 def _acquire_device_lock(device_id: int) -> bool:
-    """Reserve the per-device GDS Push operation lock."""
-    return cache.add(f'gds_push_device_{device_id}', '1', timeout=GDS_PUSH_LOCK_TIMEOUT_SECONDS)
+    """Reserve the per-device GDS Push operation lock in the database."""
+    now = timezone.now()
+    expires_at = now + timedelta(seconds=GDS_PUSH_LOCK_TIMEOUT_SECONDS)
+    with transaction.atomic():
+        lock, created = GdsPushOperationLock.objects.select_for_update().get_or_create(
+            device_id=device_id,
+            defaults={'acquired_at': now, 'expires_at': expires_at},
+        )
+        if created:
+            return True
+        if lock.expires_at > now:
+            return False
+        lock.acquired_at = now
+        lock.expires_at = expires_at
+        lock.save(update_fields=['acquired_at', 'expires_at'])
+        return True
 
 
 def _release_device_lock(device_id: int) -> None:
     """Release the per-device GDS Push operation lock."""
-    cache.delete(f'gds_push_device_{device_id}')
+    GdsPushOperationLock.objects.filter(device_id=device_id).delete()
 
 
 def _record_gds_push_audit(
@@ -126,19 +139,18 @@ def perform_gds_push_update(device_id: int) -> None:
         try:
             service = GdsPushService(device=device)
             try:
-                if service.server_certificate_needs_renewal():
-                    success, message, _certificate_bytes = _run_combined_update(service)
-                else:
-                    success, message = asyncio.run(service.update_trustlist())
-                    message = f'certificate not due for renewal; {message}'
+                success, message, certificate_bytes = asyncio.run(service.reconcile())
                 if success:
-                    logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
+                    logger.info('GDS Push reconciliation succeeded for device %s: %s', device.common_name, message)
                     _record_gds_push_audit(device, None, 'success', message)
+                    if certificate_bytes and device.onboarding_config is not None:
+                        device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+                        device.onboarding_config.save(update_fields=['onboarding_status'])
                 else:
-                    logger.warning('GDS Push update failed for device %s: %s', device.common_name, message)
+                    logger.warning('GDS Push reconciliation failed for device %s: %s', device.common_name, message)
                     _record_gds_push_audit(device, None, 'failed', message)
             except GdsPushError:
-                logger.exception('GDS Push error during combined update for device %s', device.common_name)
+                logger.exception('GDS Push error during reconciliation for device %s', device.common_name)
         except Exception:
             logger.exception('Unexpected error during GDS Push update for device %s', device.common_name)
             # Preserve queue retries without overwriting renewal settings saved during device I/O.

@@ -236,14 +236,6 @@ class TestGdsPushService:
             assert entries == original_entries
             assert not revoked
 
-    def test_server_certificate_renewal_threshold(self, mock_opc_device, mock_server_certificate):
-        """Use the pinned server certificate expiry for the renewal decision."""
-        service = GdsPushService(mock_opc_device, insecure=True)
-        service.device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 30
-        assert service.server_certificate_needs_renewal() is False
-        service.device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 400
-        assert service.server_certificate_needs_renewal() is True
-
     def test_issued_certificate_policy_rejects_small_key(self, mock_opc_device):
         """Reject a certificate below the configured minimum key size."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -571,7 +563,7 @@ class TestGdsPushService:
             patch.object(service, '_create_secure_client') as mock_create_client,
         ):
             mock_build_chain.return_value = [mock_ca_with_crl]
-            mock_build_trustlist.return_value = Mock(spec=ua.TrustListDataType)
+            mock_build_trustlist.return_value = ua.TrustListDataType()
             mock_discover.return_value = [{'group_name': 'Default', 'trustlist_node': mock_trustlist_node}]
             mock_update_single.return_value = True
             mock_create_client.return_value = mock_client
@@ -1545,6 +1537,133 @@ class TestGdsPushServiceAdditionalCoverage:
         with pytest.raises(GdsPushError, match='does not chain'):
             service._validate_server_certificate_chain(leaf, [])
 
+    def test_certificate_group_due_uses_actual_inventory(self, mock_opc_device):
+        """Decide renewal from the certificate in the selected slot."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        type_id = ua.NodeId.from_string('ns=0;i=12560')
+        group = {
+            'name': 'Server',
+            'certificate_type_id': type_id,
+            'current_certificates': {type_id: leaf.public_bytes(serialization.Encoding.DER)},
+        }
+
+        assert service._certificate_group_due(group, 30, datetime.datetime.now(datetime.UTC)) is False
+        assert service._certificate_group_due(group, 1000, datetime.datetime.now(datetime.UTC)) is True
+
+    def test_effective_trustlist_prunes_only_stale_managed_entries(self, mock_opc_device):
+        """Remove previously managed entries that disappeared; keep external entries."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        import hashlib
+
+        managed_entry = b'managed'
+        external_entry = b'external'
+        desired_entry = b'desired'
+        mock_opc_device.opc_ua_gds_push_config.opc_gds_push_managed_trustlist_fingerprints = [
+            hashlib.sha256(managed_entry).hexdigest()
+        ]
+        current = ua.TrustListDataType()
+        current.SpecifiedLists = int(ua.TrustListMasks.All)
+        current.TrustedCertificates = [managed_entry, external_entry]
+        desired = ua.TrustListDataType()
+        desired.SpecifiedLists = int(ua.TrustListMasks.All)
+        desired.TrustedCertificates = [desired_entry]
+
+        effective = service._effective_trustlist(current, desired)
+
+        assert managed_entry not in effective.TrustedCertificates
+        assert external_entry in effective.TrustedCertificates
+        assert desired_entry in effective.TrustedCertificates
+
+    @pytest.mark.asyncio
+    async def test_reconcile_skips_unchanged_state(self, mock_opc_device):
+        """Do not write or apply when both trust lists and certificates are current."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        type_id = ua.NodeId.from_string('ns=0;i=12560')
+        desired = ua.TrustListDataType()
+        desired.SpecifiedLists = int(ua.TrustListMasks.All)
+        desired.TrustedCertificates = [leaf.public_bytes(serialization.Encoding.DER)]
+        group = {
+            'name': 'Server',
+            'node_id': ua.NodeId.from_string('ns=0;i=1'),
+            'certificate_type_id': type_id,
+            'current_certificates': {type_id: leaf.public_bytes(serialization.Encoding.DER)},
+        }
+        node_info = {'group_name': 'Server', 'trustlist_node': Mock()}
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_read_server_capabilities', new_callable=AsyncMock, return_value={}),
+            patch.object(service, '_discover_certificate_groups', new_callable=AsyncMock, return_value=[group]),
+            patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=[node_info]),
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=desired),
+            patch.object(service, '_read_trustlist', new_callable=AsyncMock, return_value=desired),
+            patch.object(service, '_write_trustlist', new_callable=AsyncMock) as write,
+            patch.object(service, '_update_single_certificate', new_callable=AsyncMock) as update_cert,
+            patch.object(service, '_apply_changes', new_callable=AsyncMock) as apply,
+            patch.object(service, '_record_managed_trustlist', new_callable=AsyncMock) as record,
+        ):
+            success, message, certificate = await service.reconcile()
+
+        assert success, message
+        assert 'No certificate or trust list update required' in message
+        assert certificate is None
+        write.assert_not_called()
+        update_cert.assert_not_called()
+        apply.assert_not_called()
+        record.assert_awaited_once_with(desired)
+
+    @pytest.mark.asyncio
+    async def test_reconcile_updates_trustlist_independently(self, mock_opc_device):
+        """Update only the trust list when the server certificate is not due."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        _root, leaf = _make_ca_chain()
+        type_id = ua.NodeId.from_string('ns=0;i=12560')
+        desired = ua.TrustListDataType()
+        desired.SpecifiedLists = int(ua.TrustListMasks.All)
+        desired.TrustedCertificates = [leaf.public_bytes(serialization.Encoding.DER)]
+        current = ua.TrustListDataType()
+        current.SpecifiedLists = int(ua.TrustListMasks.All)
+        group = {
+            'name': 'Server',
+            'node_id': ua.NodeId.from_string('ns=0;i=1'),
+            'certificate_type_id': type_id,
+            'current_certificates': {type_id: leaf.public_bytes(serialization.Encoding.DER)},
+        }
+        node_info = {'group_name': 'Server', 'trustlist_node': Mock()}
+        client = Mock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=None)
+
+        async def write_trustlist(*_args, **_kwargs):
+            service._apply_changes_required = True
+            return True
+
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_read_server_capabilities', new_callable=AsyncMock, return_value={}),
+            patch.object(service, '_discover_certificate_groups', new_callable=AsyncMock, return_value=[group]),
+            patch.object(service, '_discover_trustlist_nodes', new_callable=AsyncMock, return_value=[node_info]),
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=desired),
+            patch.object(service, '_read_trustlist', new_callable=AsyncMock, return_value=current),
+            patch.object(service, '_write_trustlist', side_effect=write_trustlist) as write,
+            patch.object(service, '_update_single_certificate', new_callable=AsyncMock) as update_cert,
+            patch.object(service, '_apply_changes', new_callable=AsyncMock) as apply,
+            patch.object(service, '_record_managed_trustlist', new_callable=AsyncMock),
+            patch.object(service, '_verify_server_connection', new_callable=AsyncMock, return_value=(True, '')),
+        ):
+            success, message, certificate = await service.reconcile()
+
+        assert success, message
+        write.assert_awaited_once()
+        update_cert.assert_not_called()
+        apply.assert_awaited_once()
+        assert certificate is None
+
     def test_ca_material_requires_basic_constraints_ca(self, mock_opc_device):
         """Reject a CA entry that is not marked as a CA."""
         service = GdsPushService(mock_opc_device, insecure=True)
@@ -2192,7 +2311,9 @@ class TestGdsPushServiceAdditionalCoverage:
                 new_callable=AsyncMock,
                 return_value=[{'name': 'Application', 'node_id': ua.NodeId(1, 1)}],
             ),
-            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=Mock()),
+            patch.object(
+                service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=ua.TrustListDataType()
+            ),
             patch.object(service, '_read_rejected_certificates', new_callable=AsyncMock, return_value=[]),
             patch.object(service, '_update_single_trustlist', side_effect=update_trustlist),
             patch.object(service, '_update_single_certificate', side_effect=update_certificate),
@@ -2229,7 +2350,9 @@ class TestGdsPushServiceAdditionalCoverage:
                 new_callable=AsyncMock,
                 return_value=[{'name': 'Application', 'node_id': ua.NodeId(1, 1)}],
             ),
-            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=Mock()),
+            patch.object(
+                service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=ua.TrustListDataType()
+            ),
             patch.object(service, '_read_rejected_certificates', new_callable=AsyncMock, return_value=[]),
             patch.object(service, '_update_single_trustlist', new_callable=AsyncMock, return_value=False),
             patch.object(service, '_update_single_certificate', new_callable=AsyncMock) as update_cert,
