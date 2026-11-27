@@ -266,6 +266,14 @@ class OpcUaGdsPushConfig(models.Model):
         null=False,
         help_text=_('Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.'),
     )
+    opc_gds_push_renewal_threshold_days = models.PositiveIntegerField(
+        _('Certificate Renewal Threshold (days)'),
+        default=30,
+        help_text=_(
+            'Only replace the server certificate in the periodic task when it expires within this many days. '
+            'The trust list is still refreshed each cycle.'
+        ),
+    )
     opc_gds_push_last_update_scheduled_at = models.DateTimeField(
         _('Last Periodic Update Scheduled At'),
         null=True,

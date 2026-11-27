@@ -84,7 +84,9 @@ update. Trustpoint requires CRLs for GDS Push trustlist operations.
 
 Periodic server certificate and trustlist renewal can be enabled for a device.
 Configure the renewal interval in hours; the minimum interval is one hour.
-Scheduled operations require a running Trustpoint task worker.
+Scheduled operations require a running Trustpoint task worker. The trust list is
+refreshed each cycle; the server certificate is only replaced when it expires
+within the configured **Certificate renewal threshold (days)** (default 30).
 
 By default the server's existing private key is reused for each renewal. Enable
 **Generate a new server private key on renewal** to roll the key; this is

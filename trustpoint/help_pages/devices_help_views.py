@@ -2082,7 +2082,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
-    def _build_renewal_settings_section(
+    def _build_renewal_settings_section(  # noqa: PLR0915
         self,
         device: DeviceModel,
         *,
@@ -2095,6 +2095,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         """
         regenerate_key = False
         require_crls = False
+        renewal_threshold_days = 30
         max_trustlist_entries = 0
         max_trustlist_element_size = 0
         if domain_credential:
@@ -2118,6 +2119,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
             regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
             require_crls = device.opc_ua_gds_push_config.opc_gds_push_require_crls
+            renewal_threshold_days = device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days
             max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
             max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
@@ -2210,6 +2212,13 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             '       >'
             '<div class="form-text text-muted">'
             f'  {description}'
+            '</div>'
+            f'<label for="renewalThresholdDays" class="form-label mt-2">Certificate renewal threshold (days)</label>'
+            f'<input type="number" class="form-control tp-credential-number" id="renewalThresholdDays" '
+            f'       name="opc_gds_push_renewal_threshold_days" min="0" value="{renewal_threshold_days}">'
+            '<div class="form-text text-muted">'
+            '  Replace the certificate only when it expires within this many days; the trust list is refreshed '
+            'every cycle.'
             '</div>'
             f'{regenerate_html}'
             f'{limits_html}'

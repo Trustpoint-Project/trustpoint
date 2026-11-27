@@ -1338,6 +1338,27 @@ class GdsPushService(LoggerMixin):
                     close_method = await trustlist_node.get_child('Close')
                     await trustlist_node.call_method(close_method.nodeid, file_handle)
 
+    def server_certificate_needs_renewal(self) -> bool:
+        """Decide whether the periodic task should replace the server certificate."""
+        config = getattr(self.device, 'opc_ua_gds_push_config', None)
+        threshold_days = getattr(config, 'opc_gds_push_renewal_threshold_days', 30) or 0
+        if threshold_days <= 0:
+            return True
+
+        truststore = getattr(config, 'opc_trust_store', None) if config else None
+        if truststore is None:
+            return True
+        try:
+            order = truststore.truststoreordermodel_set.get(order=0)
+            not_after = order.certificate.not_valid_after
+        except Exception:  # noqa: BLE001
+            return True
+        if not_after is None:
+            return True
+        if not_after.tzinfo is None:
+            not_after = not_after.replace(tzinfo=dt.UTC)
+        return bool(not_after <= dt.datetime.now(tz=dt.UTC) + dt.timedelta(days=threshold_days))
+
     async def _verify_server_connection(self) -> tuple[bool, str]:
         """Reconnect with the current truststore to verify the applied identity."""
         try:
@@ -1587,6 +1608,80 @@ class GdsPushService(LoggerMixin):
             return False, self._status_error(e, 'Server certificate update'), None
         else:
             return False, 'Failed to update any certificate', None
+
+    async def update_trustlist_and_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901
+        """Apply the trust list and server certificate in one transaction (Section 7.7.2)."""
+        issued_cert: bytes | None = None
+        issuer_chain: list[bytes] | None = None
+        messages: list[str] = []
+
+        try:
+            client = await self._create_secure_client()
+            async with client:
+                await self._read_server_capabilities(client)
+                self._apply_changes_required = False
+
+                trustlist_nodes = await self._discover_trustlist_nodes(client)
+                if not trustlist_nodes:
+                    return False, 'No TrustList nodes found on server', None
+                cert_groups = await self._discover_certificate_groups(client)
+                if not cert_groups:
+                    return False, 'No certificate groups found on server', None
+
+                trustlist = await self._build_trustlist_for_server()
+                rejected = await self._read_rejected_certificates(client)
+
+                trustlist_success = 0
+                for node_info in trustlist_nodes:
+                    group_name = node_info['group_name']
+                    success = await self._update_single_trustlist(
+                        node_info['trustlist_node'], trustlist, defer_apply=True
+                    )
+                    trustlist_success += int(success)
+                    messages.append(f'{"✓" if success else "✗"} trustlist {group_name}')
+                if trustlist_success != len(trustlist_nodes):
+                    return False, f'Trustlist update failed before certificate update: {", ".join(messages)}', None
+
+                config = getattr(self.device, 'opc_ua_gds_push_config', None)
+                regenerate_private_key = bool(getattr(config, 'opc_gds_push_regenerate_server_key', False))
+
+                certificate_success = 0
+                for group in cert_groups:
+                    group_name = group['name']
+                    success, cert_bytes, chain_bytes = await self._update_single_certificate(
+                        client=client,
+                        certificate_group_id=group['node_id'],
+                        certificate_type_id=group.get('certificate_type_id'),
+                        regenerate_private_key=regenerate_private_key,
+                        defer_apply=True,
+                    )
+                    certificate_success += int(success)
+                    messages.append(f'{"✓" if success else "✗"} certificate {group_name}')
+                    if success and issued_cert is None:
+                        issued_cert = cert_bytes
+                        issuer_chain = chain_bytes
+                if certificate_success != len(cert_groups):
+                    return False, f'Certificate update failed: {", ".join(messages)}', None
+
+                if self._apply_changes_required:
+                    await self._apply_changes(client)
+        except Exception as e:
+            self.logger.exception('Failed to update trustlist and certificate')
+            return False, self._status_error(e, 'Combined GDS Push update'), None
+
+        if issued_cert and issuer_chain:
+            await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
+
+        verified, verification_error = await self._verify_server_connection()
+        verification_note = (
+            '; reconnect verified' if verified else f'; reconnect verification failed: {verification_error}'
+        )
+        rejected_note = f'; {len(rejected)} rejected certificate(s) on server' if rejected else ''
+        return (
+            True,
+            f'Successfully updated trustlist and certificate: {", ".join(messages)}{rejected_note}{verification_note}',
+            issued_cert,
+        )
 
     async def _discover_certificate_groups(self, client: Client) -> list[dict[str, Any]]:
         """Discover application certificate groups and the permitted certificate type.

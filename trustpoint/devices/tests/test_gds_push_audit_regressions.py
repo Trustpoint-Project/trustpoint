@@ -73,8 +73,7 @@ def test_obsolete_jobs_skip_and_a_due_job_reserves_one_successor(gds_device):
     config.opc_gds_push_enable_periodic_update = True
     config.save(update_fields=['opc_gds_push_enable_periodic_update'])
     service = Mock(
-        update_trustlist=AsyncMock(return_value=(True, 'updated')),
-        update_server_certificate=AsyncMock(return_value=(True, 'updated', b'certificate')),
+        update_trustlist_and_certificate=AsyncMock(return_value=(True, 'updated', b'certificate')),
     )
     with patch('devices.tasks.GdsPushService', return_value=service) as constructor:
         perform_gds_push_update(gds_device.pk)
@@ -84,8 +83,7 @@ def test_obsolete_jobs_skip_and_a_due_job_reserves_one_successor(gds_device):
         )
         perform_gds_push_update(gds_device.pk)
         perform_gds_push_update(gds_device.pk)
-    service.update_trustlist.assert_awaited_once()
-    service.update_server_certificate.assert_awaited_once()
+    service.update_trustlist_and_certificate.assert_awaited_once()
     assert Schedule.objects.filter(name=f'gds_push_update_{gds_device.pk}').count() == 1
 
 
@@ -94,17 +92,15 @@ def test_failed_update_remains_retryable(gds_device):
     config.opc_gds_push_enable_periodic_update = True
     config.save()
     service = Mock(
-        update_trustlist=AsyncMock(side_effect=RuntimeError('temporary failure')),
-        update_server_certificate=AsyncMock(return_value=(True, 'updated', b'certificate')),
+        update_trustlist_and_certificate=AsyncMock(side_effect=RuntimeError('temporary failure')),
     )
     with patch('devices.tasks.GdsPushService', return_value=service):
         with pytest.raises(RuntimeError, match='temporary failure'):
             perform_gds_push_update(gds_device.pk)
         config.refresh_from_db()
         assert config.opc_gds_push_last_update_scheduled_at is None
-        service.update_trustlist.side_effect = None
-        service.update_trustlist.return_value = (True, 'updated')
+        service.update_trustlist_and_certificate.side_effect = None
+        service.update_trustlist_and_certificate.return_value = (True, 'updated', b'certificate')
         perform_gds_push_update(gds_device.pk)
-    assert service.update_trustlist.await_count == 2
-    service.update_server_certificate.assert_awaited_once()
+    assert service.update_trustlist_and_certificate.await_count == 2
     assert Schedule.objects.filter(name=f'gds_push_update_{gds_device.pk}').count() == 1

@@ -77,28 +77,18 @@ def perform_gds_push_update(device_id: int) -> None:
     try:
         try:
             service = GdsPushService(device=device)
-
-            # Update trustlist
             try:
-                success, message = asyncio.run(service.update_trustlist())
-                if success:
-                    logger.info('Trustlist updated successfully for device %s: %s', device.common_name, message)
+                if service.server_certificate_needs_renewal():
+                    success, message, _certificate_bytes = asyncio.run(service.update_trustlist_and_certificate())
                 else:
-                    logger.warning('Trustlist update failed for device %s: %s', device.common_name, message)
-            except GdsPushError:
-                logger.exception('GDS Push error during trustlist update for device %s', device.common_name)
-
-            # Update server certificate
-            try:
-                success, message, _certificate_bytes = asyncio.run(service.update_server_certificate())
+                    success, message = asyncio.run(service.update_trustlist())
+                    message = f'certificate not due for renewal; {message}'
                 if success:
-                    logger.info(
-                        'Server certificate updated successfully for device %s: %s', device.common_name, message
-                    )
+                    logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
                 else:
-                    logger.warning('Server certificate update failed for device %s: %s', device.common_name, message)
+                    logger.warning('GDS Push update failed for device %s: %s', device.common_name, message)
             except GdsPushError:
-                logger.exception('GDS Push error during server certificate update for device %s', device.common_name)
+                logger.exception('GDS Push error during combined update for device %s', device.common_name)
         except Exception:
             logger.exception('Unexpected error during GDS Push update for device %s', device.common_name)
             # Preserve queue retries without overwriting renewal settings saved during device I/O.
@@ -150,33 +140,15 @@ def update_gds_push_server_certificate(device_id: int) -> None:
 
     try:
         service = GdsPushService(device=device)
-        # Section 7.7.2: apply the trust list (with CRLs) before the new certificate.
         try:
-            trustlist_success, trustlist_message = asyncio.run(service.update_trustlist())
-            if trustlist_success:
-                logger.info(
-                    'Trustlist updated before certificate renewal for device %s: %s',
-                    device.common_name,
-                    trustlist_message,
-                )
-            else:
-                logger.warning(
-                    'Trustlist update before certificate renewal failed for device %s: %s',
-                    device.common_name,
-                    trustlist_message,
-                )
+            success, message, certificate_bytes = asyncio.run(service.update_trustlist_and_certificate())
         except Exception:
-            logger.exception('Trustlist update before certificate renewal failed for device %s', device.common_name)
-
-        try:
-            success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
-        except Exception:
-            logger.exception('Server certificate update failed for device %s', device.common_name)
+            logger.exception('Combined GDS Push update failed for device %s', device.common_name)
             return
         if not success or not certificate_bytes:
-            logger.warning('Server certificate update rejected for device %s: %s', device.common_name, message)
+            logger.warning('GDS Push update rejected for device %s: %s', device.common_name, message)
             return
-        logger.info('Server certificate updated for device %s: %s', device.common_name, message)
+        logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
         if device.onboarding_config is not None:
             device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             device.onboarding_config.save(update_fields=['onboarding_status'])

@@ -205,6 +205,14 @@ class TestGdsPushService:
             assert entries == original_entries
             assert not revoked
 
+    def test_server_certificate_renewal_threshold(self, mock_opc_device, mock_server_certificate):
+        """Use the pinned server certificate expiry for the renewal decision."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        service.device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 30
+        assert service.server_certificate_needs_renewal() is False
+        service.device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = 400
+        assert service.server_certificate_needs_renewal() is True
+
     def test_init_uses_configured_server_url(self, mock_opc_device):
         """A configured endpoint URL overrides the IP/port-derived URL."""
         mock_opc_device.opc_ua_gds_push_config.opc_server_url = 'opc.tcp://public.example:4840/plant/edge'
@@ -1785,6 +1793,85 @@ class TestGdsPushServiceAdditionalCoverage:
         assert trustlist.TrustedCrls == [crl_der]
         assert trustlist.IssuerCertificates == []
         assert trustlist.IssuerCrls == []
+
+    @pytest.mark.asyncio
+    async def test_combined_update_applies_once_and_updates_truststore(self, mock_opc_device):
+        """Stage trust list and certificate in one session and apply once."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = AsyncMock()
+
+        async def update_trustlist(_node, _data, **_kwargs):
+            service._apply_changes_required = True
+            return True
+
+        async def update_certificate(**_kwargs):
+            service._apply_changes_required = True
+            return True, b'new-cert', [b'issuer']
+
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_read_server_capabilities', new_callable=AsyncMock),
+            patch.object(
+                service,
+                '_discover_trustlist_nodes',
+                new_callable=AsyncMock,
+                return_value=[{'group_name': 'Application', 'trustlist_node': Mock()}],
+            ),
+            patch.object(
+                service,
+                '_discover_certificate_groups',
+                new_callable=AsyncMock,
+                return_value=[{'name': 'Application', 'node_id': ua.NodeId(1, 1)}],
+            ),
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=Mock()),
+            patch.object(service, '_read_rejected_certificates', new_callable=AsyncMock, return_value=[]),
+            patch.object(service, '_update_single_trustlist', side_effect=update_trustlist),
+            patch.object(service, '_update_single_certificate', side_effect=update_certificate),
+            patch.object(service, '_apply_changes', new_callable=AsyncMock) as apply_changes,
+            patch.object(service, '_update_truststore_with_new_certificate', new_callable=AsyncMock) as update_store,
+            patch.object(service, '_verify_server_connection', new_callable=AsyncMock, return_value=(True, '')),
+        ):
+            success, message, certificate = await service.update_trustlist_and_certificate()
+
+        assert success is True
+        assert certificate == b'new-cert'
+        assert 'reconnect verified' in message
+        apply_changes.assert_awaited_once_with(client)
+        update_store.assert_awaited_once_with(b'new-cert', [b'issuer'])
+
+    @pytest.mark.asyncio
+    async def test_combined_update_stops_on_trustlist_failure(self, mock_opc_device):
+        """Do not stage certificates or apply when the trust-list step failed."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+        client = AsyncMock()
+        with (
+            patch.object(service, '_create_secure_client', new_callable=AsyncMock, return_value=client),
+            patch.object(service, '_read_server_capabilities', new_callable=AsyncMock),
+            patch.object(
+                service,
+                '_discover_trustlist_nodes',
+                new_callable=AsyncMock,
+                return_value=[{'group_name': 'Application', 'trustlist_node': Mock()}],
+            ),
+            patch.object(
+                service,
+                '_discover_certificate_groups',
+                new_callable=AsyncMock,
+                return_value=[{'name': 'Application', 'node_id': ua.NodeId(1, 1)}],
+            ),
+            patch.object(service, '_build_trustlist_for_server', new_callable=AsyncMock, return_value=Mock()),
+            patch.object(service, '_read_rejected_certificates', new_callable=AsyncMock, return_value=[]),
+            patch.object(service, '_update_single_trustlist', new_callable=AsyncMock, return_value=False),
+            patch.object(service, '_update_single_certificate', new_callable=AsyncMock) as update_cert,
+            patch.object(service, '_apply_changes', new_callable=AsyncMock) as apply_changes,
+        ):
+            success, message, certificate = await service.update_trustlist_and_certificate()
+
+        assert success is False
+        assert certificate is None
+        assert 'Trustlist update failed' in message
+        update_cert.assert_not_awaited()
+        apply_changes.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_update_server_certificate_applies_once(self, mock_opc_device):

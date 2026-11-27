@@ -161,12 +161,14 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
         max_entries_raw = request.POST.get('opc_gds_push_max_trustlist_entries', '0')
         max_element_raw = request.POST.get('opc_gds_push_max_trustlist_element_size', '0')
+        threshold_raw = request.POST.get('opc_gds_push_renewal_threshold_days', '30')
 
         try:
             interval = int(interval_raw)
             max_entries = int(max_entries_raw or 0)
             max_element_size = int(max_element_raw or 0)
-            if interval < 1 or max_entries < 0 or max_element_size < 0:
+            threshold_days = int(threshold_raw or 0)
+            if interval < 1 or max_entries < 0 or max_element_size < 0 or threshold_days < 0:
                 err_msg = 'Interval must be at least 1 and limits must not be negative.'
                 raise ValueError(err_msg)  # noqa: TRY301
         except (ValueError, TypeError):
@@ -184,10 +186,12 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         self.object.opc_ua_gds_push_config.opc_gds_push_require_crls = require_crls
         self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries = max_entries
         self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size = max_element_size
+        self.object.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = threshold_days
         self.object.opc_ua_gds_push_config.save(
             update_fields=[
                 'opc_gds_push_enable_periodic_update',
                 'opc_gds_push_renewal_interval',
+                'opc_gds_push_renewal_threshold_days',
                 'opc_gds_push_regenerate_server_key',
                 'opc_gds_push_require_crls',
                 'opc_gds_push_max_trustlist_entries',
