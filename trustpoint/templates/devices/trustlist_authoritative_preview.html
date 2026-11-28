@@ -1,0 +1,64 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans 'Authoritative Trust-List Preview' %}</h1>
+        </div>
+        <div class="card-body">
+            <p>{{ message }}</p>
+            {% if is_authoritative %}
+                <p class="text-muted">
+                    {% trans 'This device is already in authoritative mode. The preview shows differences against the current desired state.' %}
+                </p>
+            {% else %}
+                <p class="text-danger">
+                    {% trans 'Authoritative mode removes every entry that is not part of the desired TrustList. Review the entries below before confirming.' %}
+                </p>
+            {% endif %}
+
+            {% for group, attributes in removals.items %}
+                <h2 class="h5 mt-4">{{ group }}</h2>
+                {% for attribute, entries in attributes.items %}
+                    <h3 class="h6">{{ attribute }}</h3>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>{% trans 'Subject / Issuer' %}</th>
+                                    <th>{% trans 'Not after / Next update' %}</th>
+                                    <th>SHA-256</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in entries %}
+                                    <tr>
+                                        <td>{% firstof entry.subject entry.issuer %}</td>
+                                        <td>{% firstof entry.not_after entry.next_update %}</td>
+                                        <td><code>{{ entry.sha256|slice:':16' }}…</code></td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% endfor %}
+            {% empty %}
+                <p class="text-muted">{% trans 'No entries would be removed.' %}</p>
+            {% endfor %}
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <a class="btn btn-secondary"
+               href="{% url 'devices:devices_onboarding_truststore_associated_help' pk=object.pk %}">
+                {% trans 'Cancel' %}
+            </a>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="confirm" value="yes">
+                <button type="submit" class="btn btn-danger">
+                    {% trans 'Enable Authoritative Mode' %}
+                </button>
+            </form>
+        </div>
+    </div>
+{% endblock content %}

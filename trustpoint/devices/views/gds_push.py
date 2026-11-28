@@ -3,6 +3,7 @@
 
 """Views for OPC UA GDS Push certificate distribution."""
 
+import asyncio
 import io
 import zipfile
 from typing import Any, cast
@@ -25,8 +26,9 @@ from devices.models import (
 from onboarding.models import (
     OnboardingProtocol,
 )
-from pki.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel, TruststoreModel
 from pki.models.ca import CaModel
+from request.gds_push import GdsPushService
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -45,7 +47,15 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
 
 
-class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class GdsPushOperationMixin(UserPermissionRequiredMixin):
+    """Require the dedicated GDS Push permission in addition to the view permission."""
+
+    def has_permission(self) -> bool:
+        """Require both the view permission and ``manage_gds_push``."""
+        return super().has_permission() and bool(self.request.user.has_perm(AppPermissions.MANAGE_GDS_PUSH))
+
+
+class OpcUaGdsPushUpdateTrustlistView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the trustlist on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -66,7 +76,7 @@ class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMi
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-        async_task('devices.tasks.update_gds_push_trustlist', self.object.pk)
+        async_task('devices.tasks.update_gds_push_trustlist', self.object.pk, request.user.pk)
         messages.info(request, 'Trustlist update queued.')
 
         return self._redirect_to_help_page()
@@ -85,7 +95,29 @@ class OpcUaGdsPushUpdateTrustlistView(UserPermissionRequiredMixin, PageContextMi
         )
 
 
-class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushRefreshInventoryView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Queue a read of the certificate inventory from an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Queue the inventory read and return to the help page."""
+        self.object = self.get_object()
+        async_task('devices.tasks.refresh_gds_push_certificate_inventory', self.object.pk, request.user.pk)
+        messages.info(request, 'Certificate inventory refresh queued.')
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk},
+            )
+        )
+
+
+class OpcUaGdsPushUpdateServerCertificateView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -106,7 +138,7 @@ class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageC
             HttpResponse redirecting back to the help page.
         """
         self.object = self.get_object()
-        async_task('devices.tasks.update_gds_push_server_certificate', self.object.pk)
+        async_task('devices.tasks.update_gds_push_server_certificate', self.object.pk, request.user.pk)
         messages.info(request, 'Server certificate update queued.')
 
         return self._redirect_to_help_page()
@@ -133,7 +165,7 @@ class OpcUaGdsPushUpdateServerCertificateView(UserPermissionRequiredMixin, PageC
         )
 
 
-class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+class OpcUaGdsPushCertRenewalSettingsView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
     """View to save the periodic server certificate and trustlist renewal settings for an OPC UA GDS Push device."""
 
     http_method_names = ('post',)
@@ -156,21 +188,56 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
         self.object = self.get_object()
 
         enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
+        regenerate_server_key = request.POST.get('opc_gds_push_regenerate_server_key') == 'on'
+        require_crls = request.POST.get('opc_gds_push_require_crls') == 'on'
         interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
+        max_entries_raw = request.POST.get('opc_gds_push_max_trustlist_entries', '0')
+        max_element_raw = request.POST.get('opc_gds_push_max_trustlist_element_size', '0')
+        threshold_raw = request.POST.get('opc_gds_push_renewal_threshold_days', '30')
+        server_validation = request.POST.get('opc_gds_push_server_validation', 'pinned')
+        if server_validation not in {'pinned', 'ca'}:
+            server_validation = 'pinned'
+        additional_trust_store_raw = request.POST.get('opc_gds_push_additional_trust_store', '')
 
         try:
             interval = int(interval_raw)
-            if interval < 1:
-                err_msg = 'Interval must be at least 1.'
+            max_entries = int(max_entries_raw or 0)
+            max_element_size = int(max_element_raw or 0)
+            threshold_days = int(threshold_raw or 0)
+            if interval < 1 or max_entries < 0 or max_element_size < 0 or threshold_days < 0:
+                err_msg = 'Interval must be at least 1 and limits must not be negative.'
                 raise ValueError(err_msg)  # noqa: TRY301
-        except (ValueError, TypeError):
-            messages.error(request, gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).'))
+            additional_trust_store = (
+                TruststoreModel.objects.get(pk=int(additional_trust_store_raw)) if additional_trust_store_raw else None
+            )
+        except (ValueError, TypeError, TruststoreModel.DoesNotExist):
+            messages.error(
+                request,
+                gettext_lazy('Invalid renewal interval, trust-list limit or additional truststore selection.'),
+            )
             return self._redirect_to_help_page()
 
         self.object.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update = enable
         self.object.opc_ua_gds_push_config.opc_gds_push_renewal_interval = interval
+        self.object.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key = regenerate_server_key
+        self.object.opc_ua_gds_push_config.opc_gds_push_require_crls = require_crls
+        self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries = max_entries
+        self.object.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size = max_element_size
+        self.object.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days = threshold_days
+        self.object.opc_ua_gds_push_config.opc_gds_push_server_validation = server_validation
+        self.object.opc_ua_gds_push_config.opc_gds_push_additional_trust_store = additional_trust_store
         self.object.opc_ua_gds_push_config.save(
-            update_fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval']
+            update_fields=[
+                'opc_gds_push_enable_periodic_update',
+                'opc_gds_push_renewal_interval',
+                'opc_gds_push_renewal_threshold_days',
+                'opc_gds_push_server_validation',
+                'opc_gds_push_additional_trust_store',
+                'opc_gds_push_regenerate_server_key',
+                'opc_gds_push_require_crls',
+                'opc_gds_push_max_trustlist_entries',
+                'opc_gds_push_max_trustlist_element_size',
+            ]
         )
 
         if enable:
@@ -198,7 +265,7 @@ class OpcUaGdsPushCertRenewalSettingsView(UserPermissionRequiredMixin, PageConte
 
 
 class OpcUaGdsPushDomainCredentialRenewalSettingsView(
-    UserPermissionRequiredMixin,
+    GdsPushOperationMixin,
     PageContextMixin,
     DetailView[DeviceModel],
 ):
@@ -266,6 +333,89 @@ class OpcUaGdsPushDomainCredentialRenewalSettingsView(
         else:
             messages.success(request, gettext_lazy('Periodic domain credential renewal disabled.'))
         return redirect
+
+
+class OpcUaGdsPushTrustlistModeView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Switch between managed and authoritative TrustList modes."""
+
+    http_method_names = ('post',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Apply managed mode or redirect to the authoritative-mode preview."""
+        self.object = self.get_object()
+        mode = request.POST.get('mode')
+        if mode == 'authoritative':
+            return HttpResponseRedirect(
+                reverse_lazy('devices:devices_trustlist_authoritative_preview', kwargs={'pk': self.object.pk})
+            )
+        if mode == 'managed':
+            config = self.object.opc_ua_gds_push_config
+            config.opc_gds_push_trustlist_mode = 'managed'
+            config.save(update_fields=['opc_gds_push_trustlist_mode'])
+            messages.success(request, gettext_lazy('Trust-list management switched to managed mode.'))
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk},
+            )
+        )
+
+
+class OpcUaGdsPushTrustlistAuthoritativePreviewView(GdsPushOperationMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Preview and confirm switching a device to authoritative TrustList mode."""
+
+    http_method_names = ('get', 'post')
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+    template_name = 'devices/trustlist_authoritative_preview.html'
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Render the entries that authoritative mode would remove."""
+        self.object = self.get_object()
+        success, message, removals = asyncio.run(GdsPushService(device=self.object).preview_authoritative_trustlist())
+        if not success:
+            messages.error(request, message)
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                    kwargs={'pk': self.object.pk},
+                )
+            )
+        request.session[f'gds_push_authoritative_preview_{self.object.pk}'] = True
+        return self.render_to_response(
+            self.get_context_data(
+                message=message,
+                removals=removals,
+                is_authoritative=self.object.opc_ua_gds_push_config.opc_gds_push_trustlist_mode == 'authoritative',
+            )
+        )
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Confirm authoritative mode after the preview."""
+        self.object = self.get_object()
+        preview_key = f'gds_push_authoritative_preview_{self.object.pk}'
+        if request.POST.get('confirm') != 'yes' or not request.session.get(preview_key):
+            return self.get(request)
+        request.session.pop(preview_key, None)
+        config = self.object.opc_ua_gds_push_config
+        config.opc_gds_push_trustlist_mode = 'authoritative'
+        config.save(update_fields=['opc_gds_push_trustlist_mode'])
+        messages.success(
+            request,
+            gettext_lazy('Trust-list management switched to authoritative mode; the next update replaces the lists.'),
+        )
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk},
+            )
+        )
 
 
 class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):

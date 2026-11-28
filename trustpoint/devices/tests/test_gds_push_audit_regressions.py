@@ -25,6 +25,11 @@ from devices.tasks import perform_gds_push_update
             'issue_certificates',
             'devices.tasks.update_gds_push_server_certificate',
         ),
+        (
+            'devices_refresh_inventory',
+            'manage_devices',
+            'devices.tasks.refresh_gds_push_certificate_inventory',
+        ),
     ],
 )
 def test_gds_action_requires_permission(client, django_user_model, gds_device, action, permission, task):
@@ -36,8 +41,11 @@ def test_gds_action_requires_permission(client, django_user_model, gds_device, a
         assert client.post(url).status_code == 403
         enqueue.assert_not_called()
         user.role.permissions.add(Permission.objects.get(codename=permission))
+        # The dedicated push permission is required in addition to the view permission.
+        assert client.post(url).status_code == 403
+        user.role.permissions.add(Permission.objects.get(codename='manage_gds_push'))
         assert client.post(url).status_code == 302
-        enqueue.assert_called_once_with(task, gds_device.pk)
+        enqueue.assert_called_once_with(task, gds_device.pk, user.pk)
 
 
 @pytest.fixture
@@ -46,6 +54,44 @@ def gds_device(mock_models):
     device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
     device.save(update_fields=['device_type'])
     return device
+
+
+def test_switching_to_authoritative_requires_preview(client, django_user_model, gds_device):
+    """Authoritative mode is entered through the preview flow, not the settings form."""
+    user = django_user_model.objects.create_user(username='gds-mode', password='test-password')
+    user.role.permissions.set(Permission.objects.filter(codename__in=['manage_devices', 'manage_gds_push']))
+    client.force_login(user)
+    url = reverse('devices:devices_trustlist_mode', kwargs={'pk': gds_device.pk})
+
+    response = client.post(url, {'mode': 'authoritative'})
+
+    assert response.status_code == 302
+    assert reverse('devices:devices_trustlist_authoritative_preview', kwargs={'pk': gds_device.pk}) in response.url
+    gds_device.opc_ua_gds_push_config.refresh_from_db()
+    assert gds_device.opc_ua_gds_push_config.opc_gds_push_trustlist_mode == 'managed'
+
+
+def test_authoritative_preview_lists_removals_and_confirms(admin_client, gds_device):
+    """Preview removals and persist authoritative mode only after confirmation."""
+    preview = (
+        True,
+        '1 trust-list entry would be removed',
+        {'Server': {'TrustedCertificates': [{'sha256': 'abc123', 'subject': 'CN=external'}]}},
+    )
+    service = Mock()
+    service.preview_authoritative_trustlist = AsyncMock(return_value=preview)
+    url = reverse('devices:devices_trustlist_authoritative_preview', kwargs={'pk': gds_device.pk})
+
+    with patch('devices.views.gds_push.GdsPushService', return_value=service):
+        response = admin_client.get(url)
+
+    assert response.status_code == 200
+    assert b'CN=external' in response.content
+
+    response = admin_client.post(url, {'confirm': 'yes'})
+    assert response.status_code == 302
+    gds_device.opc_ua_gds_push_config.refresh_from_db()
+    assert gds_device.opc_ua_gds_push_config.opc_gds_push_trustlist_mode == 'authoritative'
 
 
 def test_saving_settings_replaces_legacy_schedules_and_disable_cancels(gds_device):
@@ -73,8 +119,7 @@ def test_obsolete_jobs_skip_and_a_due_job_reserves_one_successor(gds_device):
     config.opc_gds_push_enable_periodic_update = True
     config.save(update_fields=['opc_gds_push_enable_periodic_update'])
     service = Mock(
-        update_trustlist=AsyncMock(return_value=(True, 'updated')),
-        update_server_certificate=AsyncMock(return_value=(True, 'updated', b'certificate')),
+        reconcile=AsyncMock(return_value=(True, 'updated', b'certificate')),
     )
     with patch('devices.tasks.GdsPushService', return_value=service) as constructor:
         perform_gds_push_update(gds_device.pk)
@@ -84,8 +129,7 @@ def test_obsolete_jobs_skip_and_a_due_job_reserves_one_successor(gds_device):
         )
         perform_gds_push_update(gds_device.pk)
         perform_gds_push_update(gds_device.pk)
-    service.update_trustlist.assert_awaited_once()
-    service.update_server_certificate.assert_awaited_once()
+    service.reconcile.assert_awaited_once()
     assert Schedule.objects.filter(name=f'gds_push_update_{gds_device.pk}').count() == 1
 
 
@@ -94,17 +138,15 @@ def test_failed_update_remains_retryable(gds_device):
     config.opc_gds_push_enable_periodic_update = True
     config.save()
     service = Mock(
-        update_trustlist=AsyncMock(side_effect=RuntimeError('temporary failure')),
-        update_server_certificate=AsyncMock(return_value=(True, 'updated', b'certificate')),
+        reconcile=AsyncMock(side_effect=RuntimeError('temporary failure')),
     )
     with patch('devices.tasks.GdsPushService', return_value=service):
         with pytest.raises(RuntimeError, match='temporary failure'):
             perform_gds_push_update(gds_device.pk)
         config.refresh_from_db()
         assert config.opc_gds_push_last_update_scheduled_at is None
-        service.update_trustlist.side_effect = None
-        service.update_trustlist.return_value = (True, 'updated')
+        service.reconcile.side_effect = None
+        service.reconcile.return_value = (True, 'updated', b'certificate')
         perform_gds_push_update(gds_device.pk)
-    assert service.update_trustlist.await_count == 2
-    service.update_server_certificate.assert_awaited_once()
+    assert service.reconcile.await_count == 2
     assert Schedule.objects.filter(name=f'gds_push_update_{gds_device.pk}').count() == 1

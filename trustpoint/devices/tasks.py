@@ -7,17 +7,91 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
 from devices.domain_credential_renewal import renew_gds_push_domain_credential
-from devices.models import DeviceModel, OpcUaGdsPushConfig
+from devices.models import DeviceModel, GdsPushOperationLock, OpcUaGdsPushConfig
+from management.models.audit_log import AuditLog
 from onboarding.enums import OnboardingStatus
 from request.gds_push import GdsPushError, GdsPushService
 
 logger = logging.getLogger(__name__)
+
+GDS_PUSH_LOCK_TIMEOUT_SECONDS = 900
+
+
+def _acquire_device_lock(device_id: int) -> bool:
+    """Reserve the per-device GDS Push operation lock in the database."""
+    now = timezone.now()
+    expires_at = now + timedelta(seconds=GDS_PUSH_LOCK_TIMEOUT_SECONDS)
+    with transaction.atomic():
+        lock, created = GdsPushOperationLock.objects.select_for_update().get_or_create(
+            device_id=device_id,
+            defaults={'acquired_at': now, 'expires_at': expires_at},
+        )
+        if created:
+            return True
+        if lock.expires_at > now:
+            return False
+        lock.acquired_at = now
+        lock.expires_at = expires_at
+        lock.save(update_fields=['acquired_at', 'expires_at'])
+        return True
+
+
+def _release_device_lock(device_id: int) -> None:
+    """Release the per-device GDS Push operation lock."""
+    GdsPushOperationLock.objects.filter(device_id=device_id).delete()
+
+
+def _record_gds_push_audit(
+    device: DeviceModel,
+    initiated_by_id: int | None,
+    result: str,
+    message: str,
+) -> None:
+    """Record a GDS Push operation with optional user attribution."""
+    try:
+        actor = get_user_model().objects.filter(pk=initiated_by_id).first() if initiated_by_id else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.GDS_PUSH_UPDATE,
+            target=device,
+            target_display=f'Device: {device.common_name}',
+            actor=actor,
+            details={'protocol': 'OPC UA GDS Push', 'result': result, 'message': message[:1000]},
+        )
+    except Exception:
+        logger.exception('Failed to record GDS Push audit entry for device %s', device.pk)
+
+
+def _run_combined_update(service: GdsPushService, attempts: int = 2) -> tuple[bool, str, bytes | None]:
+    """Run the combined workflow, retrying once when another transaction is pending."""
+    success = False
+    message = ''
+    certificate: bytes | None = None
+    for attempt in range(attempts):
+        success, message, certificate = asyncio.run(service.update_trustlist_and_certificate())
+        retryable = (
+            'BadTransactionPending',
+            'BadTimeout',
+            'BadCommunicationError',
+            'BadConnectionClosed',
+            'BadServerNotConnected',
+            'BadSecureChannelClosed',
+        )
+        if getattr(service, '_apply_changes_attempted', False) is True:
+            logger.warning('ApplyChanges may already have been applied; not retrying the whole workflow')
+            break
+        if success or not any(name in message for name in retryable):
+            break
+        logger.warning('Transaction pending; retrying GDS Push update (%d/%d)', attempt + 1, attempts)
+        time.sleep(2)
+    return success, message, certificate
 
 
 def perform_gds_push_update(device_id: int) -> None:
@@ -57,73 +131,135 @@ def perform_gds_push_update(device_id: int) -> None:
         # Reserve the next cycle before external I/O so stale or duplicate jobs cannot run it again.
         config.schedule_next_gds_push_update()
 
+    if not _acquire_device_lock(device_id):
+        logger.warning('GDS Push operation already running for device %s; skipping this cycle', device.common_name)
+        return
+
     try:
-        service = GdsPushService(device=device)
-
-        # Update trustlist
         try:
-            success, message = asyncio.run(service.update_trustlist())
-            if success:
-                logger.info('Trustlist updated successfully for device %s: %s', device.common_name, message)
-            else:
-                logger.warning('Trustlist update failed for device %s: %s', device.common_name, message)
-        except GdsPushError:
-            logger.exception('GDS Push error during trustlist update for device %s', device.common_name)
+            service = GdsPushService(device=device)
+            try:
+                success, message, certificate_bytes = asyncio.run(service.reconcile())
+                if success:
+                    logger.info('GDS Push reconciliation succeeded for device %s: %s', device.common_name, message)
+                    _record_gds_push_audit(device, None, 'success', message)
+                    if certificate_bytes and device.onboarding_config is not None:
+                        device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+                        device.onboarding_config.save(update_fields=['onboarding_status'])
+                else:
+                    logger.warning('GDS Push reconciliation failed for device %s: %s', device.common_name, message)
+                    _record_gds_push_audit(device, None, 'failed', message)
+            except GdsPushError:
+                logger.exception('GDS Push error during reconciliation for device %s', device.common_name)
+        except Exception:
+            logger.exception('Unexpected error during GDS Push update for device %s', device.common_name)
+            # Preserve queue retries without overwriting renewal settings saved during device I/O.
+            OpcUaGdsPushConfig.objects.filter(
+                pk=config.pk,
+                opc_gds_push_last_update_scheduled_at=config.opc_gds_push_last_update_scheduled_at,
+            ).update(opc_gds_push_last_update_scheduled_at=next_run)
+            raise
+    finally:
+        _release_device_lock(device_id)
 
-        # Update server certificate
-        try:
-            success, message, _certificate_bytes = asyncio.run(service.update_server_certificate())
-            if success:
-                logger.info('Server certificate updated successfully for device %s: %s', device.common_name, message)
-            else:
-                logger.warning('Server certificate update failed for device %s: %s', device.common_name, message)
-        except GdsPushError:
-            logger.exception('GDS Push error during server certificate update for device %s', device.common_name)
-    except Exception:
-        logger.exception('Unexpected error during GDS Push update for device %s', device.common_name)
-        # Preserve queue retries without overwriting renewal settings saved during device I/O.
-        OpcUaGdsPushConfig.objects.filter(
-            pk=config.pk,
-            opc_gds_push_last_update_scheduled_at=config.opc_gds_push_last_update_scheduled_at,
-        ).update(opc_gds_push_last_update_scheduled_at=next_run)
-        raise
 
-
-def update_gds_push_trustlist(device_id: int) -> None:
+def update_gds_push_trustlist(device_id: int, initiated_by_id: int | None = None) -> None:
     """Push the current trustlist to one OPC UA GDS Push device from a background job."""
     device = DeviceModel.objects.filter(pk=device_id).first()
     if device is None:
         logger.info('Device %s was deleted; skipping trustlist update', device_id)
         return
-    try:
-        success, message = asyncio.run(GdsPushService(device=device).update_trustlist())
-    except Exception:
-        logger.exception('Trustlist update failed for device %s', device.common_name)
+    if not _acquire_device_lock(device_id):
+        logger.warning(
+            'GDS Push operation already running for device %s; skipping trustlist update', device.common_name
+        )
         return
-    if success:
-        logger.info('Trustlist updated for device %s: %s', device.common_name, message)
-    else:
-        logger.warning('Trustlist update rejected for device %s: %s', device.common_name, message)
+    try:
+        try:
+            success, message = asyncio.run(GdsPushService(device=device).update_trustlist())
+        except Exception as e:
+            logger.exception('Trustlist update failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
+            return
+        if success:
+            logger.info('Trustlist updated for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'success', message)
+        else:
+            logger.warning('Trustlist update rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
+    finally:
+        _release_device_lock(device_id)
 
 
-def update_gds_push_server_certificate(device_id: int) -> None:
+def update_gds_push_server_certificate(device_id: int, initiated_by_id: int | None = None) -> None:
     """Push a server certificate to one OPC UA GDS Push device from a background job."""
     device = DeviceModel.objects.filter(pk=device_id).first()
     if device is None:
         logger.info('Device %s was deleted; skipping server certificate update', device_id)
         return
+    if not _acquire_device_lock(device_id):
+        logger.warning(
+            'GDS Push operation already running for device %s; skipping server certificate update', device.common_name
+        )
+        return
+
     try:
-        success, message, certificate_bytes = asyncio.run(GdsPushService(device=device).update_server_certificate())
-    except Exception:
-        logger.exception('Server certificate update failed for device %s', device.common_name)
+        service = GdsPushService(device=device)
+        try:
+            success, message, certificate_bytes = _run_combined_update(service)
+        except Exception as e:
+            logger.exception('Combined GDS Push update failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
+            return
+        if not success:
+            logger.warning('GDS Push update rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
+            return
+        logger.info('GDS Push update succeeded for device %s: %s', device.common_name, message)
+        _record_gds_push_audit(device, initiated_by_id, 'success', message)
+        if certificate_bytes and device.onboarding_config is not None:
+            device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            device.onboarding_config.save(update_fields=['onboarding_status'])
+    finally:
+        _release_device_lock(device_id)
+
+
+def refresh_gds_push_certificate_inventory(device_id: int, initiated_by_id: int | None = None) -> None:
+    """Read the current certificate inventory from one OPC UA GDS Push device."""
+    device = DeviceModel.objects.filter(pk=device_id).first()
+    if device is None:
+        logger.info('Device %s was deleted; skipping certificate inventory', device_id)
         return
-    if not success or not certificate_bytes:
-        logger.warning('Server certificate update rejected for device %s: %s', device.common_name, message)
+    if not _acquire_device_lock(device_id):
+        logger.warning(
+            'GDS Push operation already running for device %s; skipping certificate inventory', device.common_name
+        )
         return
-    logger.info('Server certificate updated for device %s: %s', device.common_name, message)
-    if device.onboarding_config is not None:
-        device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
-        device.onboarding_config.save(update_fields=['onboarding_status'])
+    try:
+        try:
+            success, message, inventory = asyncio.run(GdsPushService(device=device).refresh_certificate_inventory())
+        except Exception as e:
+            logger.exception('Certificate inventory failed for device %s', device.common_name)
+            _record_gds_push_audit(device, initiated_by_id, 'error', str(e))
+            return
+        if success:
+            config = OpcUaGdsPushConfig.objects.filter(device=device).first()
+            if config is not None:
+                config.opc_gds_push_certificate_inventory = inventory
+                config.opc_gds_push_certificate_inventory_updated_at = timezone.now()
+                config.save(
+                    update_fields=[
+                        'opc_gds_push_certificate_inventory',
+                        'opc_gds_push_certificate_inventory_updated_at',
+                    ]
+                )
+            logger.info('Certificate inventory read for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'success', message)
+        else:
+            logger.warning('Certificate inventory rejected for device %s: %s', device.common_name, message)
+            _record_gds_push_audit(device, initiated_by_id, 'failed', message)
+    finally:
+        _release_device_lock(device_id)
 
 
 def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
@@ -150,10 +286,22 @@ def perform_gds_push_domain_credential_renewal(device_id: int) -> None:
         )
         config.save(update_fields=['opc_gds_push_domain_credential_next_renewal_at'])
 
+    if not _acquire_device_lock(device_id):
+        logger.warning('GDS Push operation already running for device %s; skipping credential renewal', device_id)
+        return
+
     try:
-        with transaction.atomic():
-            replacement = renew_gds_push_domain_credential(device)
-        logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
-    except Exception:
-        logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
-    config.schedule_next_gds_push_domain_credential_renewal()
+        try:
+            # shortcut: the replacement is verified over the network inside the atomic renewal;
+            # move issuance/verification/revocation into separate transactions if lock time becomes an issue.
+            def verify_replacement(_replacement: object) -> tuple[bool, str]:
+                return asyncio.run(GdsPushService(device=device).verify_connection())
+
+            with transaction.atomic():
+                replacement = renew_gds_push_domain_credential(device, verify=verify_replacement)
+            logger.info('Renewed GDS Push domain credential for device %s: %s', device_id, replacement.pk)
+        except Exception:
+            logger.exception('Domain credential renewal failed for device %s; retaining previous identity', device_id)
+        config.schedule_next_gds_push_domain_credential_renewal()
+    finally:
+        _release_device_lock(device_id)

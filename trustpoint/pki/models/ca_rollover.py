@@ -37,6 +37,37 @@ class CaRolloverState(models.TextChoices):
     CANCELLED = 'cancelled', _('Cancelled')
 
 
+class CaRolloverTrustlistDeployment(models.Model):
+    """Records that one device received both old and new CA TrustLists for a rollover."""
+
+    rollover = models.ForeignKey(
+        'pki.CaRolloverModel',
+        on_delete=models.CASCADE,
+        related_name='trustlist_deployments',
+    )
+    device = models.ForeignKey(
+        'devices.DeviceModel',
+        on_delete=models.CASCADE,
+        related_name='ca_rollover_trustlist_deployments',
+    )
+    both_deployed_at = models.DateTimeField(auto_now=True)
+    certificate_replaced_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        """One deployment record per rollover and device."""
+
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['rollover', 'device'],
+                name='unique_rollover_trustlist_deployment_per_device',
+            )
+        ]
+
+    def __str__(self) -> str:
+        """Return a readable deployment description."""
+        return f'Rollover {self.rollover_id} TrustLists on device {self.device_id}'
+
+
 class CaRolloverModel(LoggerMixin, models.Model):
     """Tracks an Issuing CA rollover."""
 
@@ -180,6 +211,31 @@ class CaRolloverModel(LoggerMixin, models.Model):
         self.state = CaRolloverState.CANCELLED
         self.save(update_fields=['state'])
 
+    def missing_trustlist_devices(self) -> list[str]:
+        """Return GDS Push devices in the old CA's domains without both TrustLists."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+
+        devices = DeviceModel.objects.filter(
+            domain__in=self.old_issuing_ca.domains.all(),
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
+        ).order_by('common_name')
+        deployed = set(self.trustlist_deployments.values_list('device_id', flat=True))
+        return [device.common_name for device in devices if device.pk not in deployed]
+
+    def missing_certificate_devices(self) -> list[str]:
+        """Return GDS Push devices without a verified replacement server certificate."""
+        from devices.models import DeviceModel  # noqa: PLC0415
+
+        devices = DeviceModel.objects.filter(
+            domain__in=self.old_issuing_ca.domains.all(),
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
+        ).order_by('common_name')
+        deployed = {
+            deployment.device_id: deployment.certificate_replaced_at is not None
+            for deployment in self.trustlist_deployments.all()
+        }
+        return [device.common_name for device in devices if not deployed.get(device.pk, False)]
+
     def schedule_transition_check(self) -> None:
         """Schedule a task to check if this rollover should transition from PREPARATION to TRANSITION.
 
@@ -199,12 +255,10 @@ class CaRolloverModel(LoggerMixin, models.Model):
                 self.id,
                 schedule_type='O',
                 next_run=self.transition_scheduled_at,
-                name=f'{base_name}_{self.transition_scheduled_at.timestamp()}'
+                name=f'{base_name}_{self.transition_scheduled_at.timestamp()}',
             )
             self.logger.info(
-                'Scheduled automatic transition check for rollover %s at %s',
-                self.id,
-                self.transition_scheduled_at
+                'Scheduled automatic transition check for rollover %s at %s', self.id, self.transition_scheduled_at
             )
         else:
             check_time = timezone.now() + timedelta(minutes=5)
@@ -213,6 +267,6 @@ class CaRolloverModel(LoggerMixin, models.Model):
                 self.id,
                 schedule_type='O',
                 next_run=check_time,
-                name=f'{base_name}_{check_time.timestamp()}'
+                name=f'{base_name}_{check_time.timestamp()}',
             )
             self.logger.info('Scheduled periodic transition check for rollover %s', self.id)

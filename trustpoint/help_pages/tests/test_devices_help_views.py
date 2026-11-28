@@ -549,12 +549,14 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 5  # Includes the domain credential renewal settings.
+        assert len(sections) == 7  # Includes trust-list mode, inventory and renewal settings.
         assert sections[0].heading == 'Summary'
         assert sections[1].heading == 'CA Certificates'  # No CA configured
         assert sections[2].heading == 'Download Trust Bundle'
         assert sections[3].heading == 'Available Actions'
-        assert sections[4].heading == 'Periodic Domain Credential Renewal'
+        assert sections[4].heading == 'Trust-List Management'
+        assert sections[5].heading == 'Certificate Inventory'
+        assert sections[6].heading == 'Periodic Domain Credential Renewal'
         assert 'OPC UA GDS Push' in sections[0].rows[0].value
         assert heading == 'Help - OPC UA GDS Push Certificate Management'
 
@@ -583,9 +585,11 @@ class OpcUaGdsPushOnboardingStrategyTests(TestCase):
 
         sections, heading = self.strategy.build_sections(help_context)
 
-        assert len(sections) == 5
+        assert len(sections) == 7
         assert sections[3].heading == 'Available Actions'
-        assert sections[4].heading == 'Periodic Domain Credential Renewal'
+        assert sections[4].heading == 'Trust-List Management'
+        assert sections[5].heading == 'Certificate Inventory'
+        assert sections[6].heading == 'Periodic Domain Credential Renewal'
         # Should have domain credential required message
         assert 'Domain Credential Required' in sections[3].rows[1].key
 
@@ -1100,6 +1104,36 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         with self.assertRaises(Http404):
             _agent_get_est_password(_device(domain))
 
+    def test_opc_ua_gds_inventory_section_renders_last_read(self) -> None:
+        """Render certificate groups from the stored inventory snapshot."""
+        strategy = OpcUaGdsPushApplicationCertificateStrategy()
+        device = Mock(pk=123)
+        device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory = {
+            'certificate_groups': [
+                {
+                    'name': 'Server',
+                    'certificates': [
+                        {
+                            'type': 'ns=0;i=12560',
+                            'subject': 'CN=opc.example',
+                            'not_after': '2027-01-01T00:00:00+00:00',
+                            'sha256': 'abcdef0123456789',
+                        }
+                    ],
+                }
+            ],
+            'trust_lists': [{'group': 'Server', 'certificates': 2, 'crls': 1}],
+            'rejected': [],
+        }
+        device.opc_ua_gds_push_config.opc_gds_push_certificate_inventory_updated_at = None
+
+        section = strategy._build_inventory_section(device)
+
+        assert 'Refresh Certificate Inventory' in section.rows[0].value
+        assert 'opc.example' in section.rows[1].value
+        assert 'abcdef0123456789'[:16] in section.rows[1].value
+        assert 'Trust lists: 1' in section.rows[1].value
+
     @patch('help_pages.devices_help_views.reverse', return_value='/renewal/123/')
     @patch('help_pages.devices_help_views.timezone')
     def test_opc_ua_gds_renewal_settings_render_enabled_pending_and_disabled(
@@ -1131,4 +1165,11 @@ class DeviceStrategyGeneratedContentTests(TestCase):
         assert 'Pending' in pending_section.rows[0].value
         assert 'Disabled' in disabled_section.rows[0].value
         assert 'name="opc_gds_push_renewal_interval"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_regenerate_server_key"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_max_trustlist_entries"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_max_trustlist_element_size"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_require_crls"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_renewal_threshold_days"' in disabled_section.rows[1].value
+        assert 'name="opc_gds_push_server_validation"' in disabled_section.rows[1].value
+        assert 'controlled centrally by the Security Configuration' in disabled_section.rows[1].value
         assert mock_reverse.called

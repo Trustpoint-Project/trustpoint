@@ -22,6 +22,19 @@
                     <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
                         {% trans 'Import new Truststore' %}
                     </button>
+                    <button type="submit" name="action" value="retrieve_server_certificate"
+                            class="btn btn-secondary ms-2" formnovalidate>
+                        {% trans 'Retrieve Server Certificate' %}
+                    </button>
+                    <p class="text-muted mt-2">
+                        {% trans 'Retrieve the remote server certificate to create and select an OPC UA GDS Push truststore. Verify the certificate before associating it; discovery does not authenticate the server.' %}
+                    </p>
+                    {% if discovered_certificate_available %}
+                        <a class="btn btn-secondary ms-2"
+                           href="{% url 'devices:devices_discovered_server_certificate' pk=device.pk %}">
+                            {% trans 'Download Discovered Server Certificate' %}
+                        </a>
+                    {% endif %}
                 </div>
 
             </div>

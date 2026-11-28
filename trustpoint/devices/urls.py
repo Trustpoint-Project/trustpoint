@@ -212,6 +212,11 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_discover_server',
     ),
     path(
+        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/discovered-certificate/',
+        views.OpcUaGdsPushDiscoveredCertificateView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_discovered_server_certificate',
+    ),
+    path(
         'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/truststore-association/',
         views.OpcUaGdsPushTruststoreAssociationView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_truststore_association',
@@ -303,6 +308,21 @@ urlpatterns = [
         'opc-ua-gds-push/<int:pk>/update-server-certificate/',
         views.OpcUaGdsPushUpdateServerCertificateView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_update_server_certificate',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/refresh-inventory/',
+        views.OpcUaGdsPushRefreshInventoryView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_refresh_inventory',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/trustlist-mode/',
+        views.OpcUaGdsPushTrustlistModeView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_trustlist_mode',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/trustlist-authoritative-preview/',
+        views.OpcUaGdsPushTrustlistAuthoritativePreviewView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_trustlist_authoritative_preview',
     ),
     path(
         'opc-ua-gds-push/<int:pk>/domain-credential-renewal-settings/',

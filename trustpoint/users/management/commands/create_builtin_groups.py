@@ -22,6 +22,7 @@ ROLE_PERMISSION_CODENAMES: dict[BuiltinRole, frozenset[str] | None] = {
             'revoke_certificates',
             'download_credentials',
             'view_help_pages',
+            'manage_gds_push',
         }
     ),
     BuiltinRole.DEVICE_OPERATOR: frozenset(
@@ -29,6 +30,7 @@ ROLE_PERMISSION_CODENAMES: dict[BuiltinRole, frozenset[str] | None] = {
             'manage_devices',
             'download_credentials',
             'view_help_pages',
+            'manage_gds_push',
         }
     ),
     BuiltinRole.SYSTEM_ADMIN: frozenset(

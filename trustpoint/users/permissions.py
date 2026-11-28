@@ -38,6 +38,7 @@ class AppPermissions:
     # Device lifecycle
     # -------------------------------------------------------------------------
     MANAGE_DEVICES = f'{APP_LABEL}.manage_devices'
+    MANAGE_GDS_PUSH = f'{APP_LABEL}.manage_gds_push'
 
     # -------------------------------------------------------------------------
     # Automation and integration

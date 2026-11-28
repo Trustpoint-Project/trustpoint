@@ -881,6 +881,12 @@ class OpcUaGdsPushCreateForm(forms.Form):
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
     opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
+    opc_server_url = forms.CharField(
+        max_length=255,
+        required=False,
+        label=_('OPC Server URL'),
+        help_text=_('Optional full endpoint URL (opc.tcp://host:port/path). Overrides IP and port.'),
+    )
     opc_user = forms.CharField(
         max_length=128,
         required=False,
@@ -910,6 +916,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
             Field('domain'),
             Field('ip_address'),
             Field('opc_server_port'),
+            Field('opc_server_url'),
             HTML('<h2>OPC UA Credentials</h2><hr>'),
             Field('opc_user'),
             Field('opc_password'),
@@ -945,6 +952,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
         domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
         ip_address = cast('str', self.cleaned_data.get('ip_address'))
         opc_server_port = cast('int', self.cleaned_data.get('opc_server_port'))
+        opc_server_url = cast('str', self.cleaned_data.get('opc_server_url') or '')
         opc_user = cast('str', self.cleaned_data.get('opc_user'))
         opc_password = cast('str', self.cleaned_data.get('opc_password'))
 
@@ -971,6 +979,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
         config = OpcUaGdsPushConfig(
             device=device_model,
             opc_server_port=opc_server_port,
+            opc_server_url=opc_server_url,
             opc_user=opc_user,
             opc_password=opc_password,
         )
@@ -983,7 +992,12 @@ class OpcUaGdsPushCreateForm(forms.Form):
         device_model.save()
         config, _created = OpcUaGdsPushConfig.objects.update_or_create(
             device=device_model,
-            defaults={'opc_server_port': opc_server_port, 'opc_user': opc_user, 'opc_password': opc_password},
+            defaults={
+                'opc_server_port': opc_server_port,
+                'opc_server_url': opc_server_url,
+                'opc_user': opc_user,
+                'opc_password': opc_password,
+            },
         )
 
         device_model.opc_ua_gds_push_config = config
@@ -1124,6 +1138,12 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
     opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
+    opc_server_url = forms.CharField(
+        max_length=255,
+        required=False,
+        label=_('OPC Server URL'),
+        help_text=_('Optional full endpoint URL (opc.tcp://host:port/path). Overrides IP and port.'),
+    )
     opc_user = forms.CharField(
         max_length=128,
         required=False,
@@ -1171,6 +1191,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
                 'domain': self.instance.domain,
                 'ip_address': self.instance.ip_address,
                 'opc_server_port': config.opc_server_port if config else 4840,
+                'opc_server_url': (config.opc_server_url if config else ''),
                 'opc_user': (config.opc_user if config else ''),
                 'opc_trust_store': (config.opc_trust_store if config else None),
                 'onboarding_protocol': (
@@ -1200,6 +1221,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('domain'),
             Field('ip_address'),
             Field('opc_server_port'),
+            Field('opc_server_url'),
             HTML('<h2>OPC UA Credentials</h2><hr>'),
             Field('opc_user'),
             Field('opc_password'),
@@ -1228,6 +1250,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.domain = self.cleaned_data['domain']
             self.instance.ip_address = self.cleaned_data['ip_address']
             self.instance.opc_ua_gds_push_config.opc_server_port = self.cleaned_data['opc_server_port']
+            self.instance.opc_ua_gds_push_config.opc_server_url = self.cleaned_data['opc_server_url']
             self.instance.opc_ua_gds_push_config.opc_user = self.cleaned_data['opc_user']
             if self.cleaned_data['opc_password']:
                 self.instance.opc_ua_gds_push_config.opc_password = self.cleaned_data['opc_password']

@@ -20,7 +20,7 @@ from django.db import transaction
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.html import format_html, format_html_join, strip_tags
+from django.utils.html import escape, format_html, format_html_join, strip_tags
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
@@ -61,7 +61,7 @@ from onboarding.models import (
     OnboardingStatus,
 )
 from pki.forms.cert_profiles import CertificateIssuanceForm, ProfileBasedFormFieldBuilder
-from pki.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel, TruststoreModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
@@ -1825,6 +1825,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             self._build_ca_hierarchy_section(device),
             self._build_download_section(device),
             self._build_actions_section(device),
+            self._build_trustlist_mode_section(device),
+            self._build_inventory_section(device),
             self._build_renewal_settings_section(device, domain_credential=True),
         ]
 
@@ -2082,7 +2084,105 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
-    def _build_renewal_settings_section(
+    def _build_trustlist_mode_section(self, device: DeviceModel) -> HelpSection:
+        """Render the TrustList management mode and the switch/preview controls."""
+        config = device.opc_ua_gds_push_config
+        mode = config.opc_gds_push_trustlist_mode
+        mode_url = reverse('devices:devices_trustlist_mode', kwargs={'pk': device.pk})
+        if mode == 'authoritative':
+            action_html = (
+                '<form method="post" action="' + mode_url + '" class="d-inline">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<input type="hidden" name="mode" value="managed">'
+                '<button type="submit" class="btn btn-secondary">Switch to Managed Mode</button>'
+                '</form>'
+            )
+            description = (
+                'Authoritative mode replaces the targeted TrustLists with the desired state. '
+                'Entries outside that state are removed on the next update.'
+            )
+        else:
+            action_html = (
+                '<form method="post" action="' + mode_url + '" class="d-inline">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<input type="hidden" name="mode" value="authoritative">'
+                '<button type="submit" class="btn btn-warning">Preview Authoritative Mode</button>'
+                '</form>'
+            )
+            description = (
+                'Managed mode preserves entries Trustpoint does not own and removes only previously '
+                'deployed Trustpoint-managed entries that are no longer required.'
+            )
+        return HelpSection(
+            _non_lazy('Trust-List Management'),
+            [
+                HelpRow(_non_lazy('Current Mode'), mode.title(), ValueRenderType.PLAIN),
+                HelpRow(_non_lazy('Mode'), description, ValueRenderType.PLAIN),
+                HelpRow(_non_lazy('Change Mode'), action_html, ValueRenderType.HTML),
+            ],
+        )
+
+    def _build_inventory_section(self, device: DeviceModel) -> HelpSection:
+        """Render the last certificate inventory read from the device."""
+        config = device.opc_ua_gds_push_config
+        inventory = config.opc_gds_push_certificate_inventory
+        if not isinstance(inventory, dict):
+            inventory = {}
+        updated_at = config.opc_gds_push_certificate_inventory_updated_at
+        refresh_url = reverse('devices:devices_refresh_inventory', kwargs={'pk': device.pk})
+        refresh_html = (
+            '<form method="post" action="' + refresh_url + '" class="d-inline">'
+            'CSRF_TOKEN_PLACEHOLDER'
+            '<button type="submit" class="btn btn-info">Refresh Certificate Inventory</button>'
+            '</form>'
+        )
+
+        rows: list[str] = []
+        for group in inventory.get('certificate_groups', []):
+            certificates = group.get('certificates') or []
+            if not certificates:
+                rows.append(
+                    '<tr><td>' + escape(str(group.get('name', ''))) + '</td>'
+                    '<td colspan="4" class="text-muted">No certificate reported</td></tr>'
+                )
+            rows.extend(
+                '<tr>'
+                '<td>' + escape(str(group.get('name', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('type', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('subject', ''))) + '</td>'
+                '<td>' + escape(str(certificate.get('not_after', ''))) + '</td>'
+                '<td><code>' + escape(str(certificate.get('sha256', ''))[:16]) + '…</code></td>'
+                '</tr>'
+                for certificate in certificates
+            )
+
+        if rows:
+            table_html = (
+                '<div class="table-responsive"><table class="table table-sm">'
+                '<thead><tr><th>Group</th><th>Type</th><th>Subject</th><th>Not After</th><th>SHA-256</th></tr></thead>'
+                '<tbody>' + ''.join(rows) + '</tbody></table></div>'
+            )
+        else:
+            table_html = '<p class="text-muted">No certificate inventory has been read from this device yet.</p>'
+
+        trust_lists = inventory.get('trust_lists') or []
+        rejected = inventory.get('rejected') or []
+        summary = (
+            f'<p class="text-muted mt-2">Trust lists: {len(trust_lists)} · '
+            f'Rejected certificates: {len(rejected)}'
+            + (f' · Updated: {updated_at.strftime("%Y-%m-%d %H:%M UTC")}' if updated_at else '')
+            + '</p>'
+        )
+
+        return HelpSection(
+            _non_lazy('Certificate Inventory'),
+            [
+                HelpRow(_non_lazy('Device Inventory'), refresh_html, ValueRenderType.HTML),
+                HelpRow(_non_lazy('Last Read'), table_html + summary, ValueRenderType.HTML),
+            ],
+        )
+
+    def _build_renewal_settings_section(  # noqa: PLR0915
         self,
         device: DeviceModel,
         *,
@@ -2093,6 +2193,11 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         Both variants show the enabled state, renewal interval, and next scheduled run.
         Their settings and background tasks remain independent.
         """
+        regenerate_key = False
+        require_crls = False
+        renewal_threshold_days = 30
+        max_trustlist_entries = 0
+        max_trustlist_element_size = 0
         if domain_credential:
             route = 'devices:devices_domain_credential_renewal_settings'
             enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_domain_credential_renewal
@@ -2112,6 +2217,11 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             enabled = device.opc_ua_gds_push_config.opc_gds_push_enable_periodic_update
             interval = device.opc_ua_gds_push_config.opc_gds_push_renewal_interval
             next_run = device.opc_ua_gds_push_config.opc_gds_push_last_update_scheduled_at
+            regenerate_key = device.opc_ua_gds_push_config.opc_gds_push_regenerate_server_key
+            require_crls = device.opc_ua_gds_push_config.opc_gds_push_require_crls
+            renewal_threshold_days = device.opc_ua_gds_push_config.opc_gds_push_renewal_threshold_days
+            max_trustlist_entries = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_entries
+            max_trustlist_element_size = device.opc_ua_gds_push_config.opc_gds_push_max_trustlist_element_size
             enabled_field = 'opc_gds_push_enable_periodic_update'
             interval_field = 'opc_gds_push_renewal_interval'
             title = 'Periodic Server Certificate & Trustlist Renewal'
@@ -2142,6 +2252,80 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         else:
             next_run_html = '<span class="badge bg-secondary">Disabled</span>'
 
+        regenerate_html = ''
+        if not domain_credential:
+            regenerate_checked = 'checked' if regenerate_key else ''
+            regenerate_html = (
+                '<div class="form-check form-switch mb-2 mt-3">'
+                '  <input class="form-check-input" type="checkbox" role="switch" '
+                '         id="regenerateServerKey" name="opc_gds_push_regenerate_server_key" '
+                f'         {regenerate_checked}>'
+                '  <label class="form-check-label" for="regenerateServerKey">'
+                '    Generate a new server private key on renewal'
+                '  </label>'
+                '  <div class="form-text text-muted">'
+                '    Disabled by default so secure elements and non-exportable keys are reused.'
+                '  </div>'
+                '</div>'
+            )
+
+        limits_html = ''
+        additional_id = getattr(device.opc_ua_gds_push_config, 'opc_gds_push_additional_trust_store_id', None)
+        truststore_options = ''.join(
+            f'<option value="{store.pk}"'
+            + (' selected' if store.pk == additional_id else '')
+            + f'>{escape(store.unique_name)}</option>'
+            for store in TruststoreModel.objects.order_by('unique_name')
+        )
+        if not domain_credential:
+            server_validation = device.opc_ua_gds_push_config.opc_gds_push_server_validation
+            pinned_selected = 'selected' if server_validation == 'pinned' else ''
+            ca_selected = 'selected' if server_validation == 'ca' else ''
+            limits_html = (
+                '<hr>'
+                '<h6 class="mt-3">Server certificate validation</h6>'
+                '<label for="serverValidation" class="form-label">Validation mode</label>'
+                '<select class="form-select" id="serverValidation" name="opc_gds_push_server_validation">'
+                f'  <option value="pinned" {pinned_selected}>Pinned leaf certificate (truststore order 0)</option>'
+                f'  <option value="ca" {ca_selected}>CA chain validation (truststore CA certificates)</option>'
+                '</select>'
+                '<div class="form-text text-muted">'
+                '  Use CA chain validation when the server certificate rotates; the current certificate '
+                'must chain to a CA in the truststore.'
+                '</div>'
+                '<label for="additionalTrustStore" class="form-label mt-3">Additional trust material</label>'
+                '<select class="form-select" id="additionalTrustStore" '
+                '        name="opc_gds_push_additional_trust_store">'
+                '<option value="">None</option>' + truststore_options + '</select>'
+                '<div class="form-text text-muted">'
+                '  Certificates in this truststore are added to the desired TrustList in both modes.'
+                '</div>'
+                '<h6 class="mt-3">Trust-list limits</h6>'
+                '<label for="maxTrustlistEntries" class="form-label">Maximum entries (0 = no limit)</label>'
+                '<input type="number" class="form-control tp-credential-number" id="maxTrustlistEntries" '
+                '       name="opc_gds_push_max_trustlist_entries" min="0" '
+                f'       value="{max_trustlist_entries}">'
+                '<label for="maxTrustlistElementSize" class="form-label mt-2">'
+                'Maximum element size in bytes (0 = no limit)</label>'
+                '<input type="number" class="form-control tp-credential-number" id="maxTrustlistElementSize" '
+                '       name="opc_gds_push_max_trustlist_element_size" min="0" '
+                f'       value="{max_trustlist_element_size}">'
+                '<div class="form-text text-muted">'
+                '  Counts unique certificates and CRLs. Example: S7-1500 devices may allow 62 entries '
+                'and 4,096 bytes per element; verify against the device documentation.'
+                '</div>'
+                '<div class="form-check form-switch mt-3">'
+                '  <input class="form-check-input" type="checkbox" role="switch" '
+                '         id="requireCrls" name="opc_gds_push_require_crls" '
+                f'         {"checked" if require_crls else ""}>'
+                '  <label class="form-check-label" for="requireCrls">Require CRLs in pushed trust lists</label>'
+                '</div>'
+                '<div class="form-text text-muted mt-3">'
+                '  Issued certificate key sizes, curves, signature algorithms and OPC UA security '
+                'policies are controlled centrally by the Security Configuration.'
+                '</div>'
+            )
+
         form_html = (
             f'<form method="post" action="{renewal_url}">'
             'CSRF_TOKEN_PLACEHOLDER'
@@ -2160,6 +2344,15 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             '<div class="form-text text-muted">'
             f'  {description}'
             '</div>'
+            f'<label for="renewalThresholdDays" class="form-label mt-2">Certificate renewal threshold (days)</label>'
+            f'<input type="number" class="form-control tp-credential-number" id="renewalThresholdDays" '
+            f'       name="opc_gds_push_renewal_threshold_days" min="0" value="{renewal_threshold_days}">'
+            '<div class="form-text text-muted">'
+            '  Replace the certificate only when it expires within this many days; the trust list is refreshed '
+            'every cycle.'
+            '</div>'
+            f'{regenerate_html}'
+            f'{limits_html}'
             '</div>'
             '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
             '</form>'

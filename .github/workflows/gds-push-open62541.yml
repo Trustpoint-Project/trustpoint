@@ -1,0 +1,79 @@
+name: GDS Push / open62541 conformance
+
+on:
+  pull_request:
+    paths:
+      - 'trustpoint/request/gds_push/**'
+      - 'trustpoint/devices/**'
+      - 'tests/scripts/gds_push_open62541_conformance.py'
+      - '.github/workflows/gds-push-open62541.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'trustpoint/request/gds_push/**'
+      - 'trustpoint/devices/**'
+      - 'tests/scripts/gds_push_open62541_conformance.py'
+      - '.github/workflows/gds-push-open62541.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  open62541:
+    name: Trustpoint client against open62541 GDS receiver
+    runs-on: ubuntu-24.04
+
+    env:
+      # Pinned open62541 commit that contains the GDS receiver driver and its
+      # PushManagement conformance tests. Update deliberately after reviewing
+      # upstream changes.
+      OPEN62541_REF: 59f556e9920d76e8ecc6567b890003b54561d447
+      TRUSTPOINT_OPERATIONAL_DATABASE: sqlite
+
+    steps:
+      - name: Checkout Trustpoint
+        uses: actions/checkout@v7
+
+      - name: Install open62541 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git libssl-dev
+
+      - name: Build open62541 ci_server with GDS receiver
+        run: |
+          git clone https://github.com/open62541/open62541.git open62541
+          git -C open62541 checkout "$OPEN62541_REF"
+          git -C open62541 submodule update --init --depth 1 deps/ua-nodeset
+          cmake -S open62541 -B open62541/build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUA_BUILD_EXAMPLES=ON \
+            -DUA_ENABLE_ENCRYPTION=OPENSSL \
+            -DUA_ENABLE_DRIVER_GDS_RECEIVER=ON \
+            -DUA_NAMESPACE_ZERO=FULL \
+            -DUA_ENABLE_RBAC=ON \
+            -DUA_ENABLE_SUBSCRIPTIONS=ON
+          cmake --build open62541/build --target ci_server -j "$(nproc)"
+
+      - name: Setup uv environment
+        uses: ./.github/actions/setup-uv-action
+
+      - name: Run open62541 GDS Push conformance test
+        env:
+          OPEN62541_CI_SERVER: ${{ github.workspace }}/open62541/build/bin/examples/ci_server
+          OPEN62541_LOG_DIR: ${{ github.workspace }}/reports/open62541
+        run: uv run python tests/scripts/gds_push_open62541_conformance.py
+
+      - name: Upload open62541 logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: open62541-conformance-logs
+          path: reports/open62541/
+          if-no-files-found: ignore

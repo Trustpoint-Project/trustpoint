@@ -492,6 +492,7 @@ class AppPermission(models.Model):
             # Device lifecycle
             # -----------------------------------------------------------------
             ('manage_devices', _('Can manage devices')),
+            ('manage_gds_push', _('Can push OPC UA GDS certificates and trust lists')),
             # -----------------------------------------------------------------
             # Automation and integration
             # -----------------------------------------------------------------

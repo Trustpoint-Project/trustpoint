@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, TypeGuard, cast
 from trustpoint_core.oid import HmacAlgorithm
 
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.opc_ua_security_policy import OPC_UA_SECURITY_POLICIES
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -59,6 +60,7 @@ class SecurityRestrictions:
     allow_imported_private_keys: bool | _Unset = UNSET
     allow_cmp_hmac_sha1: bool | _Unset = UNSET
     permitted_cmp_hmac_algorithms: list[str] | _Unset = UNSET
+    permitted_opc_ua_security_policies: list[str] | _Unset = UNSET
     auto_gen_pki: bool | _Unset = UNSET
     permitted_no_onboarding_pki_protocols: list[int] | _Unset = UNSET
     permitted_onboarding_protocols: list[int] | _Unset = UNSET
@@ -140,6 +142,29 @@ def _parse_cmp_hmac_algorithms(value: str | _Unset) -> list[str] | _Unset:
     return result
 
 
+def _parse_opc_ua_security_policies(value: str | _Unset) -> list[str] | _Unset:
+    """Parse OPC UA SecurityPolicy names into their canonical spellings."""
+    if isinstance(value, _Unset):
+        return UNSET
+    if not value:
+        return []
+    result: list[str] = []
+    for name in value.split(','):
+        policy_name = name.strip()
+        if not policy_name:
+            _fail('TP_SECURITY_PERMITTED_OPC_UA_SECURITY_POLICIES contains an empty policy name.')
+        if policy_name not in OPC_UA_SECURITY_POLICIES:
+            supported = ', '.join(OPC_UA_SECURITY_POLICIES)
+            _fail(
+                f'TP_SECURITY_PERMITTED_OPC_UA_SECURITY_POLICIES contains unknown policy '
+                f'{policy_name!r}. Supported values: {supported}.'
+            )
+        if policy_name in result:
+            _fail(f'TP_SECURITY_PERMITTED_OPC_UA_SECURITY_POLICIES contains duplicate policy {policy_name!r}.')
+        result.append(policy_name)
+    return result
+
+
 def parse_security_restrictions(environment: Mapping[str, str] | None = None) -> SecurityRestrictions:
     """Parse all optional ``TP_SECURITY_*`` restrictions."""
     credential_ttl_seconds = _parse_nullable_integer(
@@ -184,6 +209,9 @@ def parse_security_restrictions(environment: Mapping[str, str] | None = None) ->
         ),
         permitted_cmp_hmac_algorithms=_parse_cmp_hmac_algorithms(
             _raw_environment(environment, 'TP_SECURITY_PERMITTED_CMP_HMAC_ALGORITHMS'),
+        ),
+        permitted_opc_ua_security_policies=_parse_opc_ua_security_policies(
+            _raw_environment(environment, 'TP_SECURITY_PERMITTED_OPC_UA_SECURITY_POLICIES'),
         ),
         allow_cmp_hmac_sha1=_parse_bool(
             'TP_SECURITY_ALLOW_CMP_HMAC_SHA1',
@@ -272,6 +300,9 @@ def effective_security_defaults(
                 cast('list[int]', defaults['permitted_no_onboarding_pki_protocols'])
             ),
             'permitted_onboarding_protocols': list(cast('list[int]', defaults['permitted_onboarding_protocols'])),
+            'permitted_opc_ua_security_policies': list(
+                cast('list[str]', defaults['permitted_opc_ua_security_policies'])
+            ),
         }
     )
     restrictions = restrictions or parse_security_restrictions()
@@ -307,6 +338,17 @@ def effective_security_defaults(
             defaults[field] = value
 
     _apply_cmp_hmac_restrictions(defaults, restrictions, mode)
+
+    opc_ua_policies = restrictions.permitted_opc_ua_security_policies
+    if not _is_unset(opc_ua_policies):
+        preset_policies = set(cast('list[str]', defaults['permitted_opc_ua_security_policies']))
+        for policy_name in cast('list[str]', opc_ua_policies):
+            if policy_name not in preset_policies:
+                _fail(
+                    f'OPC UA security policy {policy_name} is not permitted by security mode {mode}; '
+                    'environment configuration may only further restrict the selected preset.',
+                )
+        defaults['permitted_opc_ua_security_policies'] = opc_ua_policies
 
     for field in ('permitted_no_onboarding_pki_protocols', 'permitted_onboarding_protocols'):
         value = getattr(restrictions, field)
@@ -395,6 +437,7 @@ def synchronize_security_config() -> bool:
                     'permitted_no_onboarding_pki_protocols',
                     'permitted_onboarding_protocols',
                     'permitted_cmp_hmac_algorithms',
+                    'permitted_opc_ua_security_policies',
                 }
                 or field.startswith('allow_')
                 or field

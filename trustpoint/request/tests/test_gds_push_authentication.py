@@ -12,6 +12,7 @@ from asyncua.crypto.permission_rules import User, UserRole
 from asyncua.ua.uaerrors import UaStatusCodeError
 
 from devices.forms import ClmDeviceModelOpcUaGdsPushOnboardingForm, OpcUaGdsPushCreateForm
+from management.models import SecurityConfig
 from request.gds_push.gds_push_service import GdsPushService
 
 
@@ -82,6 +83,7 @@ async def test_secure_client_with_optional_user_credentials(username, password):
     service = GdsPushService.__new__(GdsPushService)
     service.device = Mock(opc_ua_gds_push_config=Mock(opc_user=username, opc_password=password))
     service.server_url = 'opc.tcp://localhost:4840'
+    service._security_config = SecurityConfig()
     client = Mock(set_security=AsyncMock())
     module = 'request.gds_push.gds_push_service'
     with (
@@ -89,6 +91,8 @@ async def test_secure_client_with_optional_user_credentials(username, password):
         patch.object(service, '_get_server_certificate', AsyncMock(return_value=b'server-certificate')),
         patch.object(service, '_extract_application_uri', return_value='urn:test'),
         patch.object(service, '_build_client_certificate_chain', AsyncMock(return_value=b'client-certificate')),
+        patch.object(service, '_select_security_policy', AsyncMock(return_value=(Mock(), 'Basic256Sha256'))),
+        patch(f'{module}.x509.load_der_x509_certificate', return_value=Mock()),
         patch(f'{module}.Client', return_value=client),
     ):
         assert await service._create_secure_client() is client
@@ -169,7 +173,12 @@ async def test_certificate_update_uses_discovered_group_and_persists_matching_ke
         assert exc.value.code == ua.StatusCodes.BadInvalidArgument
 
     csr_der = await config.call_method(
-        '0:CreateSigningRequest', group.nodeid, ua.NodeId(ua.ObjectIds.ApplicationCertificateType), None, True, None
+        '0:CreateSigningRequest',
+        group.nodeid,
+        ua.NodeId(ua.ObjectIds.ApplicationCertificateType),
+        None,
+        True,
+        b'0' * 32,
     )
     csr = x509.load_der_x509_csr(csr_der)
     assert csr.is_signature_valid
@@ -212,6 +221,40 @@ async def test_certificate_update_uses_discovered_group_and_persists_matching_ke
 
 
 @pytest.mark.asyncio
+async def test_test_server_rejects_short_nonce_and_non_application_type(tmp_path):
+    """The standalone server enforces the CreateSigningRequest argument rules."""
+    from asyncua import Server, ua
+
+    script = Path(__file__).resolve().parents[1] / 'gds_push' / 'asyncua-gds-push-test' / 'server.py'
+    namespace = runpy.run_path(str(script))
+    state = namespace['PushState'](tmp_path)
+    await state.setup()
+    server = Server()
+    await server.init()
+    await namespace['configure_push_methods'](server, state)
+
+    with pytest.raises(UaStatusCodeError):
+        await state.csr(
+            ua.NodeId(),
+            ua.Variant(state.application_group),
+            ua.Variant(ua.NodeId(ua.ObjectIds.ApplicationCertificateType)),
+            ua.Variant(''),
+            ua.Variant(True),
+            ua.Variant(b'short'),
+        )
+
+    with pytest.raises(UaStatusCodeError):
+        await state.csr(
+            ua.NodeId(),
+            ua.Variant(state.application_group),
+            ua.Variant(ua.NodeId(ua.ObjectIds.HttpsCertificateType)),
+            ua.Variant(''),
+            ua.Variant(True),
+            ua.Variant(b'0' * 32),
+        )
+
+
+@pytest.mark.asyncio
 async def test_repeated_trustlist_upload_only_discovers_implemented_groups(tmp_path):
     """Repeatedly upload identical data through each advertised TrustList."""
     from asyncua import Server, ua
@@ -225,6 +268,7 @@ async def test_repeated_trustlist_upload_only_discovers_implemented_groups(tmp_p
     await server.init()
     await namespace['configure_push_methods'](server, state)
     service = GdsPushService.__new__(GdsPushService)
+    service._security_config = SecurityConfig()
     nodes = await service._discover_trustlist_nodes(server)
     assert [node['group_name'] for node in nodes] == ['DefaultApplicationGroup']
     groups = await service._discover_certificate_groups(server)

@@ -5,11 +5,15 @@
 
 import abc
 import asyncio
+import base64
+import uuid
 from typing import Any, cast
 
+from cryptography import x509
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.http.request import HttpRequest
@@ -584,6 +588,7 @@ class OpcUaGdsPushDiscoverServerView(UserPermissionRequiredMixin, PageContextMix
             if success and server_info:
                 messages.success(request, message)
 
+                server_info['device_id'] = self.object.pk
                 request.session['opc_ua_server_info'] = server_info
 
                 if server_info.get('server_certificate_available'):
@@ -603,6 +608,33 @@ class OpcUaGdsPushDiscoverServerView(UserPermissionRequiredMixin, PageContextMix
                 f'devices:{self.page_name}_onboarding_truststore_associated_help', kwargs={'pk': self.object.pk}
             )
         )
+
+
+class OpcUaGdsPushDiscoveredCertificateView(UserPermissionRequiredMixin, PageContextMixin, DetailView[DeviceModel]):
+    """Download the server certificate captured during discovery."""
+
+    http_method_names = ('get',)
+    permission_required = AppPermissions.MANAGE_DEVICES
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Return the discovered DER certificate from the session."""
+        self.object = self.get_object()
+        server_info = request.session.get('opc_ua_server_info') or {}
+        encoded = server_info.get('server_certificate')
+        if server_info.get('device_id') != self.object.pk or not encoded:
+            msg = 'No discovered server certificate is available. Run discovery again.'
+            raise Http404(msg)
+        try:
+            certificate = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError) as e:
+            msg = 'The discovered server certificate is invalid. Run discovery again.'
+            raise Http404(msg) from e
+
+        response = HttpResponse(certificate, content_type='application/pkix-cert')
+        response['Content-Disposition'] = 'attachment; filename="opc-ua-server.der"'
+        return response
 
 
 class OpcUaGdsPushTruststoreAssociationView(
@@ -646,14 +678,59 @@ class OpcUaGdsPushTruststoreAssociationView(
         context = super().get_context_data(**kwargs)
         context['device'] = self.get_device()
         context['import_form'] = TruststoreAddForm()
+        server_info = self.request.session.get('opc_ua_server_info') or {}
+        context['discovered_certificate_available'] = bool(
+            server_info.get('server_certificate') and server_info.get('device_id') == self.get_device().pk
+        )
         return context
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle both association and import form submissions."""
+        """Handle association, upload, and remote certificate retrieval."""
+        if request.POST.get('action') == 'retrieve_server_certificate':
+            return self._handle_retrieve(request)
         if 'trust_store_file' in request.FILES:
             return self._handle_import(request)
 
         return super().post(request, *args, **kwargs)
+
+    def _handle_retrieve(self, request: HttpRequest) -> HttpResponse:
+        """Create a truststore from fresh discovery and select it for association."""
+        if not request.user.has_perm(AppPermissions.MANAGE_TRUSTSTORES):
+            raise PermissionDenied
+        device = self.get_device()
+        association_url = reverse('devices:devices_truststore_association', kwargs={'pk': device.pk})
+        try:
+            service = GdsPushService(device=device, insecure=True)
+            success, message, server_info = asyncio.run(
+                asyncio.wait_for(service.discover_server(), timeout=DISCOVERY_TIMEOUT_SECONDS)
+            )
+            if not success:
+                messages.error(request, f'Failed to retrieve server certificate: {message}')
+                return HttpResponseRedirect(association_url)
+            if not server_info or not server_info.get('server_certificate'):
+                messages.error(request, 'The remote server did not provide a server certificate.')
+                return HttpResponseRedirect(association_url)
+
+            certificate = x509.load_der_x509_certificate(
+                base64.b64decode(server_info['server_certificate'], validate=True)
+            )
+            with transaction.atomic():
+                truststore = TruststoreAddForm.save_trust_store(
+                    unique_name=f'opc-ua-server-{device.pk}-{uuid.uuid4().hex}',
+                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH,
+                    certificates=[certificate],
+                )
+        except TimeoutError:
+            messages.error(request, 'Failed to retrieve server certificate: the request timed out.')
+        except Exception as e:
+            self.logger.exception('Failed to create truststore from remote server certificate')
+            messages.error(request, f'Failed to retrieve server certificate: {e}')
+        else:
+            server_info['device_id'] = device.pk
+            request.session['opc_ua_server_info'] = server_info
+            messages.success(request, 'Created an OPC UA GDS Push truststore. Review it and associate it below.')
+            return HttpResponseRedirect(f'{association_url}?truststore_id={truststore.pk}')
+        return HttpResponseRedirect(association_url)
 
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Handle truststore import from modal."""

@@ -203,6 +203,12 @@ class DeviceModel(CustomDeleteActionModel):
 class OpcUaGdsPushConfig(models.Model):
     """Connection, trust, and renewal settings belonging to one GDS Push device."""
 
+    class TrustListMode(models.TextChoices):
+        """How Trustpoint reconciles the targeted application TrustLists."""
+
+        MANAGED = 'managed', _('Managed (preserve external entries)')
+        AUTHORITATIVE = 'authoritative', _('Authoritative (replace targeted lists)')
+
     device = models.OneToOneField(
         DeviceModel,
         on_delete=models.CASCADE,
@@ -213,6 +219,13 @@ class OpcUaGdsPushConfig(models.Model):
         default=4840,
         validators=[MinValueValidator(1), MaxValueValidator(65535)],
     )
+    opc_server_url = models.CharField(
+        _('OPC Server URL'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('Optional full endpoint URL (opc.tcp://host:port/path). Overrides the IP address and port.'),
+    )
     opc_user = models.CharField(_('OPC User'), max_length=128, blank=True, default='')
     opc_password = EncryptedCharField(_('OPC Password'), max_length=128, blank=True, default='')
     opc_trust_store = models.ForeignKey(
@@ -222,6 +235,38 @@ class OpcUaGdsPushConfig(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='opc_ua_gds_push_configs',
+    )
+    opc_gds_push_server_validation = models.CharField(
+        _('Server Certificate Validation'),
+        max_length=16,
+        choices=[
+            ('pinned', _('Pinned leaf certificate (truststore order 0)')),
+            ('ca', _('CA chain validation (truststore CA certificates)')),
+        ],
+        default='pinned',
+        help_text=_(
+            'Pinned validation requires the exact server certificate at truststore order 0. '
+            'CA validation reads the current server certificate and accepts it when it chains '
+            'to a CA in the truststore, which allows certificate rotation.'
+        ),
+    )
+    opc_gds_push_max_trustlist_entries = models.PositiveIntegerField(
+        _('Maximum Trust-List Entries'),
+        default=0,
+        help_text=_(
+            'Maximum number of unique certificates and CRLs in a pushed trust list. '
+            '0 means no limit. Set this for devices with fixed trust-list capacity.'
+        ),
+    )
+    opc_gds_push_max_trustlist_element_size = models.PositiveIntegerField(
+        _('Maximum Trust-List Element Size (bytes)'),
+        default=0,
+        help_text=_('Maximum size of one DER-encoded certificate or CRL in a pushed trust list. 0 means no limit.'),
+    )
+    opc_gds_push_require_crls = models.BooleanField(
+        _('Require CRLs in Pushed Trust Lists'),
+        default=True,
+        help_text=_('Reject a trust-list update when a CA in the chain has no CRL.'),
     )
 
     opc_gds_push_enable_periodic_update = models.BooleanField(
@@ -241,11 +286,27 @@ class OpcUaGdsPushConfig(models.Model):
         null=False,
         help_text=_('Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.'),
     )
+    opc_gds_push_renewal_threshold_days = models.PositiveIntegerField(
+        _('Certificate Renewal Threshold (days)'),
+        default=30,
+        help_text=_(
+            'Only replace the server certificate in the periodic task when it expires within this many days. '
+            'The trust list is still refreshed each cycle.'
+        ),
+    )
     opc_gds_push_last_update_scheduled_at = models.DateTimeField(
         _('Last Periodic Update Scheduled At'),
         null=True,
         blank=True,
         help_text=_('Timestamp of the most recent scheduled periodic server certificate and trustlist update.'),
+    )
+    opc_gds_push_regenerate_server_key = models.BooleanField(
+        _('Generate New Server Key on Renewal'),
+        default=False,
+        help_text=_(
+            'Generate a new private key on the server for each certificate renewal. '
+            'Disabled by default so secure elements and non-exportable keys are reused.'
+        ),
     )
 
     opc_gds_push_enable_domain_credential_renewal = models.BooleanField(
@@ -264,6 +325,45 @@ class OpcUaGdsPushConfig(models.Model):
         null=True,
         blank=True,
     )
+    opc_gds_push_certificate_inventory = models.JSONField(
+        _('Last Certificate Inventory'),
+        default=dict,
+        blank=True,
+        help_text=_('Certificate groups, trust lists and rejected certificates read from the device.'),
+    )
+    opc_gds_push_certificate_inventory_updated_at = models.DateTimeField(
+        _('Certificate Inventory Updated At'),
+        null=True,
+        blank=True,
+    )
+    opc_gds_push_trustlist_mode = models.CharField(
+        _('Trust-List Management Mode'),
+        max_length=16,
+        choices=TrustListMode.choices,
+        default=TrustListMode.MANAGED,
+        help_text=_(
+            'Managed preserves entries Trustpoint does not own and prunes only its own obsolete entries. '
+            'Authoritative replaces the targeted TrustLists with the configured desired state.'
+        ),
+    )
+    opc_gds_push_additional_trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('Additional Trust Material'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='opc_ua_gds_push_additional_configs',
+        help_text=_('Optional certificates added to the desired TrustList in both management modes.'),
+    )
+    opc_gds_push_managed_trustlist_state = models.JSONField(
+        _('Managed Trust-List State'),
+        default=dict,
+        blank=True,
+        help_text=_(
+            'Per certificate group SHA-256 fingerprints of Trustpoint-managed certificates and CRLs '
+            'that were successfully deployed.'
+        ),
+    )
 
     def __str__(self) -> str:
         """Identify the device owning this configuration."""
@@ -274,6 +374,8 @@ class OpcUaGdsPushConfig(models.Model):
         errors: dict[str, str] = {}
         if self.device.device_type != DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
             errors['device'] = 'GDS Push configuration requires an OPC UA GDS Push device.'
+        if self.opc_server_url and not self.opc_server_url.startswith(('opc.tcp://', 'opc.https://', 'https://')):
+            errors['opc_server_url'] = 'Use an opc.tcp://, opc.https:// or https:// URL.'
         if self.opc_gds_push_renewal_interval < 1:
             errors['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
         if self.opc_gds_push_domain_credential_renewal_interval < 1:
@@ -283,6 +385,12 @@ class OpcUaGdsPushConfig(models.Model):
             and self.opc_trust_store.intended_usage != TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
         ):
             errors['opc_trust_store'] = 'Truststore must be intended for OPC UA GDS Push.'
+        if self.opc_gds_push_additional_trust_store_id and (
+            self.opc_gds_push_additional_trust_store_id == self.opc_trust_store_id
+        ):
+            errors['opc_gds_push_additional_trust_store'] = (
+                'Additional trust material must use a different truststore than server authentication.'
+            )
         if errors:
             raise ValidationError(errors)
 
@@ -327,6 +435,23 @@ class OpcUaGdsPushConfig(models.Model):
             )
         self.opc_gds_push_domain_credential_next_renewal_at = next_run
         type(self).objects.filter(pk=self.pk).update(opc_gds_push_domain_credential_next_renewal_at=next_run)
+
+
+class GdsPushOperationLock(models.Model):
+    """Database-backed per-device GDS Push operation lock shared by worker processes."""
+
+    device = models.OneToOneField(
+        DeviceModel,
+        on_delete=models.CASCADE,
+        primary_key=True,
+        related_name='gds_push_operation_lock',
+    )
+    acquired_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+
+    def __str__(self) -> str:
+        """Identify the locked device."""
+        return f'GdsPushOperationLock(device={self.device_id})'
 
 
 class RemoteDeviceCredentialDownloadModel(models.Model):

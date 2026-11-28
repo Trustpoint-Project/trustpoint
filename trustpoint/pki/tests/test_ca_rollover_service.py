@@ -8,6 +8,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone
 
 from pki.models import CaModel
 from pki.models.ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
@@ -192,6 +193,47 @@ class TestCaRolloverServiceFinalize:
         # Import strategy deactivates old CA on complete
         issuing_ca_model.refresh_from_db()
         assert issuing_ca_model.is_active is False
+
+    def test_finalize_requires_both_trustlists_on_every_gds_device(self, issuing_ca_model, second_issuing_ca_model):
+        """Refuse finalization until every GDS Push device received both CA TrustLists."""
+        import pki.rollover.import_ca  # noqa: F401
+        from devices.models import DeviceModel
+        from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
+        from pki.models.ca_rollover import CaRolloverTrustlistDeployment
+        from pki.models.domain import DomainModel
+
+        domain = DomainModel.objects.create(unique_name='rollover_gate_domain', issuing_ca=issuing_ca_model)
+        onboarding = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH)
+        onboarding.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
+        onboarding.save()
+        device = DeviceModel.objects.create(
+            common_name='rollover-gate-device',
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH,
+            domain=domain,
+            onboarding_config=onboarding,
+            ip_address='127.0.0.1',
+        )
+        rollover = CaRolloverModel.objects.create(
+            old_issuing_ca=issuing_ca_model,
+            new_issuing_ca=second_issuing_ca_model,
+            state=CaRolloverState.PLANNED,
+            strategy_type=CaRolloverStrategyType.IMPORT_CA,
+        )
+        rollover.start()
+        rollover.transition_to_transition()
+
+        with pytest.raises(CaRolloverError, match='rollover-gate-device'):
+            CaRolloverService.finalize_rollover(rollover)
+
+        deployment = CaRolloverTrustlistDeployment.objects.create(rollover=rollover, device=device)
+        with pytest.raises(CaRolloverError, match='server certificate'):
+            CaRolloverService.finalize_rollover(rollover)
+
+        deployment.certificate_replaced_at = timezone.now()
+        deployment.save(update_fields=['certificate_replaced_at'])
+        CaRolloverService.finalize_rollover(rollover)
+        rollover.refresh_from_db()
+        assert rollover.state == CaRolloverState.COMPLETED
 
     def test_finalize_rollover_reassigns_domains(self, issuing_ca_model, second_issuing_ca_model):
         """Test that finalizing a rollover reassigns domains from old CA to new CA."""

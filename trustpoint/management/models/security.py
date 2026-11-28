@@ -16,6 +16,10 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm, NamedCurve, Public
 
 from management.security_env import effective_security_defaults, parse_security_restrictions
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.opc_ua_security_policy import (
+    DEFAULT_OPC_UA_SECURITY_POLICIES,
+    OPC_UA_SECURITY_POLICY_PREFERENCE,
+)
 from pki.security_policy import (
     CryptographicPolicy,
     evaluate_cryptographic_policy,
@@ -45,6 +49,7 @@ class _SecurityModeDefaults(TypedDict):
     allow_self_signed_ca: bool
     allow_imported_private_keys: bool
     permitted_cmp_hmac_algorithms: list[str]
+    permitted_opc_ua_security_policies: list[str]
     permitted_no_onboarding_pki_protocols: list[int]
     permitted_onboarding_protocols: list[int]
 
@@ -59,6 +64,11 @@ def default_cmp_hmac_algorithms() -> list[str]:
             HmacAlgorithm.HMAC_SHA512,
         )
     ]
+
+
+def default_opc_ua_security_policies() -> list[str]:
+    """Return the default OPC UA SecurityPolicy allow-list without shared mutable state."""
+    return list(DEFAULT_OPC_UA_SECURITY_POLICIES)
 
 
 class SecurityConfig(models.Model):
@@ -270,6 +280,17 @@ class SecurityConfig(models.Model):
         ),
     )
 
+    permitted_opc_ua_security_policies = models.JSONField(
+        default=default_opc_ua_security_policies,
+        blank=True,
+        verbose_name=_('Permitted OPC UA security policies'),
+        help_text=_(
+            'OPC UA SecurityPolicies the GDS Push client may negotiate. Certificate-management '
+            'operations always require SignAndEncrypt. Legacy Basic256/Basic128Rsa15 policies '
+            'must be selected explicitly and are never used as a silent fallback.'
+        ),
+    )
+
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
 
     permitted_no_onboarding_pki_protocols = models.JSONField(
@@ -326,6 +347,7 @@ class SecurityConfig(models.Model):
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
+            'permitted_opc_ua_security_policies': [definition.name for definition in OPC_UA_SECURITY_POLICY_PREFERENCE],
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -347,6 +369,7 @@ class SecurityConfig(models.Model):
             'allow_self_signed_ca': True,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': [CmpHmacAlgorithmChoices.SHA1, *default_cmp_hmac_algorithms()],
+            'permitted_opc_ua_security_policies': [definition.name for definition in OPC_UA_SECURITY_POLICY_PREFERENCE],
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -374,6 +397,7 @@ class SecurityConfig(models.Model):
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': True,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
+            'permitted_opc_ua_security_policies': ['Aes256Sha256RsaPss', 'Aes128Sha256RsaOaep', 'Basic256Sha256'],
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32, SCEP=64
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32, 64],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -403,6 +427,7 @@ class SecurityConfig(models.Model):
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
+            'permitted_opc_ua_security_policies': ['Aes256Sha256RsaPss', 'Aes128Sha256RsaOaep'],
             'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -434,6 +459,7 @@ class SecurityConfig(models.Model):
             'allow_self_signed_ca': False,
             'allow_imported_private_keys': False,
             'permitted_cmp_hmac_algorithms': default_cmp_hmac_algorithms(),
+            'permitted_opc_ua_security_policies': ['Aes256Sha256RsaPss'],
             'permitted_no_onboarding_pki_protocols': [1, 4],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -503,6 +529,7 @@ class SecurityConfig(models.Model):
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
         self.allow_imported_private_keys = defaults['allow_imported_private_keys']
         self.permitted_cmp_hmac_algorithms = list(defaults['permitted_cmp_hmac_algorithms'])
+        self.permitted_opc_ua_security_policies = list(defaults['permitted_opc_ua_security_policies'])
         self.permitted_no_onboarding_pki_protocols = list(defaults['permitted_no_onboarding_pki_protocols'])
         self.permitted_onboarding_protocols = list(defaults['permitted_onboarding_protocols'])
         if save:
@@ -521,6 +548,7 @@ class SecurityConfig(models.Model):
                     'allow_self_signed_ca',
                     'allow_imported_private_keys',
                     'permitted_cmp_hmac_algorithms',
+                    'permitted_opc_ua_security_policies',
                     'permitted_no_onboarding_pki_protocols',
                     'permitted_onboarding_protocols',
                 ]
@@ -557,6 +585,7 @@ class SecurityConfig(models.Model):
                 'allow_self_signed_ca_creation': defaults['allow_self_signed_ca_creation'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
                 'permitted_cmp_hmac_algorithms': defaults['permitted_cmp_hmac_algorithms'],
+                'permitted_opc_ua_security_policies': defaults['permitted_opc_ua_security_policies'],
                 'permitted_no_onboarding_pki_protocols': [
                     no_onboarding_labels.get(v, v) for v in defaults['permitted_no_onboarding_pki_protocols']
                 ],
