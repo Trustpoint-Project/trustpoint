@@ -68,9 +68,7 @@ jobs:
         env:
           OPEN62541_CI_SERVER: ${{ github.workspace }}/open62541/build/bin/examples/ci_server
           OPEN62541_LOG_DIR: ${{ github.workspace }}/reports/open62541
-        run: |
-          set -euo pipefail
-          uv run python tests/scripts/gds_push_open62541_conformance.py
+        run: uv run python tests/scripts/gds_push_open62541_conformance.py
 
       - name: Upload open62541 logs
         if: always()
